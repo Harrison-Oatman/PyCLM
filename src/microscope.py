@@ -7,7 +7,8 @@ class MicroscopeProcess:
 
     def __init__(self, core: Core, aq: AllQueues):
         self.core = core
-        self.inbox = aq.manager_to_microscope  # receives messages/events from the controller
+        self.inbox = aq.manager_to_microscope  # receives messages/events from manager
+        self.manager = aq.microscope_to_manager  # send messages to manager
         self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
         self.slm_queue = aq.slm_to_microscope  # receives SLM updates
 

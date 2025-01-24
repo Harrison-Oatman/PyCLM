@@ -16,8 +16,10 @@ class MicroscopeOutbox:
 
     def __init__(self, aq: AllQueues):
         self.inbox = aq.manager_to_outbox
+        self.manager = aq.outbox_to_manager
         self.outbox = aq.acquisition_outbox
         self.seg_queue = aq.segmentation_queue
+        self.pattern_queue = aq.raw_pattern
 
     def process(self):
         pass
@@ -27,6 +29,7 @@ class SLMBuffer:
 
     def __init__(self, aq: AllQueues):
         self.inbox = aq.manager_to_slm_buffer
+        self.manager = aq.slm_buffer_to_manager
         self.slm_queue = aq.slm_to_microscope
         self.pattern_queue = aq.pattern_to_slm
 
