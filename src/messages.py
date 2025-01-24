@@ -13,6 +13,10 @@ class Message(ABC):
     # will always be a string
     message = "BASE_MESSAGE"
 
-    # optional, unrestricted
-    field = None
 
+class AcquisitionEvent(Message):
+
+    message = "acquisition_event"
+
+    def __init__(self):
+        pass
