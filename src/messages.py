@@ -14,7 +14,7 @@ class Message(ABC):
     message = "BASE_MESSAGE"
 
 
-class AcquisitionEvent(Message):
+class AcquisitionEventMessage(Message):
 
     message = "acquisition_event"
 
