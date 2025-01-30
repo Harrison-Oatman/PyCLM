@@ -1,5 +1,89 @@
+from uuid import uuid4
 
 
 class AcquisitionEvent:
 
-    def __init__(self):
+    def __init__(self, experiment, x_um=0.0, y_um=0.0, z_um=0.0, use_pfs=False, pfs=0.0,
+                 scheduled_time=0, exposure_time_ms=10, needs_slm=False,
+                 super_axes=None, sub_axes=None, config_groups=None, devices=None,
+                 save_output=True,
+                 do_segmentation=False, segmentation_method=None, save_segmentation=False,
+                 updates_pattern=False, pattern_method=None, save_pattern=False):
+
+        self.id = uuid4()
+
+        # experiment (determines h5 filename)
+        self.experiment_name = experiment
+
+        # position
+        self.x_um = x_um
+        self.y_um = y_um
+        self.z_um = z_um
+
+        # pfs
+        self.use_pfs = use_pfs
+        self.pfs = pfs
+
+        self.scheduled_time = scheduled_time
+        self.complete = False
+        self.completed_time = None
+
+        # acquisition details
+        self.exposure_time_ms = exposure_time_ms
+        self.needs_slm = needs_slm
+
+        # axis-name, axis-value pairs
+        # super-axes (determines folder structure containing experiment)
+        self.super_axes = super_axes
+
+        # sub-axes (determines folder within hdf5_file)
+        self.sub_axes = sub_axes
+
+        # config group config-preset pairs
+        self.config_groups = config_groups
+
+        # device-name, parameter, value triplets
+        self.devices = devices
+
+        # what to do with the output
+        self.save_output = save_output
+
+        self.segment = do_segmentation
+        self.seg_method = segmentation_method
+        self.save_seg = save_segmentation
+
+        self.updates_pattern = updates_pattern
+        self.pattern_method = pattern_method
+        self.save_pattern = save_pattern
+
+    def get_rel_path(self, leading=3) -> (str, str):
+        fstring = ""
+
+        if self.super_axes is not None:
+            for ax, val in self.super_axes:
+
+                if val is int:
+                    val = str(val).zfill(leading)
+
+                fstring += f"{val}/"
+
+        fstring += f"{self.experiment_name}.hdf5"
+
+        dset = ""
+
+        if self.super_axes is not None:
+            for ax, val in self.sub_axes:
+
+                if val is int:
+                    val = str(val).zfill(leading)
+
+                dset += f"{val}/"
+
+            dset.rstrip("/")
+
+        else:
+            dset = "UNNAMED_DATA"
+
+        return fstring, dset
+
+
