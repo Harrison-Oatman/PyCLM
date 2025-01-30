@@ -91,12 +91,11 @@ class Position:
 
     def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
 
-        self.label=label
+        self.label = label
         self.x = x
         self.y = y
         self.z = z
         self.pfs = pfs
-
 
     def get_xy(self):
         if not ((self.x is None) or (self.y is None)):
