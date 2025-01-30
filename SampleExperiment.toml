@@ -1,0 +1,37 @@
+# information related to imaging conditions, channels, frequency
+[imaging]
+frequency = "2m"
+exposure = 100
+save = true
+
+
+# determines channel axis
+[channels]
+group = "channel"
+presets = ["545"]
+
+    # channel specific details, overwrites imaging properties
+    [channels.545]
+    exposure = 50
+
+
+# information related to stimulation
+[stimulation]
+frequency = "30s"
+exposure = 500
+
+
+# information related to segmentation
+[segmentation]
+method = "cellpose"
+save = true
+
+# all additional arguments are passed to method
+model = "cyto3"
+diam = 25
+
+
+# information related to pattern generation
+[patterns]
+method = "move_right"
+save = true
