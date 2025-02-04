@@ -20,3 +20,7 @@ class AcquisitionEventMessage(Message):
 
     def __init__(self):
         pass
+
+class UpdatePatternEventMessage(Message):
+
+    message = "update_pattern_event"
