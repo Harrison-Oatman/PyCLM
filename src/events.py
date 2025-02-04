@@ -1,6 +1,16 @@
 from uuid import uuid4
 
 
+class UpdatePatternEvent:
+
+    def __init__(self, experiment, configs=None, devices=None):
+        self.id = uuid4()
+
+        self.experiment_name = experiment
+        self.configs = configs
+        self.devices = devices
+
+
 class AcquisitionEvent:
 
     def __init__(self, experiment, x_um=0.0, y_um=0.0, z_um=0.0, use_pfs=False, pfs=0.0,
