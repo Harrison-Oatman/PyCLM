@@ -2,7 +2,7 @@ from pycromanager import Core
 from queues import AllQueues
 from time import time
 import numpy as np
-from .events import AcquisitionEvent, UpdatePatternEvent
+from .events import AcquisitionEvent, UpdatePatternEvent, Position
 from .datatypes import EventSLMPattern
 import logging
 
@@ -89,6 +89,33 @@ class MicroscopeProcess:
 
             self.core.set_property(label, name, t_func(value))
 
+    def move_to_position(self, position: Position):
+
+        core = self.core
+
+        xy = position.get_xy()
+        if xy is not None:
+            logging.info(f"moving to xy {xy}")
+            core.set_xy_position(xy[0], xy[1])
+        else:
+            logging.debug(f"move_to_position called with no xy position: {position}")
+
+        z = position.get_z()
+        if z is not None:
+            logging.info(f"moving to z position {z}")
+            core.set_position(z)
+        else:
+            logging.debug(f"move_to_position called with no z position: {position}")
+
+        pfs = position.get_pfs()
+        if pfs is not None:
+            logging.info(f"setting pfs offset {pfs}")
+            core.set_auto_focus_offset(pfs)
+        else:
+            logging.debug(f"move_to_position called with no pfs offset: {position}")
+
+        return 0
+
     def handle_update_pattern_event(self, up_event: UpdatePatternEvent, slm_await_s):
         event_id = up_event.id
         logging.debug(f"handling update pattern event {event_id}")
@@ -96,7 +123,7 @@ class MicroscopeProcess:
         assert self.slm_initialized, "slm not declared to microscope process, run declare_slm first"
 
         self.handle_device_update(up_event.devices)
-        self.handle_config_update(up_event.configs)
+        self.handle_config_update(up_event.config_groups)
 
         pattern_data = self.slm_queue.get(True, slm_await_s)
 
@@ -104,12 +131,16 @@ class MicroscopeProcess:
         assert pattern_data.event_id == event_id, f"event mismatch"
 
         self.core.set_slm_image(self.slm_device, pattern_data)
+        logging.info(f"experiment {up_event.experiment_name}: set slm image")
 
         return 0
 
     def handle_acquisition_event(self, aq_event: AcquisitionEvent):
         event_id = aq_event.id
         logging.debug(f"handling acquisition event {event_id}")
+
+        self.handle_device_update(aq_event.devices)
+        self.handle_config_update(aq_event.config_groups)
 
     def snap(self):
         core = self.core

@@ -7,13 +7,39 @@ class UpdatePatternEvent:
         self.id = uuid4()
 
         self.experiment_name = experiment
-        self.configs = configs
+        self.config_groups = configs
         self.devices = devices
+
+
+# todo: UpdatePosition event
+
+
+class Position:
+
+    def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
+
+        self.label = label
+        self.x = x
+        self.y = y
+        self.z = z
+        self.pfs = pfs
+
+    def get_xy(self):
+        if not ((self.x is None) or (self.y is None)):
+            return [self.x, self.y]
+
+        return None
+
+    def get_z(self):
+        return self.z
+
+    def get_pfs(self):
+        return self.get_pfs
 
 
 class AcquisitionEvent:
 
-    def __init__(self, experiment, x_um=0.0, y_um=0.0, z_um=0.0, use_pfs=False, pfs=0.0,
+    def __init__(self, experiment, position: Position,
                  scheduled_time=0, exposure_time_ms=10, needs_slm=False,
                  super_axes=None, sub_axes=None, config_groups=None, devices=None,
                  save_output=True,
@@ -26,13 +52,7 @@ class AcquisitionEvent:
         self.experiment_name = experiment
 
         # position
-        self.x_um = x_um
-        self.y_um = y_um
-        self.z_um = z_um
-
-        # pfs
-        self.use_pfs = use_pfs
-        self.pfs = pfs
+        self.position = position
 
         self.scheduled_time = scheduled_time
         self.complete = False
@@ -95,30 +115,6 @@ class AcquisitionEvent:
             dset = "UNNAMED_DATA"
 
         return fstring, dset
-
-
-class Position:
-
-    def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
-
-        self.label = label
-        self.x = x
-        self.y = y
-        self.z = z
-        self.pfs = pfs
-
-    def get_xy(self):
-        if not ((self.x is None) or (self.y is None)):
-            return [self.x, self.y]
-
-        return None
-
-    def get_z(self):
-        return self.z
-
-    def get_pfs(self):
-        return self.get_pfs
-
 
 
 # class PositionGrid:
