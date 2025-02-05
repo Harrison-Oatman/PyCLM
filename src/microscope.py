@@ -142,6 +142,8 @@ class MicroscopeProcess:
         self.handle_device_update(aq_event.devices)
         self.handle_config_update(aq_event.config_groups)
 
+        # todo: move to position
+
     def snap(self):
         core = self.core
 
