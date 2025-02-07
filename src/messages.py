@@ -6,6 +6,7 @@ should not pass numpy arrays (see datatypes.py)
 """
 
 from abc import ABC
+from .events import *
 
 
 class Message(ABC):
@@ -18,9 +19,13 @@ class AcquisitionEventMessage(Message):
 
     message = "acquisition_event"
 
-    def __init__(self):
-        pass
+    def __init__(self, event: AcquisitionEvent):
+        self.event = event
+
 
 class UpdatePatternEventMessage(Message):
 
     message = "update_pattern_event"
+
+    def __init__(self, event: UpdatePatternEvent):
+        self.event = event
