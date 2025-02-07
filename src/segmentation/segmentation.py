@@ -1,6 +1,9 @@
 from ..queues import AllQueues
 
 
+# todo SegmentationModel
+
+
 class SegmentationProcess:
 
     def __init__(self, aq: AllQueues):
