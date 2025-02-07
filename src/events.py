@@ -11,9 +11,6 @@ class UpdatePatternEvent:
         self.devices = devices
 
 
-# todo: UpdatePosition event
-
-
 class Position:
 
     def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
@@ -35,6 +32,16 @@ class Position:
 
     def get_pfs(self):
         return self.get_pfs
+
+
+class UpdateStagePositionEvent:
+    """
+    Moves the stage
+    """
+    def __init__(self, position):
+
+        self.id = uuid4()
+        self.position = position
 
 
 class AcquisitionEvent:
@@ -101,7 +108,7 @@ class AcquisitionEvent:
 
         dset = ""
 
-        if self.super_axes is not None:
+        if self.sub_axes is not None:
             for ax, val in self.sub_axes:
 
                 if val is int:
