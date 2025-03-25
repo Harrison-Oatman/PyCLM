@@ -1,8 +1,18 @@
 # information related to imaging conditions, channels, frequency
+[config_groups]
+LightPath = "CameraLeft"
+objective = "10x"
+
+[device_properties]
+Camera-TestProperty1 = 0.05
+
 [imaging]
-frequency = "2m"
+every_t = 2
 exposure = 100
 save = true
+
+    [imaging.config_groups]
+    # information related to imaging conditions, channels, frequency
 
 
 # determines channel axis
@@ -17,7 +27,7 @@ presets = ["545"]
 
 # information related to stimulation
 [stimulation]
-frequency = "30s"
+every_t = 1
 exposure = 500
 
 
@@ -32,6 +42,7 @@ diam = 25
 
 
 # information related to pattern generation
-[patterns]
-method = "move_right"
+[pattern]
+method = "circle"
 save = true
+rad = 200
