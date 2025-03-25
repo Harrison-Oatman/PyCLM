@@ -1,13 +1,15 @@
 from uuid import uuid4
-
+from .experiments import DeviceProperty, ConfigGroup
+from typing import Optional
 
 class UpdatePatternEvent:
 
-    def __init__(self, experiment, configs=None, devices=None):
+    def __init__(self, experiment, config_groups: Optional[list[ConfigGroup]] = None,
+                 devices: Optional[list[ConfigGroup]] = None,):
         self.id = uuid4()
 
         self.experiment_name = experiment
-        self.config_groups = configs
+        self.config_groups = config_groups
         self.devices = devices
 
 
@@ -44,11 +46,28 @@ class UpdateStagePositionEvent:
         self.position = position
 
 
+class GeneratePatternEvent:
+
+    def __init__(self, experiment, model, uses_acquisition=False, acquisition_event_id=None,
+                 uses_segmentation=False, segmentation_event_id=None,
+                 save_output=True, **kwargs):
+        self.id = uuid4()
+
+        self.experiment_name = experiment
+        self.model = model
+        self.uses_acquisition = uses_acquisition
+        self.acquisition_event_id = acquisition_event_id
+        self.save_output = save_output
+        self.kwargs = kwargs
+
+
 class AcquisitionEvent:
 
     def __init__(self, experiment, position: Position,
                  scheduled_time=0, exposure_time_ms=10, needs_slm=False,
-                 super_axes=None, sub_axes=None, config_groups=None, devices=None,
+                 super_axes=None, sub_axes=None,
+                 config_groups: Optional[list[ConfigGroup]] = None,
+                 devices: Optional[list[ConfigGroup]] = None,
                  save_output=True,
                  do_segmentation=False, segmentation_method=None, save_segmentation=False,
                  updates_pattern=False, pattern_method=None, save_pattern=False):
@@ -79,7 +98,7 @@ class AcquisitionEvent:
         # config group config-preset pairs
         self.config_groups = config_groups
 
-        # device-name, parameter, value triplets
+        # device-name, parameter, value, type
         self.devices = devices
 
         # what to do with the output
@@ -97,7 +116,7 @@ class AcquisitionEvent:
         fstring = ""
 
         if self.super_axes is not None:
-            for ax, val in self.super_axes:
+            for ax, val in enumerate(self.super_axes):
 
                 if val is int:
                     val = str(val).zfill(leading)
@@ -109,7 +128,7 @@ class AcquisitionEvent:
         dset = ""
 
         if self.sub_axes is not None:
-            for ax, val in self.sub_axes:
+            for ax, val in enumerate(self.sub_axes):
 
                 if val is int:
                     val = str(val).zfill(leading)
