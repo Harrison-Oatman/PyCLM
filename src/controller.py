@@ -11,21 +11,83 @@ from time import time
 from .queues import AllQueues
 from .events import AcquisitionEvent, UpdatePatternEvent, Position
 from .experiments import Experiment, experiment_from_toml
+from .datatypes import AcquisitionData
+from .messages import Message
+from h5py import File
+from pathlib import Path
+import numpy as np
 
 
 class MicroscopeOutbox:
 
     # grabs data from microscope, writes data to disk
 
-    def __init__(self, aq: AllQueues):
+    def __init__(self, aq: AllQueues, base_path: Path = Path().cwd()):
         self.inbox = aq.manager_to_outbox
         self.manager = aq.outbox_to_manager
         self.outbox = aq.acquisition_outbox
         self.seg_queue = aq.segmentation_queue
         self.pattern_queue = aq.raw_pattern
 
+        self.base_path = base_path
+
+        self.message_history = []
+
     def process(self):
-        pass
+
+        while True:
+
+            if not self.inbox.empty():
+                msg = self.inbox.get()
+
+                must_break = self.handle_message(msg)
+
+                if must_break:
+                    break
+
+            if not self.outbox.empty():
+                data = self.outbox.get()
+
+                if isinstance(data, Message):
+                    must_break = self.handle_message(data)
+
+                    if must_break:
+                        break
+
+                assert isinstance(data, AcquisitionData), \
+                    f"Unexpected data type: {type(data)}, expected AcquisitionData"
+
+                self.write_data(data)
+
+    def handle_message(self, msg):
+
+        self.message_history.append(msg)
+
+        match msg.message:
+
+            case "close":
+                return True
+
+            case _:
+                raise ValueError(f"Unexpected message: {msg}")
+
+    def write_data(self, data: AcquisitionData):
+        aq_event = data.event
+
+        file_relpath, relpath = aq_event.get_rel_path()
+
+        filepath = self.base_path / file_relpath
+        with File(filepath, "w") as f:
+            dset = f.create_dataset(relpath + r"\data", data=data.data)
+
+            print(dset)
+
+    def test_write_data(self):
+        aq_event = AcquisitionEvent("test", Position(1, 2, 0), scheduled_time=0, exposure_time_ms=1,
+                                    sub_axes=[0, "test"])
+        data = AcquisitionData(aq_event, np.random.rand(100, 100))
+
+        self.write_data(data)
 
 
 class SLMBuffer:
@@ -63,7 +125,6 @@ class Manager:
 
         while True:
             pass
-
 
     def sample_experiment(self):
         t_interval = 5
@@ -128,5 +189,9 @@ class Manager:
 if __name__ == "__main__":
     # Example usage
     aq = AllQueues()
-    manager = Manager(aq)
-    manager.sample_experiment()
+
+    outbox = MicroscopeOutbox(aq)
+    outbox.test_write_data()
+    #
+    # manager = Manager(aq)
+    # manager.sample_experiment()
