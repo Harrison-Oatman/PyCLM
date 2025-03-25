@@ -4,3 +4,4 @@ notebooks/gol_snaps/
 /plots/*
 /resources/*
 */.ipynb_checkpoints/*
+*.pyc
