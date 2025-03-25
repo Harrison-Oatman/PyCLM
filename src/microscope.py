@@ -1,5 +1,5 @@
 from pymmcore_plus import CMMCorePlus
-from queues import AllQueues
+from .queues import AllQueues
 from time import time, sleep
 import numpy as np
 from .events import AcquisitionEvent, UpdatePatternEvent, Position
@@ -40,6 +40,8 @@ class MicroscopeProcess:
         while True:
 
             if self.inbox.empty():
+
+                logging.debug(f"{time() - event_await_start: .3f}s since last event")
 
                 # check for timeout
                 if (event_await_s != 0) & (time() - event_await_start > event_await_s):
