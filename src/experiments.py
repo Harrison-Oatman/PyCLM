@@ -30,7 +30,6 @@ class ImagingConfig:
                  config_groups: Optional[list[ConfigGroup]] = None,
                  device_properties: Optional[list[DeviceProperty]] = None,
                  save=True):
-
         self.name = name
         self.exposure = exposure_ms
         self.every_t = every_t
@@ -40,12 +39,10 @@ class ImagingConfig:
         self.device_properties = make_deviceproperty_dict(device_properties)
 
     def update_config_groups(self, gps: list[ConfigGroup]):
-
         gps = make_configgroup_dict(gps)
         self.config_groups.update(gps)
 
     def update_device_properties(self, devp: list[DeviceProperty]):
-
         devp = make_deviceproperty_dict(devp)
         self.device_properties.update(devp)
 
@@ -63,7 +60,6 @@ class ImagingConfig:
 class MethodBasedConfig:
 
     def __init__(self, method_name: str, save_output: bool = True, **kwargs):
-
         self.method_name = method_name
         self.save = save_output
 
@@ -81,7 +77,6 @@ class Experiment:
 
     def __init__(self, experiment_name, imaging_configs: dict[str, ImagingConfig], stimulation_config: ImagingConfig,
                  segmentation: SegmentationConfig, pattern: PatternConfig):
-
         self.experiment_name = experiment_name
         self.channels = imaging_configs
         self.stimulation = stimulation_config
@@ -92,20 +87,55 @@ class Experiment:
         return (f"Experiment('{self.experiment_name}': Channels={self.channels}, Stimulation={self.stimulation}, "
                 f"Segmentation method={self.segmentation}, Pattern method={self.pattern})")
 
-    # def make_update_pattern_event(self):
-    #     devices = self.stimulation.device_properties
-    #     config_groups = self.stimulation.config_groups
-    #
-    #     return UpdatePatternEvent(self.experiment_name, devices, config_groups)
-    #
-    # def make_stim_acquisition_event(self, position, scheduled_time):
-    #     devices = self.stimulation.device_properties
-    #     config_groups = self.stimulation.config_groups
-    #
-    #     aq_event = AcquisitionEvent(
-    #         self.experiment_name, position, scheduled_time=scheduled_time,
-    #         exposure_time_ms=self.stimulation.exposure,
-    #     )
+
+class PositionBase:
+    pass
+
+
+class Position(PositionBase):
+
+    def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
+        self.label = label
+        self.x = x
+        self.y = y
+        self.z = z
+        self.pfs = pfs
+
+    def get_xy(self):
+        if not ((self.x is None) or (self.y is None)):
+            return [self.x, self.y]
+
+        return None
+
+    def get_z(self):
+        return self.z
+
+    def get_pfs(self):
+        return self.pfs
+
+
+class TimeCourse:
+
+    def __init__(self, count, interval, setup, between):
+        self.count = count
+        self.interval = interval
+        self.setup = setup
+        self.between = between
+
+
+class ExperimentSchedule:
+
+    def __init__(self, experiments: list[Experiment], positions: list[PositionBase],
+                 t_count: int = 1, t_interval: float = 30.0, t_setup=2., t_between=1.,
+                 timecourse: Optional[TimeCourse] = None):
+        self.experiments = {exp.experiment_name: exp for exp in experiments}
+        self.positions = {exp.experiment_name: pos for exp, pos in zip(experiments, positions)}
+
+        if timecourse:
+            self.times = timecourse
+
+        else:
+            self.times = TimeCourse(t_count, t_interval, t_setup, t_between)
 
 
 def check_type(obj):
@@ -250,4 +280,4 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
 
 if __name__ == "__main__":
-    print(experiment_from_toml(r"D:\FeedbackControl\SampleExperiment.toml"))
+    print(experiment_from_toml(r"/experiments/SampleExperiment.toml"))
