@@ -2,7 +2,8 @@ from pymmcore_plus import CMMCorePlus
 from .queues import AllQueues
 from time import time, sleep
 import numpy as np
-from .events import AcquisitionEvent, UpdatePatternEvent, Position
+from .events import AcquisitionEvent, UpdatePatternEvent
+from .experiments import Position
 from .datatypes import EventSLMPattern
 import logging
 

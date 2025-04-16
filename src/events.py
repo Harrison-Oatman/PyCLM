@@ -1,6 +1,7 @@
 from uuid import uuid4
-from .experiments import DeviceProperty, ConfigGroup
+from .experiments import ConfigGroup, Position
 from typing import Optional
+
 
 class UpdatePatternEvent:
 
@@ -11,29 +12,6 @@ class UpdatePatternEvent:
         self.experiment_name = experiment
         self.config_groups = config_groups
         self.devices = devices
-
-
-class Position:
-
-    def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
-
-        self.label = label
-        self.x = x
-        self.y = y
-        self.z = z
-        self.pfs = pfs
-
-    def get_xy(self):
-        if not ((self.x is None) or (self.y is None)):
-            return [self.x, self.y]
-
-        return None
-
-    def get_z(self):
-        return self.z
-
-    def get_pfs(self):
-        return self.get_pfs
 
 
 class UpdateStagePositionEvent:
