@@ -3,9 +3,9 @@ from .queues import AllQueues
 from time import time, sleep
 import numpy as np
 from .events import AcquisitionEvent, UpdatePatternEvent
-from .experiments import Position
-from .datatypes import EventSLMPattern
-import logging
+from .experiments import Position, DeviceProperty, ConfigGroup
+from .datatypes import EventSLMPattern, AcquisitionData
+from logging import debug, warning, info
 
 
 class MicroscopeProcess:
@@ -26,15 +26,24 @@ class MicroscopeProcess:
         core = self.core
         dev = core.getSLMDevice()
 
-        self.slm_device = dev
-        self.slm_h = core.getSLMHeight(dev)
-        self.slm_w = core.getSLMWidth(dev)
+        if dev == "":
+            warning("SLM Device not initialized,"
+                            " using dummy slm")
+
+            self.slm_device = "dummy"
+            self.slm_h = 1140
+            self.slm_w = 900
+
+        else:
+            self.slm_device = dev
+            self.slm_h = core.getSLMHeight(dev)
+            self.slm_w = core.getSLMWidth(dev)
 
         self.slm_initialized = True
 
     def process(self, event_await_s=5, slm_await_s=5):
 
-        logging.debug(f"started MicroscopeProcess on {self.core}")
+        debug(f"started MicroscopeProcess on {self.core}")
 
         event_await_start = time()
 
@@ -42,7 +51,7 @@ class MicroscopeProcess:
 
             if self.inbox.empty():
 
-                logging.debug(f"{time() - event_await_start: .3f}s since last event")
+                # debug(f"{time() - event_await_start: .3f}s since last event")
 
                 # check for timeout
                 if (event_await_s != 0) & (time() - event_await_start > event_await_s):
@@ -54,10 +63,10 @@ class MicroscopeProcess:
 
             match msg.message:
                 case "update_pattern_event":
-                    self.handle_update_pattern_event(msg, slm_await_s)
+                    self.handle_update_pattern_event(msg.event, slm_await_s)
 
                 case "acquisition_event":
-                    self.handle_acquisition_event(msg)
+                    self.handle_acquisition_event(msg.event)
 
                 case "close":
                     return 0
@@ -67,7 +76,7 @@ class MicroscopeProcess:
 
             event_await_start = time()
 
-    def handle_config_update(self, config_groups):
+    def handle_config_update(self, config_groups: list[ConfigGroup]):
         if config_groups is None:
             return 0
 
@@ -76,10 +85,11 @@ class MicroscopeProcess:
 
         return 0
 
-    def handle_device_update(self, devices):
+    def handle_device_update(self, devices: list[DeviceProperty]):
 
         if devices is None:
             return 0
+
 
         for label, name, value, t in devices:
 
@@ -92,55 +102,57 @@ class MicroscopeProcess:
 
             self.core.setProperty(label, name, t_func(value))
 
+        return 1
+
     def move_to_position(self, position: Position):
 
         core = self.core
 
         xy = position.get_xy()
         if xy is not None:
-            logging.info(f"moving to xy {xy}")
+            info(f"moving to xy {xy}")
             core.setXYPosition(xy[0], xy[1])
         else:
-            logging.debug(f"move_to_position called with no xy position: {position}")
+            debug(f"move_to_position called with no xy position: {position}")
 
         z = position.get_z()
         if z is not None:
-            logging.info(f"moving to z position {z}")
+            info(f"moving to z position {z}")
             core.setPosition(z)
         else:
-            logging.debug(f"move_to_position called with no z position: {position}")
+            debug(f"move_to_position called with no z position: {position}")
 
         pfs = position.get_pfs()
         if pfs is not None:
-            logging.info(f"setting pfs offset {pfs}")
+            info(f"setting pfs offset {pfs}")
             core.setAutoFocusOffset(pfs)
         else:
-            logging.debug(f"move_to_position called with no pfs offset: {position}")
+            debug(f"move_to_position called with no pfs offset: {position}")
 
         return 0
 
     def handle_update_pattern_event(self, up_event: UpdatePatternEvent, slm_await_s):
         event_id = up_event.id
-        logging.debug(f"handling update pattern event {event_id}")
+        debug(f"handling update pattern event {event_id}")
 
         assert self.slm_initialized, "slm not declared to microscope process, run declare_slm first"
 
-        self.handle_device_update(up_event.devices)
-        self.handle_config_update(up_event.config_groups)
-
         pattern_data = self.slm_queue.get(True, slm_await_s)
 
-        assert pattern_data is EventSLMPattern, f"received pattern data of unknown type: {type(pattern_data)}"
+        assert isinstance(pattern_data, EventSLMPattern), f"received pattern data of unknown type: {type(pattern_data)}"
         assert pattern_data.event_id == event_id, f"event mismatch"
 
-        self.core.setSLMImage(self.slm_device, pattern_data)
-        logging.info(f"experiment {up_event.experiment_name}: set slm image")
+        if self.slm_device == "dummy":
+            info(f"experiment {up_event.experiment_name}: dummy slm set image")
+        else:
+            self.core.setSLMImage(self.slm_device, pattern_data)
+            info(f"experiment {up_event.experiment_name}: set slm image")
 
         return 0
 
     def handle_acquisition_event(self, aq_event: AcquisitionEvent):
         event_id = aq_event.id
-        logging.debug(f"handling acquisition event {event_id}")
+        debug(f"handling acquisition event {event_id}")
 
         self.handle_device_update(aq_event.devices)
         self.handle_config_update(aq_event.config_groups)
@@ -152,17 +164,20 @@ class MicroscopeProcess:
         t_delta = target_time - time() - 0.1
 
         if t_delta > 0:
-            logging.info(f"waiting {t_delta: .3f}s until next acquisition")
+            info(f"waiting {t_delta: .3f}s until next acquisition")
             sleep(t_delta)
 
-        logging.debug("wait for system")
+        debug("wait for system")
         wait_time = time()
         self.core.waitForSystem()
-        logging.debug(f"took {wait_time - time(): .3f}s")
+        debug(f"took {time() - wait_time: .3f}s")
 
-        logging.info("acquiring image")
-        image = self.snap()
+        info("acquiring image")
+        image, tags = self.snap()
         aq_event.completed_time = time()
+
+        data_out = AcquisitionData(aq_event, image)
+        self.outbox.put(data_out)
 
     def snap(self):
         core = self.core

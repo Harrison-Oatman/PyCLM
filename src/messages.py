@@ -14,6 +14,9 @@ class Message(ABC):
     # will always be a string
     message = "BASE_MESSAGE"
 
+    def __repr__(self):
+        return f"message: {self.message}"
+
 
 class AcquisitionEventMessage(Message):
 

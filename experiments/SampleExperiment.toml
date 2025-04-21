@@ -1,7 +1,7 @@
 # information related to imaging conditions, channels, frequency
 [config_groups]
-LightPath = "CameraLeft"
-objective = "10x"
+LightPath = "Camera-left"
+Objective = "10X"
 
 [device_properties]
 Camera-TestProperty1 = 0.05
@@ -17,11 +17,11 @@ save = true
 
 # determines channel axis
 [channels]
-group = "channel"
-presets = ["545"]
+group = "Channel"
+presets = ["DAPI"]
 
     # channel specific details, overwrites imaging properties
-    [channels.545]
+    [channels.DAPI]
     exposure = 50
 
 

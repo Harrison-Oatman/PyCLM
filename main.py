@@ -1,9 +1,14 @@
 from argparse import ArgumentParser
 import logging
+import traceback
+
+import numpy as np
+
 from src import *
 from pymmcore_plus import CMMCorePlus
 # from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 
 class Controller:
@@ -29,6 +34,14 @@ class Controller:
             self.pattern
         ]
 
+    def initialize(self, schedule: ExperimentSchedule, slm_shape: tuple[int], affine_transform: np.ndarray,
+                   out_path: Path):
+
+        self.manager.initialize(schedule)
+        self.slm_buffer.initialize(slm_shape, affine_transform, schedule.experiment_names)
+        self.microscope.declare_slm()
+        self.outbox.base_path = out_path
+
     def run(self):
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(process.process) for process in self.processes]
@@ -37,12 +50,37 @@ class Controller:
                     future.result()
                 except Exception as e:
                     logging.error(f"Exception occurred: {e}")
+                    logging.error(traceback.format_exc())
+                # future.result()
 
 
 def main():
     args = process_args()
 
     c = Controller()
+
+    core = c.core
+    for group in core.getAvailableConfigGroups():
+        cg = core.getConfigGroupObject(group, False)
+        print(list(cg.items()))
+
+    t_interval = 5
+    t_steps = 5
+    t_setup = 2
+    t_between = 1
+    sample_experiment_toml_path = r"D:\FeedbackControl\experiments\SampleExperiment.toml"
+    experiments = {name: experiment_from_toml(sample_experiment_toml_path, name) for name in ["a", "b"]}
+    positions = {
+        "a": Position(1, 2, 0),
+        "b": Position(3, 4, 0)
+    }
+
+    schedule = ExperimentSchedule(experiments, positions, t_steps, t_interval, t_setup, t_between)
+    slm_shape = (10, 10)
+    at = np.array([[1, 0, 0], [0, 1, 0]])
+    base_path = Path(r"D:\FeedbackControl\test")
+
+    c.initialize(schedule, slm_shape, at, base_path)
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 

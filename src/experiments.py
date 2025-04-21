@@ -35,26 +35,26 @@ class ImagingConfig:
         self.every_t = every_t
         self.save = save
 
-        self.config_groups = make_configgroup_dict(config_groups)
-        self.device_properties = make_deviceproperty_dict(device_properties)
+        self._config_groups = make_configgroup_dict(config_groups)
+        self._device_properties = make_deviceproperty_dict(device_properties)
 
     def update_config_groups(self, gps: list[ConfigGroup]):
         gps = make_configgroup_dict(gps)
-        self.config_groups.update(gps)
+        self._config_groups.update(gps)
 
     def update_device_properties(self, devp: list[DeviceProperty]):
         devp = make_deviceproperty_dict(devp)
-        self.device_properties.update(devp)
+        self._device_properties.update(devp)
 
     def get_config_groups(self) -> list[ConfigGroup]:
-        return list(self.config_groups)
+        return list(self._config_groups.values())
 
     def get_device_properties(self) -> list[DeviceProperty]:
-        return list(self.device_properties)
+        return list(self._device_properties.values())
 
     def __repr__(self):
         return (f"ImagingConfig(exposure={self.exposure}ms, image_every={self.every_t}, "
-                f"configs={self.config_groups}, device_props={self.device_properties})")
+                f"configs={self._config_groups}, device_props={self._device_properties})")
 
 
 class MethodBasedConfig:
@@ -125,11 +125,15 @@ class TimeCourse:
 
 class ExperimentSchedule:
 
-    def __init__(self, experiments: list[Experiment], positions: list[PositionBase],
+    def __init__(self, experiments: dict[str: Experiment], positions: dict[str, PositionBase],
                  t_count: int = 1, t_interval: float = 30.0, t_setup=2., t_between=1.,
                  timecourse: Optional[TimeCourse] = None):
-        self.experiments = {exp.experiment_name: exp for exp in experiments}
-        self.positions = {exp.experiment_name: pos for exp, pos in zip(experiments, positions)}
+
+        self.experiment_names = [exp for exp in experiments]
+        self.experiments = experiments
+        self.positions = positions
+
+        assert set(experiments.keys()) == set(positions.keys())
 
         if timecourse:
             self.times = timecourse
@@ -277,6 +281,12 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         segmentation=segmentation_config,
         pattern=pattern_config,
     )
+
+# todo: generate ExperimentSchedule from toml
+# todo: write sample experimentschedule.toml
+# todo: generate positions from elements output
+# todo: generate positions from micromanager output
+# todo: make grid-based acquisition
 
 
 if __name__ == "__main__":

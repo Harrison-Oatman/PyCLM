@@ -1,12 +1,12 @@
 from uuid import uuid4
-from .experiments import ConfigGroup, Position
+from .experiments import ConfigGroup, Position, DeviceProperty
 from typing import Optional
 
 
 class UpdatePatternEvent:
 
     def __init__(self, experiment, config_groups: Optional[list[ConfigGroup]] = None,
-                 devices: Optional[list[ConfigGroup]] = None,):
+                 devices: Optional[list[DeviceProperty]] = None,):
         self.id = uuid4()
 
         self.experiment_name = experiment
@@ -45,7 +45,7 @@ class AcquisitionEvent:
                  scheduled_time=0, exposure_time_ms=10, needs_slm=False,
                  super_axes=None, sub_axes=None,
                  config_groups: Optional[list[ConfigGroup]] = None,
-                 devices: Optional[list[ConfigGroup]] = None,
+                 devices: Optional[list[DeviceProperty]] = None,
                  save_output=True,
                  do_segmentation=False, segmentation_method=None, save_segmentation=False,
                  updates_pattern=False, pattern_method=None, save_pattern=False):

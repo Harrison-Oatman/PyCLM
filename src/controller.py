@@ -17,7 +17,8 @@ from h5py import File
 from pathlib import Path
 import numpy as np
 from cv2 import warpAffine
-
+from logging import debug, info, warning
+import tifffile
 
 class DataPassingProcess(metaclass=ABCMeta):
     def __init__(self, aq: AllQueues):
@@ -102,6 +103,7 @@ class MicroscopeOutbox(DataPassingProcess):
     def handle_message(self, msg):
 
         self.message_history.append(msg)
+        info(msg)
 
         match msg.message:
 
@@ -111,16 +113,17 @@ class MicroscopeOutbox(DataPassingProcess):
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
+        return False
+
     def write_data(self, data: AcquisitionData):
         aq_event = data.event
 
         file_relpath, relpath = aq_event.get_rel_path()
 
-        filepath = self.base_path / file_relpath
-        with File(filepath, "w") as f:
-            dset = f.create_dataset(relpath + r"\data", data=data.data)
 
-            print(dset)
+        filepath = self.base_path / file_relpath
+        with File(filepath, "a") as f:
+            f[relpath + r"\data"] = data.data
 
     def test_write_data(self):
         aq_event = AcquisitionEvent("test", Position(1, 2, 0), scheduled_time=0, exposure_time_ms=1,
@@ -230,6 +233,8 @@ class SLMBuffer(DataPassingProcess):
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
+        return False
+
 
 class Manager:
 
@@ -276,19 +281,22 @@ class Manager:
             while (time() - start_time) < (t * times.interval) - times.setup:
                 pass
 
+            print(f"{time() - start_time}")
+
             for i, (name, experiment) in enumerate(self.experiments.items()):
                 scheduled_time = start_time + (t * times.interval) + (i * times.between)
+                print(scheduled_time - start_time)
 
                 stim = experiment.stimulation
 
                 if t % stim.every_t == 0:
-                    update_pattern = UpdatePatternEvent(name, stim.config_groups, stim.device_properties)
+                    update_pattern = UpdatePatternEvent(name, stim.get_config_groups(), stim.get_device_properties())
                     pattern_acquisition = AcquisitionEvent(name, self.positions[name],
                                                            scheduled_time=scheduled_time,
                                                            exposure_time_ms=stim.exposure,
                                                            needs_slm=True,
-                                                           config_groups=stim.config_groups,
-                                                           devices=stim.device_properties,
+                                                           config_groups=stim.get_config_groups(),
+                                                           devices=stim.get_device_properties(),
                                                            sub_axes=[t, "stim_aq"],
                                                            save_output=stim.save,
                                                            )
@@ -305,14 +313,20 @@ class Manager:
                         channel_acquisition = AcquisitionEvent(name, self.positions[name],
                                                                scheduled_time=scheduled_time,
                                                                exposure_time_ms=channel.exposure,
-                                                               config_groups=channel.config_groups,
-                                                               devices=channel.device_properties,
+                                                               config_groups=channel.get_config_groups(),
+                                                               devices=channel.get_device_properties(),
                                                                sub_axes=[t, f"channel_{channel_name}"],
                                                                save_output=channel.save,
                                                                )
 
                         aqmsg = AcquisitionEventMessage(channel_acquisition)
                         self.msgout["microscope"].put(aqmsg)
+
+        # msg = Message()
+        # msg.message = "close"
+        #
+        # for box in self.msgout:
+        #     self.msgout[box].put(msg)
 
     def sample_experiment(self):
         t_interval = 5
@@ -342,13 +356,13 @@ class Manager:
                 stim = experiment.stimulation
 
                 if t % stim.every_t == 0:
-                    update_pattern = UpdatePatternEvent(name, stim.config_groups, stim.device_properties)
+                    update_pattern = UpdatePatternEvent(name, stim._config_groups, stim._device_properties)
                     pattern_acquisition = AcquisitionEvent(name, positions[name],
                                                            scheduled_time=scheduled_time,
                                                            exposure_time_ms=stim.exposure,
                                                            needs_slm=True,
-                                                           config_groups=stim.config_groups,
-                                                           devices=stim.device_properties,
+                                                           config_groups=stim._config_groups,
+                                                           devices=stim._device_properties,
                                                            sub_axes=[t, "stim_aq"],
                                                            save_output=stim.save,
                                                            )
@@ -362,8 +376,8 @@ class Manager:
                         channel_acquisition = AcquisitionEvent(name, positions[name],
                                                                scheduled_time=scheduled_time,
                                                                exposure_time_ms=channel.exposure,
-                                                               config_groups=channel.config_groups,
-                                                               devices=channel.device_properties,
+                                                               config_groups=channel._config_groups,
+                                                               devices=channel._device_properties,
                                                                sub_axes=[t, f"channel_{channel_name}"],
                                                                save_output=channel.save,
                                                                )
