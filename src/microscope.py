@@ -4,7 +4,7 @@ from time import time, sleep
 import numpy as np
 from .events import AcquisitionEvent, UpdatePatternEvent
 from .experiments import Position, DeviceProperty, ConfigGroup
-from .datatypes import EventSLMPattern, AcquisitionData
+from .datatypes import EventSLMPattern, AcquisitionData, StimulationData
 from logging import debug, warning, info
 
 
@@ -21,6 +21,12 @@ class MicroscopeProcess:
         self.slm_device = None
         self.slm_h = None
         self.slm_w = None
+
+        self.start = 0
+
+        self.current_pattern = None
+        self.current_pattern_id = None
+
 
     def declare_slm(self):
         core = self.core
@@ -39,11 +45,15 @@ class MicroscopeProcess:
             self.slm_h = core.getSLMHeight(dev)
             self.slm_w = core.getSLMWidth(dev)
 
+        self.current_pattern = np.zeros((self.slm_h, self.slm_w))
+
         self.slm_initialized = True
+
 
     def process(self, event_await_s=5, slm_await_s=5):
 
         debug(f"started MicroscopeProcess on {self.core}")
+        self.start = time()
 
         event_await_start = time()
 
@@ -142,17 +152,22 @@ class MicroscopeProcess:
         assert isinstance(pattern_data, EventSLMPattern), f"received pattern data of unknown type: {type(pattern_data)}"
         assert pattern_data.event_id == event_id, f"event mismatch"
 
+        pattern = pattern_data.pattern
+
         if self.slm_device == "dummy":
             info(f"experiment {up_event.experiment_name}: dummy slm set image")
         else:
-            self.core.setSLMImage(self.slm_device, pattern_data)
+            self.core.setSLMImage(self.slm_device, pattern)
             info(f"experiment {up_event.experiment_name}: set slm image")
+
+        self.current_pattern = pattern
+        self.current_pattern_id = pattern_data.pattern_unique_id
 
         return 0
 
     def handle_acquisition_event(self, aq_event: AcquisitionEvent):
         event_id = aq_event.id
-        debug(f"handling acquisition event {event_id}")
+        debug(f"{self.t(): .3f}| handling acquisition event {event_id}")
 
         self.handle_device_update(aq_event.devices)
         self.handle_config_update(aq_event.config_groups)
@@ -164,7 +179,7 @@ class MicroscopeProcess:
         t_delta = target_time - time() - 0.1
 
         if t_delta > 0:
-            info(f"waiting {t_delta: .3f}s until next acquisition")
+            info(f"{self.t(): .3f}| waiting {t_delta: .3f}s until next acquisition")
             sleep(t_delta)
 
         debug("wait for system")
@@ -172,22 +187,36 @@ class MicroscopeProcess:
         self.core.waitForSystem()
         debug(f"took {time() - wait_time: .3f}s")
 
-        info("acquiring image")
-        image, tags = self.snap()
+        info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
+        image = self.snap()
         aq_event.completed_time = time()
+        info(f"{self.t(): .3f}| image acquired")
 
-        data_out = AcquisitionData(aq_event, image)
+        # info(f"{self.t(): .3f}| unloading")
+
+        if aq_event.needs_slm:
+            data_out = StimulationData(aq_event, image, self.current_pattern, self.current_pattern_id)
+        else:
+            data_out = AcquisitionData(aq_event, image)
+
         self.outbox.put(data_out)
+        # info(f"{self.t(): .3f}| unloaded")
 
     def snap(self):
         core = self.core
 
         core.snapImage()
+        image = core.getImage()
 
-        tagged_image = core.getTaggedImage()
-        pixels = np.reshape(tagged_image.pix,
-                            newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
+        return image
 
-        tags = tagged_image.tags
+    def t(self):
+        return time() - self.start
 
-        return pixels, tags
+        # tagged_image = core.getTaggedImage()
+        # pixels = np.reshape(tagged_image.pix,
+        #                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
+        #
+        # tags = tagged_image.tags
+        #
+        # return pixels, tags
