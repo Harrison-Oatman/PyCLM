@@ -23,12 +23,12 @@ class AllQueues:
         self.acquisition_outbox = Queue()
 
         # raw data to be segmented queue
-        self.segmentation_queue = Queue()
+        self.outbox_to_seg = Queue()
 
         # segmented for pattern generation queue
         # and raw to pattern queue
-        self.segmented_pattern = Queue()
-        self.raw_pattern = Queue()
+        self.seg_to_pattern = Queue()
+        self.outbox_to_pattern = Queue()
 
         # pattern to slm buffer queue
         self.pattern_to_slm = Queue()
