@@ -43,6 +43,5 @@ diam = 25
 
 # information related to pattern generation
 [pattern]
-method = "circle"
-save = true
+method = "vbar"
 rad = 200
