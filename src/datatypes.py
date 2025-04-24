@@ -16,19 +16,40 @@ class EventSLMPattern:
         self.pattern_unique_id = pattern_unique_id
 
 
-class AcquisitionData:
+class GenericData:
+
+    def __init__(self, data: np.ndarray):
+        self.data = data
+
+
+class AcquisitionData(GenericData):
 
     def __init__(self, event: AcquisitionEvent, data: np.ndarray):
+        super().__init__(data)
+
         self.event = event
         self.event_id = event.id
-        self.data = data
+        self.channel_id = event.channel_id
 
 
-class CameraPattern:
+class StimulationData(AcquisitionData):
 
-    def __init__(self, event: AcquisitionEvent, data: np.ndarray):
-        self.event = event
-        self.experiment = event.experiment_name
-        self.data = data
+    def __init__(self, event: AcquisitionEvent, data: np.ndarray, dmd_pattern: np.ndarray,
+                 pattern_id):
+        super().__init__(event, data)
+        self.dmd_pattern = dmd_pattern
+        self.pattern_id = pattern_id
 
+
+class SegmentationData(AcquisitionData):
+
+    pass
+
+
+class CameraPattern(GenericData):
+
+    def __init__(self, experiment_name, data: np.ndarray):
+        super().__init__(data)
+
+        self.experiment = experiment_name
         self.pattern_id = uuid4()
