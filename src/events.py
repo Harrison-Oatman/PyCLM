@@ -1,12 +1,15 @@
-from uuid import uuid4
+from uuid import uuid4, UUID
 from .experiments import ConfigGroup, Position, DeviceProperty
 from typing import Optional
+from h5py import Dataset
+import datetime
+
 
 
 class UpdatePatternEvent:
 
     def __init__(self, experiment, config_groups: Optional[list[ConfigGroup]] = None,
-                 devices: Optional[list[DeviceProperty]] = None,):
+                 devices: Optional[list[DeviceProperty]] = None, ):
         self.id = uuid4()
 
         self.experiment_name = experiment
@@ -18,8 +21,8 @@ class UpdateStagePositionEvent:
     """
     Moves the stage
     """
-    def __init__(self, position):
 
+    def __init__(self, position):
         self.id = uuid4()
         self.position = position
 
@@ -41,14 +44,16 @@ class GeneratePatternEvent:
 
 class AcquisitionEvent:
 
-    def __init__(self, experiment, position: Position,
-                 scheduled_time=0, exposure_time_ms=10, needs_slm=False,
+    def __init__(self, experiment, position: Position, channel_id: UUID,
+                 scheduled_time=0, scheduled_time_since_start=0, exposure_time_ms=10, needs_slm=False,
                  super_axes=None, sub_axes=None,
                  config_groups: Optional[list[ConfigGroup]] = None,
                  devices: Optional[list[DeviceProperty]] = None,
                  save_output=True,
                  do_segmentation=False, segmentation_method=None, save_segmentation=False,
-                 updates_pattern=False, pattern_method=None, save_pattern=False):
+                 raw_goes_to_pattern=False, pattern_method=None, save_pattern=False,
+                 segmentation_goes_to_pattern=False,
+                 ):
 
         self.id = uuid4()
 
@@ -59,6 +64,7 @@ class AcquisitionEvent:
         self.position = position
 
         self.scheduled_time = scheduled_time
+        self.time_since_start = scheduled_time_since_start
         self.complete = False
         self.completed_time = None
 
@@ -86,7 +92,10 @@ class AcquisitionEvent:
         self.seg_method = segmentation_method
         self.save_seg = save_segmentation
 
-        self.updates_pattern = updates_pattern
+        self.raw_goes_to_pattern = raw_goes_to_pattern
+        self.seg_goes_to_pattern = segmentation_goes_to_pattern
+        self.channel_id = channel_id
+
         self.pattern_method = pattern_method
         self.save_pattern = save_pattern
 
@@ -101,7 +110,7 @@ class AcquisitionEvent:
 
                 fstring += f"{val}/"
 
-        fstring += f"{self.experiment_name}.hdf5"
+        fstring += f"{self.experiment_name}"
 
         dset = ""
 
@@ -120,6 +129,46 @@ class AcquisitionEvent:
 
         return fstring, dset
 
+    def write_attrs(self, dset: Dataset):
+        dset.attrs["id"] = str(self.id)
+        dset.attrs["position"] = [(k, str(v)) for k, v in self.position.as_dict().items()]
+
+        dset.attrs["experiment_name"] = self.experiment_name
+
+        value = datetime.datetime.fromtimestamp(self.scheduled_time)
+        dset.attrs["time_scheduled"] = value.strftime('%Y-%m-%d %H:%M:%S')
+        dset.attrs["time_since_start"] = str(datetime.timedelta(seconds=self.time_since_start))
+        dset.attrs["time_completed"] = datetime.datetime.fromtimestamp(self.completed_time).strftime('%Y-%m-%d %H:%M:%S')
+        dset.attrs["complete"] = self.complete
+
+        dset.attrs["exposure_time_ms"] = self.exposure_time_ms
+        dset.attrs["needs_slm"] = self.needs_slm
+
+        if self.super_axes is not None:
+            dset.attrs["super_axes"] = [str(a) for a in self.super_axes]
+
+        if self.sub_axes is not None:
+             dset.attrs["sub_axes"] = [str(a) for a in self.sub_axes]
+
+        if self.config_groups is not None:
+            for cg in self.config_groups:
+                dset.attrs[f"config_groups: {cg.group}"] = str(cg.config)
+
+        if self.devices is not None:
+            for dp in self.devices:
+                dset.attrs[f"devices: {dp.device}-{dp.property}"] = str(dp.value)
+
+        dset.attrs["save_output"] = self.save_output
+        dset.attrs["segment"] = self.segment
+        dset.attrs["seg_method"] = self.seg_method
+        dset.attrs["save_seg"] = self.save_seg
+
+        dset.attrs["raw_goes_to_pattern"] = self.raw_goes_to_pattern
+        dset.attrs["seg_goes_to_pattern"] = self.seg_goes_to_pattern
+        dset.attrs["channel_id"] = str(self.channel_id)
+
+        dset.attrs["pattern_method"] = self.pattern_method
+        dset.attrs["save_pattern"] = self.save_pattern
 
 # class PositionGrid:
 #     """
