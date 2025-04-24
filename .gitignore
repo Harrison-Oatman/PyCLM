@@ -5,3 +5,4 @@ notebooks/gol_snaps/
 /resources/*
 */.ipynb_checkpoints/*
 *.pyc
+/test/
