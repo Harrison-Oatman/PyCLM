@@ -34,10 +34,23 @@ class Controller:
             self.pattern
         ]
 
+        self.camera_properties = None
+
     def initialize(self, schedule: ExperimentSchedule, slm_shape: tuple[int], affine_transform: np.ndarray,
                    out_path: Path):
 
-        self.manager.initialize(schedule)
+        camera_roi = ROI(*self.core.getROI())
+        camera_resolution = self.core.getPixelSizeUm()
+
+        self.camera_properties = CameraProperties(camera_roi, camera_resolution)
+
+        self.pattern.initialize(self.camera_properties)
+
+        pattern_requirements = {}
+        for name, experiment in schedule.experiments.items():
+            pattern_requirements[name] = self.pattern.request_model(experiment)
+
+        self.manager.initialize(schedule, pattern_requirements)
         self.slm_buffer.initialize(slm_shape, affine_transform, schedule.experiment_names)
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
@@ -76,8 +89,8 @@ def main():
     }
 
     schedule = ExperimentSchedule(experiments, positions, t_steps, t_interval, t_setup, t_between)
-    slm_shape = (10, 10)
-    at = np.array([[1, 0, 0], [0, 1, 0]])
+    slm_shape = (512, 512)
+    at = np.array([[1, 0, 0], [0, 1, 0]], dtype=np.float32)
     base_path = Path(r"D:\FeedbackControl\test")
 
     c.initialize(schedule, slm_shape, at, base_path)
