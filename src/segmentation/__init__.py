@@ -1,1 +1,1 @@
-from .segmentation import SegmentationProcess
+from .segmentation import SegmentationProcess, SegmentationModel

@@ -1,1 +1,1 @@
-from .pattern import PatternProcess
+from .pattern import *
