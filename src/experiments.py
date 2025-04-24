@@ -2,6 +2,7 @@ from collections import namedtuple
 from typing import Optional
 from toml import load
 from copy import deepcopy
+from uuid import uuid4
 
 ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
@@ -26,11 +27,12 @@ class ImagingConfig:
     Contains device properties and config groups which can be updated during experiment initialization or runtime
     """
 
-    def __init__(self, name: str, exposure_ms: float = 10, every_t: int = 1,
+    def __init__(self, experiment_name: str, exposure_ms: float = 10, every_t: int = 1,
                  config_groups: Optional[list[ConfigGroup]] = None,
                  device_properties: Optional[list[DeviceProperty]] = None,
                  save=True):
-        self.name = name
+        self.channel_id = uuid4()
+        self.experiment_name = experiment_name
         self.exposure = exposure_ms
         self.every_t = every_t
         self.save = save
@@ -59,9 +61,10 @@ class ImagingConfig:
 
 class MethodBasedConfig:
 
-    def __init__(self, method_name: str, save_output: bool = True, **kwargs):
+    def __init__(self, method_name: str, save_output: bool = True, every_t = 1, **kwargs):
         self.method_name = method_name
         self.save = save_output
+        self.every_t = every_t
 
         self.kwargs = kwargs
 
@@ -77,6 +80,7 @@ class Experiment:
 
     def __init__(self, experiment_name, imaging_configs: dict[str, ImagingConfig], stimulation_config: ImagingConfig,
                  segmentation: SegmentationConfig, pattern: PatternConfig):
+        self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
         self.stimulation = stimulation_config
@@ -112,6 +116,15 @@ class Position(PositionBase):
 
     def get_pfs(self):
         return self.pfs
+
+    def as_dict(self):
+        return {
+            "label": self.label,
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "pfs": self.pfs
+        }
 
 
 class TimeCourse:
@@ -203,7 +216,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     base_device_props = get_device_properties(toml_data, "device_properties")
 
     base_config = ImagingConfig(
-        name=name,
+        experiment_name=name,
         config_groups=base_config_groups,
         device_properties=base_device_props,
     )
@@ -264,14 +277,12 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
     # make segmentation config
     segmentation = toml_data["segmentation"]
-    method = segmentation["method"]
-    del segmentation["method"]
+    method = segmentation.pop("method")
     segmentation_config = SegmentationConfig(method, **segmentation)
 
     # make pattern config
     pattern = toml_data["pattern"]
-    method = pattern["method"]
-    del pattern["method"]
+    method = pattern.pop("method")
     pattern_config = PatternConfig(method, **pattern)
 
     return Experiment(
