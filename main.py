@@ -36,7 +36,7 @@ class Controller:
 
         self.camera_properties = None
 
-    def initialize(self, schedule: ExperimentSchedule, slm_shape: tuple[int], affine_transform: np.ndarray,
+    def initialize(self, schedule: ExperimentSchedule, slm_shape: tuple[int, int], affine_transform: np.ndarray,
                    out_path: Path):
 
         camera_roi = ROI(*self.core.getROI())

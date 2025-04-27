@@ -20,6 +20,7 @@ import numpy as np
 from cv2 import warpAffine
 from logging import debug, info, warning
 import tifffile
+from typing import Any
 
 class DataPassingProcess(metaclass=ABCMeta):
     def __init__(self, aq: AllQueues):
@@ -168,7 +169,7 @@ class SLMBuffer(DataPassingProcess):
 
         self.initialized = False
 
-    def initialize(self, shape, affine_transform, experiment_names):
+    def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32], experiment_names: list[str]):
         """
         :param shape: Tuple of (width, height) for the SLM pattern
         :param affine_transform: 2x3 array for affine transformation to apply to pattern
