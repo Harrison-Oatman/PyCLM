@@ -3,6 +3,8 @@ from typing import Optional
 from toml import load
 from copy import deepcopy
 from uuid import uuid4
+from xml.etree import ElementTree
+from pathlib import Path
 
 ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
@@ -208,6 +210,40 @@ def get_device_properties(toml_dict, key):
     return device_properties
 
 
+def positions_from_xml(fp):
+
+    tree = ElementTree.parse(fp)
+    root = tree.getroot()
+
+    positions = []
+
+    for node in root[0]:
+        if node.attrib["runtype"] != "NDSetupMultipointListItem":
+            continue
+
+        nv = {n.tag: n.attrib["value"] for n in node if n.attrib.get("value", None) is not None}
+
+        for tag in ["dXPosition", "dYPosition", "dZPosition", "dPFSOffset"]:
+            val = nv.get(tag)
+            if val is not None:
+                val = float(val)
+
+            nv[tag] = val
+
+        if (nv["dPFSOffset"] is not None) and (nv["dPFSOffset"] < 0):
+            nv["dPFSOffset"] = None
+
+        positions.append(Position(
+            x=nv["dXPosition"],
+            y=nv["dYPosition"],
+            z=nv["dZPosition"],
+            pfs=nv["dPFSOffset"],
+            label=nv["strName"]
+        ))
+
+    return positions
+
+
 def experiment_from_toml(toml_path, name="SampleExperiment"):
     with open(toml_path, "r") as f:
         toml_data = load(f)
@@ -292,6 +328,55 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         segmentation=segmentation_config,
         pattern=pattern_config,
     )
+
+
+def read_schedule(toml_path):
+
+    with open(toml_path, "r") as f:
+        toml_data = load(f)
+
+    toml_data = toml_data["timing"]
+
+    out = {}
+
+    out["t_count"] = toml_data.get("steps", 10)
+    out["t_interval"] = toml_data.get("interval_seconds", 10.0)
+    out["t_setup"] = toml_data.get("setup_time_seconds", 2.0)
+    out["t_between"] = toml_data.get("time_between_positions", 2.0)
+
+    return out
+
+
+def schedule_from_directory(experiment_dir: Path):
+    tomls = experiment_dir.glob("*.toml")
+    tomls = {f.stem: str(f) for f in tomls}
+
+    positions_path = experiment_dir / "multipoints.xml"
+
+    pos_list = positions_from_xml(str(positions_path))
+
+    positions = {}
+    experiments = {}
+
+    for position in pos_list:
+
+        name: str = position.label
+
+        exp_stem = name.split(".")[0]
+
+        experiment_path = tomls.get(exp_stem)
+        assert experiment_path is not None, f"could not find {exp_stem} in {list(tomls.keys())}"
+
+        positions[name] = position
+        experiments[name] = experiment_from_toml(experiment_path, name)
+
+    timing = read_schedule(str(experiment_dir / "schedule.toml"))
+
+    schedule = ExperimentSchedule(experiments, positions, **timing)
+
+    return schedule
+
+
 
 # todo: generate ExperimentSchedule from toml
 # todo: write sample experimentschedule.toml

@@ -171,7 +171,7 @@ class SLMBuffer(DataPassingProcess):
 
     def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32], experiment_names: list[str]):
         """
-        :param shape: Tuple of (width, height) for the SLM pattern
+        :param shape: Tuple of (height, width) for the SLM pattern
         :param affine_transform: 2x3 array for affine transformation to apply to pattern
         :param experiment_names: List of experiment names to initialize patterns for
         """
@@ -196,7 +196,10 @@ class SLMBuffer(DataPassingProcess):
         """
         assert self.initialized, "SLMBuffer must be initialized before converting patterns"
 
-        return warpAffine(np.round(pattern * 255).astype(np.uint8), self.affine_transform, self.slm_shape)
+        return warpAffine(np.round(pattern * 255).astype(np.uint8),
+                          self.affine_transform,
+                          (self.slm_shape[1],
+                           self.slm_shape[0]))
 
     def handle_data(self, data: CameraPattern):
 
