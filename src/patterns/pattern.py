@@ -107,6 +107,7 @@ class PatternModel:
     def __init__(self, experiment_name, camera_properties: CameraProperties, **kwargs):
         self.experiment = experiment_name
         self.camera_properties = camera_properties
+        self.pixel_size_um = camera_properties.pixel_size_um
         self.pattern_shape = (camera_properties.roi.height, camera_properties.roi.width)
 
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
@@ -114,6 +115,18 @@ class PatternModel:
 
     def generate(self, data_dock: DataDock) -> np.ndarray:
         raise NotImplementedError
+
+
+# class OpenLoopPatternModel(PatternModel):
+#
+#     name = "open loop"
+#
+#     def __init__(self, experiment_name, camera_properties, **kwargs):
+#         super().__init__(experiment_name, camera_properties)
+#
+#
+#     def initialize(self, experiment):
+#         return []
 
 
 class CirclePattern(PatternModel):
@@ -148,6 +161,51 @@ class CirclePattern(PatternModel):
         return (pattern * ((xx - center_x)**2 + (yy - center_y)**2 < self.rad**2)).astype(np.float16)
 
 
+class BarPattern(PatternModel):
+    """
+    moves a bar along the y-axis
+    """
+
+    name = "bar"
+
+    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2, bar_speed=0.01, bar_width=40, **kwargs):
+        """
+        :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
+                           vertical axis containing "on" pixels
+        :param bar_speed: speed in um/sec
+        :param bar_width: width in um
+        """
+
+        super().__init__(experiment_name, camera_properties)
+
+        self.duty_cycle = duty_cycle
+        self.bar_speed = bar_speed
+        self.bar_width = bar_width
+        self.L = bar_width / duty_cycle
+
+    def initialize(self, experiment):
+        return []
+
+    def generate(self, data_dock: DataDock):
+
+        t = data_dock.t
+
+        px_um = self.pixel_size_um
+
+        h, w = self.pattern_shape
+
+        y_range = np.arange(h)
+        x_range = np.arange(w)
+
+        xx, yy = np.meshgrid(x_range, y_range)
+
+        y_um = px_um*yy
+
+        is_on = (((t*self.bar_speed - y_um) / self.L) % 1) < self.duty_cycle
+
+        return is_on.astype(np.float16)
+
+
 # class PatternDataDock:
 #
 #     def
@@ -156,7 +214,8 @@ class CirclePattern(PatternModel):
 class PatternProcess:
 
     known_models = {
-        "circle": CirclePattern
+        "circle": CirclePattern,
+        "bar": BarPattern,
     }
 
     def __init__(self, aq: AllQueues):
