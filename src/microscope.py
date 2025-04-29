@@ -50,7 +50,7 @@ class MicroscopeProcess:
         self.slm_initialized = True
 
 
-    def process(self, event_await_s=5, slm_await_s=5):
+    def process(self, event_await_s=0, slm_await_s=5):
 
         debug(f"started MicroscopeProcess on {self.core}")
         self.start = time()
