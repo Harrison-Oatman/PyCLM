@@ -376,7 +376,7 @@ class Manager:
 
                 if make_pattern:
                     pattern_request = RequestPattern(
-                        scheduled_time, name, self.pattern_requirements[name]
+                        scheduled_time - start_time, name, self.pattern_requirements[name]
                     )
 
                     print("sending message to pattern")
