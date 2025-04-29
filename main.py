@@ -13,7 +13,7 @@ from pathlib import Path
 
 class Controller:
 
-    def __init__(self, config=None):
+    def __init__(self, config="MMConfig_demo.cfg"):
         self.core = CMMCorePlus()
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
@@ -72,61 +72,63 @@ def get_slm_shape(core: CMMCorePlus):
     return core.getSLMHeight(dev), core.getSLMWidth(dev)
 
 
-def main():
-    args = process_args()
-
-    c = Controller(r"C:\Program Files\Micro-Manager-2.0\Ti2MightexCrestSolaSpectra.cfg")
-
-    core = c.core
-    for group in core.getAvailableConfigGroups():
-        cg = core.getConfigGroupObject(group, False)
-        print(cg.name, list(cg.items()))
-
-    base_path = Path(str(r"C:\Users\Nikon\Desktop\Code\FeedbackControl\test\test1"))
-    schedule = schedule_from_directory(base_path)
-
-    slm_shape = get_slm_shape(core)
-
-    core.setFocusDevice("ZDrive")
-
-    at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
-    c.initialize(schedule, slm_shape, at, base_path)
-    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
-
-    c.run()
-
-
 # def main():
 #     args = process_args()
 #
-#     c = Controller()
+#     c = Controller(r"C:\Program Files\Micro-Manager-2.0\Ti2MightexCrestSolaSpectra.cfg")
 #
 #     core = c.core
 #     for group in core.getAvailableConfigGroups():
 #         cg = core.getConfigGroupObject(group, False)
-#         print(list(cg.items()))
+#         print(cg.name, list(cg.items()))
 #
-#     t_interval = 10
-#     t_steps = 5
-#     t_setup = 2
-#     t_between = 1
-#     sample_experiment_toml_path = r"D:\FeedbackControl\experiments\SampleExperiment.toml"
-#     experiments = {name: experiment_from_toml(sample_experiment_toml_path, name) for name in ["a", "b"]}
-#     positions = {
-#         "a": Position(1, 2, 0),
-#         "b": Position(3, 4, 0)
-#     }
+#     base_path = Path(str(r"C:\Users\Nikon\Desktop\Code\FeedbackControl\test\test1"))
+#     schedule = schedule_from_directory(base_path)
 #
-#     schedule = ExperimentSchedule(experiments, positions, t_steps, t_interval, t_setup, t_between)
-#     slm_shape = (512, 512)
-#     at = np.array([[1, 0, 0], [0, 1, 0]], dtype=np.float32)
-#     base_path = Path(r"D:\FeedbackControl\test")
+#     slm_shape = get_slm_shape(core)
 #
+#     core.setFocusDevice("ZDrive")
+#
+#     at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 #     c.initialize(schedule, slm_shape, at, base_path)
-#
 #     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 #
 #     c.run()
+
+
+def main():
+    args = process_args()
+
+    c = Controller()
+
+    core = c.core
+    for group in core.getAvailableConfigGroups():
+        cg = core.getConfigGroupObject(group, False)
+        print(list(cg.items()))
+
+    t_interval = 5
+    t_steps = 5
+    t_setup = 2
+    t_between = 1
+    e1_toml_path = r"D:\FeedbackControl\experiments\SampleExperiment.toml"
+    e2_toml_path = r"D:\FeedbackControl\experiments\SampleExperiment2.toml"
+    experiments = {"a": experiment_from_toml(e1_toml_path, "a"),
+                   "b": experiment_from_toml(e2_toml_path, "b")}
+    positions = {
+        "a": Position(1, 2, 0),
+        "b": Position(3, 4, 0)
+    }
+
+    schedule = ExperimentSchedule(experiments, positions, t_steps, t_interval, t_setup, t_between)
+    slm_shape = (512, 512)
+    at = np.array([[1, 0, 0], [0, 1, 0]], dtype=np.float32)
+    base_path = Path(r"D:\FeedbackControl\test")
+
+    c.initialize(schedule, slm_shape, at, base_path)
+
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+
+    c.run()
 
 
 def process_args():
