@@ -188,13 +188,17 @@ class SLMBuffer(DataPassingProcess):
 
         self.initialized = True
 
-    def pattern_to_slm(self, pattern: np.ndarray):
+    def pattern_to_slm(self, pattern: np.ndarray, slm_coords=False):
         """
         This function takes a pattern and applies the stored affine transformation
         :param pattern: np array of type float scaled from 0-1, in coordinates of camera
+        :param slm_coords: bool whether pattern is already in slm coordinate space
         :return: at_slm_pattern: np array of type uint8, transformed to SLM coordinates
         """
         assert self.initialized, "SLMBuffer must be initialized before converting patterns"
+
+        if slm_coords:
+            return np.round(pattern).astype(np.uint8)
 
         return warpAffine(np.round(pattern * 255).astype(np.uint8),
                           self.affine_transform,
@@ -210,7 +214,7 @@ class SLMBuffer(DataPassingProcess):
 
         experiment_name = data.experiment
 
-        slm_pattern = self.pattern_to_slm(pattern)
+        slm_pattern = self.pattern_to_slm(pattern, data.slm_coords)
 
         # Store the pattern in the dictionary
         if experiment_name in self.slm_patterns:
@@ -396,7 +400,7 @@ class Manager:
                                                            needs_slm=True,
                                                            config_groups=stim.get_config_groups(),
                                                            devices=stim.get_device_properties(),
-                                                           sub_axes=[t, "stim_aq"],
+                                                           sub_axes=[f"{t: 05d}", "stim_aq"],
                                                            **channel_kwargs,
                                                            )
 

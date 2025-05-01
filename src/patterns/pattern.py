@@ -3,10 +3,13 @@ from ..experiments import Experiment, ImagingConfig
 from ..messages import Message
 from ..datatypes import AcquisitionData, SegmentationData, CameraPattern
 from logging import warning
-from typing import NamedTuple
+from typing import NamedTuple, Union
 from uuid import UUID, uuid4
 from collections import defaultdict
+from pathlib import Path
+from h5py import File
 import numpy as np
+from natsort import natsorted
 
 
 AcquiredImageRequest = NamedTuple("AcquiredImageRequest", [("id", UUID), ("needs_raw", bool), ("needs_seg", bool)])
@@ -116,6 +119,10 @@ class PatternModel:
     def generate(self, data_dock: DataDock) -> np.ndarray:
         raise NotImplementedError
 
+class PatternModelReturnsSLM(PatternModel):
+
+    pass
+
 
 # class OpenLoopPatternModel(PatternModel):
 #
@@ -127,6 +134,43 @@ class PatternModel:
 #
 #     def initialize(self, experiment):
 #         return []
+
+class PatternReview(PatternModelReturnsSLM):
+
+    name = "pattern_review"
+
+
+    def __init__(self, experiment_name, camera_properties, h5fp: Union[str, Path] = None, channel="545", **kwargs):
+        super().__init__(experiment_name, camera_properties)
+
+        if h5fp is None:
+            raise ValueError("pattern_review model requires specifying h5fp (h5 filepath)")
+
+        self.fp = Path(h5fp)
+        self.channel_name = f"channel_{channel}"
+
+        with File(str(self.fp), "r") as f:
+
+            keys = list(f.keys())
+
+        self.keys = natsorted(keys)
+
+    def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
+        return []
+
+    def generate(self, data_dock: DataDock) -> np.ndarray:
+
+        with File(str(self.fp), "r") as f:
+
+            while len(self.keys) > 0:
+
+                key = self.keys.pop(0)
+
+                if self.channel_name in f[key]:
+
+                    return np.array(f[key]["stim_aq"]["dmd"])
+
+        return np.array([])
 
 
 class CirclePattern(PatternModel):
@@ -274,9 +318,16 @@ class PatternProcess:
 
         assert isinstance(model, PatternModel), f"self.models[{'experiment_name'}] is not a PatternModel"
 
-        pattern = model.generate(data_dock)
+        if isinstance(model, PatternModelReturnsSLM):
+            slm_pattern = model.generate(data_dock)
 
-        self.slm.put(CameraPattern(experiment_name, pattern))
+            self.slm.put(CameraPattern(experiment_name, slm_pattern, slm_coords=True))
+
+        else:
+
+            pattern = model.generate(data_dock)
+
+            self.slm.put(CameraPattern(experiment_name, pattern))
 
     def check(self, experiment_name):
 
