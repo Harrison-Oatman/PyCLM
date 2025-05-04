@@ -3,6 +3,8 @@ import numpy as np
 from h5py import File
 import tifffile
 from pathlib import Path
+from argparse import ArgumentParser
+from natsort import natsorted
 
 
 def get_mapping(projector_api):
@@ -31,17 +33,38 @@ def make_tif(fp, chan="638"):
 
     with File(fp, mode="r") as f:
 
+        indices = []
+
         for t_val, data in f.items():
 
             if channel_key not in data:
                 continue
 
-            collected_frames.append(np.array(data[channel_key]["data"]))
+            indices.append(t_val)
 
+        for t_val in natsorted(indices):
+
+            collected_frames.append(np.array(f[t_val][channel_key]["data"]))
 
     outpath = fp[:-5] + ".tif"
     tifffile.imwrite(outpath, np.array(collected_frames))
 
 
+def parse_args():
+    args = ArgumentParser()
+
+    args.add_argument("dir")
+
+    return args.parse_args()
+
+
 if __name__ == "__main__":
-    make_tif(r"D:\FeedbackControl\bar5.08.hdf5")
+
+    args = parse_args()
+
+    input_dir = args.dir
+
+    for val in Path(input_dir).glob("*.hdf5"):
+        make_tif(str(val))
+
+    # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")

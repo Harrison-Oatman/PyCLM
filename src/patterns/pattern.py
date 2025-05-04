@@ -260,6 +260,8 @@ class PatternProcess:
     known_models = {
         "circle": CirclePattern,
         "bar": BarPattern,
+        "pattern_review": PatternReview,
+
     }
 
     def __init__(self, aq: AllQueues):

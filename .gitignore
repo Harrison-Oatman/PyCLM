@@ -6,3 +6,4 @@ notebooks/gol_snaps/
 */.ipynb_checkpoints/*
 *.pyc
 /test/
+/real/

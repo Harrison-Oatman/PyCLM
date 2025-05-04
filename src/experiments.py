@@ -30,6 +30,7 @@ class ImagingConfig:
     """
 
     def __init__(self, experiment_name: str, exposure_ms: float = 10, every_t: int = 1,
+                 binning: int = 1,
                  config_groups: Optional[list[ConfigGroup]] = None,
                  device_properties: Optional[list[DeviceProperty]] = None,
                  save=True):
@@ -38,6 +39,7 @@ class ImagingConfig:
         self.exposure = exposure_ms
         self.every_t = every_t
         self.save = save
+        self.binning = binning
 
         self._config_groups = make_configgroup_dict(config_groups)
         self._device_properties = make_deviceproperty_dict(device_properties)
@@ -260,6 +262,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     imaging_exposure = toml_data["imaging"].get("exposure", 10)
     imaging_every_t = toml_data["imaging"].get("every_t", 1)
     imaging_save = toml_data["imaging"].get("save", True)
+    imaging_binning = toml_data["binning"].get("binning", 1)
     imaging_config_groups = get_config_groups(toml_data["imaging"], "config_groups")
     imaging_device_props = get_device_properties(toml_data["imaging"], "device_properties")
 
@@ -270,6 +273,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     imaging_config.exposure = imaging_exposure
     imaging_config.every_t = imaging_every_t
     imaging_config.save = imaging_save
+    imaging_config.binning = imaging_binning
 
     channel_group = toml_data["channels"]["group"]
     presets = toml_data["channels"]["presets"]
@@ -290,6 +294,8 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         channel_every_t = channel_toml.get("every_t", imaging_every_t)
         cfg.every_t = channel_every_t
 
+        cfg.binning = channel_toml.get("binning", imaging_binning)
+
         # get channel-specific config groups and device properties
         device_properties = channel_toml.get("device_properties", {})
         device_properties = get_device_properties(device_properties, "device_properties")
@@ -307,6 +313,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     stimulation_config.exposure = toml_data["stimulation"]["exposure"]
     stimulation_config.every_t = toml_data["stimulation"].get("every_t", 1)
     stimulation_config.save = toml_data["stimulation"].get("save", True)
+    stimulation_config.binning = toml_data["stimulation"].get("binning", 1)
 
     stimulation_config.update_config_groups(get_config_groups(toml_data["stimulation"], "config_groups"))
     stimulation_config.update_device_properties(get_device_properties(toml_data["stimulation"], "device_properties"))
@@ -378,9 +385,6 @@ def schedule_from_directory(experiment_dir: Path):
 
 
 
-# todo: generate ExperimentSchedule from toml
-# todo: write sample experimentschedule.toml
-# todo: generate positions from elements output
 # todo: generate positions from micromanager output
 # todo: make grid-based acquisition
 

@@ -18,9 +18,12 @@ from h5py import File
 from pathlib import Path
 import numpy as np
 from cv2 import warpAffine
-from logging import debug, info, warning
+import logging
 import tifffile
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
 
 class DataPassingProcess(metaclass=ABCMeta):
     def __init__(self, aq: AllQueues):
@@ -107,7 +110,7 @@ class MicroscopeOutbox(DataPassingProcess):
     def handle_message(self, msg):
 
         self.message_history.append(msg)
-        info(msg)
+        logger.info(msg)
 
         match msg.message:
 
@@ -207,7 +210,7 @@ class SLMBuffer(DataPassingProcess):
 
     def handle_data(self, data: CameraPattern):
 
-        info("SLM buffer received data from slm")
+        logger.info("SLM buffer received data from slm")
 
         pattern = data.data
         pattern_id = data.pattern_id
@@ -420,7 +423,7 @@ class Manager:
                                                                exposure_time_ms=channel.exposure,
                                                                config_groups=channel.get_config_groups(),
                                                                devices=channel.get_device_properties(),
-                                                               sub_axes=[t, f"channel_{channel_name}"],
+                                                               sub_axes=[f"{t: 05d}", f"channel_{channel_name}"],
                                                                **channel_kwargs,
                                                                )
 

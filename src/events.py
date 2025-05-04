@@ -53,6 +53,7 @@ class AcquisitionEvent:
                  do_segmentation=False, segmentation_method=None, save_segmentation=False,
                  raw_goes_to_pattern=False, pattern_method=None, save_pattern=False,
                  segmentation_goes_to_pattern=False,
+                 binning: int = 1,
                  ):
 
         self.id = uuid4()
@@ -71,6 +72,7 @@ class AcquisitionEvent:
         # acquisition details
         self.exposure_time_ms = exposure_time_ms
         self.needs_slm = needs_slm
+        self.binning = binning
 
         # axis-name, axis-value pairs
         # super-axes (determines folder structure containing experiment)
@@ -143,6 +145,7 @@ class AcquisitionEvent:
 
         dset.attrs["exposure_time_ms"] = self.exposure_time_ms
         dset.attrs["needs_slm"] = self.needs_slm
+        dset.attrs["binning"] = self.binning
 
         if self.super_axes is not None:
             dset.attrs["super_axes"] = [str(a) for a in self.super_axes]

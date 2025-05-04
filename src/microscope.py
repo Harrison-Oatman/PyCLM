@@ -5,7 +5,9 @@ import numpy as np
 from .events import AcquisitionEvent, UpdatePatternEvent
 from .experiments import Position, DeviceProperty, ConfigGroup
 from .datatypes import EventSLMPattern, AcquisitionData, StimulationData
-from logging import debug, warning, info
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MicroscopeProcess:
@@ -27,13 +29,15 @@ class MicroscopeProcess:
         self.current_pattern = None
         self.current_pattern_id = None
 
+        self.warned_binning = False
+
 
     def declare_slm(self):
         core = self.core
         dev = core.getSLMDevice()
 
         if dev == "":
-            warning("SLM Device not initialized,"
+            logger.warning("SLM Device not initialized,"
                             " using dummy slm")
 
             self.slm_device = "dummy"
@@ -52,7 +56,7 @@ class MicroscopeProcess:
 
     def process(self, event_await_s=0, slm_await_s=5):
 
-        debug(f"started MicroscopeProcess on {self.core}")
+        logger.debug(f"started MicroscopeProcess on {self.core}")
         self.start = time()
 
         event_await_start = time()
@@ -114,36 +118,58 @@ class MicroscopeProcess:
 
         return 1
 
+    def set_binning(self, binning: int):
+        core = self.core
+        camera = self.core.getCameraDevice()
+
+        try:
+            allowed = core.getAllowedPropertyValues(camera, "Binning")
+        except:
+            return None
+
+        binning_str = f"{binning}x{binning}"
+
+        if binning_str in allowed:
+            core.setProperty(camera, "Binning", binning_str)
+
+        else:
+            if self.warned_binning:
+                return None
+
+            logger.warning(f"attempted set binning {binning_str}, allowed binnings {allowed}")
+            self.warned_binning = True
+
+
     def move_to_position(self, position: Position):
 
         core = self.core
 
         xy = position.get_xy()
         if xy is not None:
-            info(f"moving to xy {xy}")
-            core.setXYPosition(xy[0], xy[1])
+            logger.info(f"moving to xy {xy}")
+            core.setXYPosition(xy[0], -xy[1])
         else:
-            debug(f"move_to_position called with no xy position: {position}")
+            logger.debug(f"move_to_position called with no xy position: {position}")
 
         z = position.get_z()
         if z is not None:
-            info(f"moving to z position {z}")
+            logger.info(f"moving to z position {z}")
             core.setPosition(z)
         else:
-            debug(f"move_to_position called with no z position: {position}")
+            logger.debug(f"move_to_position called with no z position: {position}")
 
         pfs = position.get_pfs()
         if pfs is not None:
-            info(f"setting pfs offset {pfs}")
+            logger.info(f"setting pfs offset {pfs}")
             core.setAutoFocusOffset(pfs)
         else:
-            debug(f"move_to_position called with no pfs offset: {position}")
+            logger.debug(f"move_to_position called with no pfs offset: {position}")
 
         return 0
 
     def handle_update_pattern_event(self, up_event: UpdatePatternEvent, slm_await_s):
         event_id = up_event.id
-        debug(f"handling update pattern event {event_id}")
+        logger.debug(f"handling update pattern event {event_id}")
 
         assert self.slm_initialized, "slm not declared to microscope process, run declare_slm first"
 
@@ -155,10 +181,10 @@ class MicroscopeProcess:
         pattern = pattern_data.pattern
 
         if self.slm_device == "dummy":
-            info(f"experiment {up_event.experiment_name}: dummy slm set image")
+            logger.info(f"experiment {up_event.experiment_name}: dummy slm set image")
         else:
             self.core.setSLMImage(self.slm_device, pattern)
-            info(f"experiment {up_event.experiment_name}: set slm image")
+            logger.info(f"experiment {up_event.experiment_name}: set slm image")
 
         self.current_pattern = pattern
         self.current_pattern_id = pattern_data.pattern_unique_id
@@ -167,7 +193,7 @@ class MicroscopeProcess:
 
     def handle_acquisition_event(self, aq_event: AcquisitionEvent):
         event_id = aq_event.id
-        debug(f"{self.t(): .3f}| handling acquisition event {event_id}")
+        logger.debug(f"{self.t(): .3f}| handling acquisition event {event_id}")
 
         self.handle_device_update(aq_event.devices)
         self.handle_config_update(aq_event.config_groups)
@@ -175,22 +201,24 @@ class MicroscopeProcess:
 
         self.move_to_position(aq_event.position)
 
+        self.set_binning(aq_event.binning)
+
         target_time = aq_event.scheduled_time
         t_delta = target_time - time() - 0.1
 
         if t_delta > 0:
-            info(f"{self.t(): .3f}| waiting {t_delta: .3f}s until next acquisition")
+            logger.info(f"{self.t(): .3f}| waiting {t_delta: .3f}s until next acquisition")
             sleep(t_delta)
 
-        debug("wait for system")
+        logger.debug("wait for system")
         wait_time = time()
         self.core.waitForSystem()
-        debug(f"took {time() - wait_time: .3f}s")
+        logger.debug(f"took {time() - wait_time: .3f}s")
 
-        info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
+        logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
         image = self.snap()
         aq_event.completed_time = time()
-        info(f"{self.t(): .3f}| image acquired")
+        logger.info(f"{self.t(): .3f}| image acquired")
 
         # info(f"{self.t(): .3f}| unloading")
 
