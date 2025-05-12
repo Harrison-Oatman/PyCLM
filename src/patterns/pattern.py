@@ -192,8 +192,8 @@ class CirclePattern(PatternModel):
 
         h, w = self.pattern_shape
 
-        y_range = np.arange(h)
-        x_range = np.arange(w)
+        y_range = np.arange(h) * self.pixel_size_um
+        x_range = np.arange(w) * self.pixel_size_um
 
         center_x = w / 2.
         center_y = h / 2.
@@ -212,27 +212,27 @@ class BarPattern(PatternModel):
 
     name = "bar"
 
-    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2, bar_speed=0.01, bar_width=40, **kwargs):
+    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2, bar_speed=1, period=30, **kwargs):
         """
         :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
                            vertical axis containing "on" pixels
-        :param bar_speed: speed in um/sec
-        :param bar_width: width in um
+        :param bar_speed: speed in um/min
+        :param period: period in um
         """
 
         super().__init__(experiment_name, camera_properties)
 
         self.duty_cycle = duty_cycle
         self.bar_speed = bar_speed
-        self.bar_width = bar_width
-        self.L = bar_width / duty_cycle
+        self.period_space = period    # in um
+        self.period_time = period / bar_speed    # in minutes
 
     def initialize(self, experiment):
         return []
 
     def generate(self, data_dock: DataDock):
 
-        t = data_dock.t
+        t = data_dock.t / 60
 
         px_um = self.pixel_size_um
 
@@ -245,7 +245,7 @@ class BarPattern(PatternModel):
 
         y_um = px_um*yy
 
-        is_on = (((t*self.bar_speed - y_um) / self.L) % 1) < self.duty_cycle
+        is_on = ((t - (y_um / self.bar_speed)) % self.period_time) < self.duty_cycle*self.period_time
 
         return is_on.astype(np.float16)
 
@@ -335,14 +335,14 @@ class PatternProcess:
 
         dock: DataDock = self.docks.get(experiment_name)
 
-        print(dock.get_awaiting())
+        # print(dock.get_awaiting())
 
         if dock.check_complete():
             self.run_model(experiment_name)
 
     def handle_message(self, message: Message):
 
-        print(message.message)
+        # print(message.message)
 
         match message.message:
 
