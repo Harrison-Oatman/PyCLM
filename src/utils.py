@@ -5,6 +5,8 @@ import tifffile
 from pathlib import Path
 from argparse import ArgumentParser
 from natsort import natsorted
+from skimage.transform import downscale_local_mean
+import cv2
 
 
 def get_mapping(projector_api):
@@ -26,12 +28,22 @@ def get_mapping(projector_api):
     return at
 
 
-def make_tif(fp, chan="638"):
+# def apply_at(img, at, target_size):
+#
+#
+#
+
+
+def make_tif(fp, at=None, chan="channel_638"):
+
+    if at is not None:
+        ati = cv2.invertAffineTransform(at)
+        patterned = []
 
     collected_frames = []
-    channel_key = f"channel_{chan}"
+    channel_key = f"{chan}"
 
-    with File(fp, mode="r") as f:
+    with (File(fp, mode="r") as f):
 
         indices = []
 
@@ -44,10 +56,24 @@ def make_tif(fp, chan="638"):
 
         for t_val in natsorted(indices):
 
-            collected_frames.append(np.array(f[t_val][channel_key]["data"]))
+            data = np.array(f[t_val][channel_key]["data"])
+            collected_frames.append(data)
+
+            if at is not None:
+
+                pattern = np.array(f[t_val]["stim_aq"]["dmd"])
+                target_size = data.shape
+                tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati, (target_size[1]*2, target_size[0]*2)).astype(np.uint16)
+                ds =  downscale_local_mean(tf, (2, 2)).astype(np.uint16)
+                patterned.append(np.stack([data,ds, ds]).astype(np.uint16))
+
 
     outpath = fp[:-5] + ".tif"
     tifffile.imwrite(outpath, np.array(collected_frames))
+
+    if at is not None:
+        # print(np.array(patterned).shape)
+        tifffile.imwrite(fp[:-5] + "_patterns.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tcyx"})
 
 
 def parse_args():
@@ -62,9 +88,12 @@ if __name__ == "__main__":
 
     args = parse_args()
 
-    input_dir = args.dir
+    # input_dir = args.dir
+
+    input_dir = r"E:\Harrison\cells\barspeed3\final"
+    at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in Path(input_dir).glob("*.hdf5"):
-        make_tif(str(val))
+        make_tif(str(val), at, "channel_638")
 
     # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")
