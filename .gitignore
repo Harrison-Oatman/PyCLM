@@ -7,3 +7,4 @@ notebooks/gol_snaps/
 *.pyc
 /test/
 /real/
+*log.txt

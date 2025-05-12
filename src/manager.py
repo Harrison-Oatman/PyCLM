@@ -9,10 +9,12 @@ It is responsible for
 from abc import ABCMeta, abstractmethod
 from time import time
 from .queues import AllQueues
-from .events import AcquisitionEvent, UpdatePatternEvent
-from .experiments import experiment_from_toml, Position, ExperimentSchedule, TimeCourse, Experiment, ImagingConfig
+from .events import AcquisitionEvent, UpdatePatternEvent, UpdatePositionWithAutoFocusEvent
+from .experiments import (experiment_from_toml, PositionWithAutoFocus, ExperimentSchedule, TimeCourse,
+                          Experiment, ImagingConfig)
 from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData
-from .messages import Message, UpdatePatternEventMessage, AcquisitionEventMessage
+from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
+                       UpdateZPositionMessage)
 from .patterns import RequestPattern, AcquiredImageRequest
 from h5py import File
 from pathlib import Path
@@ -98,8 +100,7 @@ class MicroscopeOutbox(DataPassingProcess):
     def handle_data(self, data):
         aq_event = data.event
 
-        if aq_event.save_output:
-            self.write_data(data)
+        self.write_data(data)
 
         if aq_event.segment:
             self.seg_queue.put(data)
@@ -137,13 +138,14 @@ class MicroscopeOutbox(DataPassingProcess):
         else:
             filepath = self.base_path / f"{file_relpath}.hdf5"
             with File(filepath, "a") as f:
-                dset = f.create_dataset(relpath + r"data", data=data.data)
-                aq_event.write_attrs(dset)
+                if aq_event.save_output:
+                    dset = f.create_dataset(relpath + r"data", data=data.data)
+                    aq_event.write_attrs(dset)
 
                 if isinstance(data, StimulationData):
-                    dset = f.create_dataset(relpath + r"dmd", data=data.dmd_pattern)
-                    dset.attrs["pattern_id"] = str(data.pattern_id)
-
+                    if aq_event.save_stim:
+                        dset = f.create_dataset(relpath + r"dmd", data=data.dmd_pattern)
+                        dset.attrs["pattern_id"] = str(data.pattern_id)
 
     # def test_write_data(self):
     #     aq_event = AcquisitionEvent("test", Position(1, 2, 0), scheduled_time=0, exposure_time_ms=1,
@@ -172,7 +174,8 @@ class SLMBuffer(DataPassingProcess):
 
         self.initialized = False
 
-    def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32], experiment_names: list[str]):
+    def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32],
+                   experiment_names: list[str]):
         """
         :param shape: Tuple of (height, width) for the SLM pattern
         :param affine_transform: 2x3 array for affine transformation to apply to pattern
@@ -312,6 +315,7 @@ class Manager:
             "save_output": channel.save,
             "segmentation_method": experiment.segmentation.method_name,
             "pattern_method": experiment.pattern.method_name,
+            "binning": channel.binning,
             "do_segmentation": False,
             "save_segmentation": False,
             "raw_goes_to_pattern": False,
@@ -346,6 +350,22 @@ class Manager:
 
         return kwargs
 
+    def handle_message(self, msg: Message):
+
+        print("handling message")
+
+        match msg.message:
+            case "update_z_position":
+
+                assert isinstance(msg, UpdateZPositionMessage)
+                name = msg.experiment_name
+                val = msg.new_z_position
+
+                self.positions[name].z = val
+
+            case _:
+                raise ValueError(f"Unexpected message: {msg}")
+
     @staticmethod
     def get_pattern_lcm(experiment: Experiment, requirements: list[AcquiredImageRequest]):
 
@@ -361,44 +381,76 @@ class Manager:
 
         return np.lcm.reduce(np.array(t_vals, dtype=int))
 
+    def construct_position_event_message(self, position, name):
+        self.msgout["microscope"].put(
+            UpdatePositionEventMessage(
+                UpdatePositionWithAutoFocusEvent(
+                    position, name
+                )
+            )
+        )
+
+    def send_make_pattern_request(self, loop_iter, experiment_name, time_sec):
+        """
+
+        :param loop_iter: current loop
+        :param experiment_name: name of experiment
+        :param time_sec: scheduled time of pattern (used by pattern generation module)
+        :return:
+        """
+        make_pattern = (loop_iter % self.pattern_lcms[experiment_name]) == 0
+
+        if make_pattern:
+            pattern_request = RequestPattern(
+                time_sec, experiment_name, self.pattern_requirements[experiment_name]
+            )
+
+            self.msgout["pattern"].put(pattern_request)
+
+        return make_pattern
+
     def process(self):
         assert self.initialized, "manager must be initialized with an experiment schedule to start"
 
         times: TimeCourse = self.times
         start_time = time() + times.setup
 
+        # time iter loop
         for t in range(times.count):
-            print(f"t = {t}")
 
+            # wait until preparatory phase
+            # todo: check if we are behind schedule
             while (time() - start_time) < (t * times.interval) - times.setup:
-                pass
+                for source, inbox in self.msgin.items():
+                    while not inbox.empty():
+                        msg = inbox.get()
+                        self.handle_message(msg)
 
-            print(f"{time() - start_time}")
-
+            # iterate through each experiment
             for i, (name, experiment) in enumerate(self.experiments.items()):
                 scheduled_time = start_time + (t * times.interval) + (i * times.between)
-                print(scheduled_time - start_time)
 
-                make_pattern = (t % self.pattern_lcms[name]) == 0
+                # determine and send if new pattern should be generated
+                make_pattern = self.send_make_pattern_request(t, name, scheduled_time - start_time)
 
-                if make_pattern:
-                    pattern_request = RequestPattern(
-                        scheduled_time - start_time, name, self.pattern_requirements[name]
-                    )
+                # tracks when to send update position message
+                position_passed = False
 
-                    print("sending message to pattern")
-
-                    self.msgout["pattern"].put(pattern_request)
-
+                """Stimulation Event"""
                 stim = experiment.stimulation
-
                 if t % stim.every_t == 0:
-                    channel_kwargs = self.get_kwargs(experiment, stim, make_pattern)
 
+                    # create update position event if first imaging condition in loop
+                    if not position_passed:
+                        self.construct_position_event_message(self.positions[name], name)
+                        position_passed = True
+
+                    # create update pattern and acquisition event
+                    channel_kwargs = self.get_kwargs(experiment, stim, make_pattern)
                     update_pattern = UpdatePatternEvent(name, stim.get_config_groups(), stim.get_device_properties())
                     pattern_acquisition = AcquisitionEvent(name, self.positions[name], stim.channel_id,
                                                            scheduled_time=scheduled_time,
-                                                           scheduled_time_since_start=scheduled_time-start_time,
+                                                           scheduled_time_since_start=scheduled_time - start_time,
                                                            exposure_time_ms=stim.exposure,
                                                            needs_slm=True,
                                                            config_groups=stim.get_config_groups(),
@@ -414,12 +466,20 @@ class Manager:
                     self.msgout["microscope"].put(upmsg)
                     self.msgout["microscope"].put(aqmsg)
 
+                """Image Acquisition Events (each channel)"""
                 for channel_name, channel in experiment.channels.items():
                     if t % channel.every_t == 0:
-                        channel_kwargs = self.get_kwargs(experiment, channel, make_pattern)
 
+                        # create update position event if first imaging condition in loop
+                        if not position_passed:
+                            self.construct_position_event_message(self.positions[name], name)
+                            position_passed = True
+
+                        # create acquisition event
+                        channel_kwargs = self.get_kwargs(experiment, channel, make_pattern)
                         channel_acquisition = AcquisitionEvent(name, self.positions[name], channel.channel_id,
                                                                scheduled_time=scheduled_time,
+                                                               scheduled_time_since_start=scheduled_time - start_time,
                                                                exposure_time_ms=channel.exposure,
                                                                config_groups=channel.get_config_groups(),
                                                                devices=channel.get_device_properties(),
@@ -430,6 +490,8 @@ class Manager:
                         aqmsg = AcquisitionEventMessage(channel_acquisition)
                         self.msgout["microscope"].put(aqmsg)
 
+        print("DONE")
+
         # todo: figure out when/if to send close messages
         # msg = Message()
         # msg.message = "close"
@@ -437,64 +499,6 @@ class Manager:
         # for box in self.msgout:
         #     self.msgout[box].put(msg)
 
-    # def sample_experiment(self):
-    #     t_interval = 5
-    #     t_steps = 5
-    #     t_setup = 2
-    #     t_between = 1
-    #     sample_experiment_toml_path = r"D:\FeedbackControl\SampleExperiment.toml"
-    #     experiments = {name: experiment_from_toml(sample_experiment_toml_path, name) for name in ["a", "b"]}
-    #     positions = {
-    #         "a": Position(1, 2, 0),
-    #         "b": Position(3, 4, 0)
-    #     }
-    #
-    #     print(experiments)
-    #
-    #     start_time = time()
-    #
-    #     for t in range(t_steps):
-    #         print(f"t = {t}")
-    #
-    #         while (time() - start_time) < (t * t_interval) - t_setup:
-    #             pass
-    #
-    #         for i, (name, experiment) in enumerate(experiments.items()):
-    #             scheduled_time = start_time + (t * t_interval) + (i * t_between)
-    #
-    #             stim = experiment.stimulation
-    #
-    #             if t % stim.every_t == 0:
-    #                 update_pattern = UpdatePatternEvent(name, stim._config_groups, stim._device_properties)
-    #                 pattern_acquisition = AcquisitionEvent(name, positions[name],
-    #                                                        scheduled_time=scheduled_time,
-    #                                                        exposure_time_ms=stim.exposure,
-    #                                                        needs_slm=True,
-    #                                                        config_groups=stim._config_groups,
-    #                                                        devices=stim._device_properties,
-    #                                                        sub_axes=[t, "stim_aq"],
-    #                                                        save_output=stim.save,
-    #                                                        )
-    #
-    #                 print(update_pattern)
-    #                 print(pattern_acquisition)
-    #                 print(pattern_acquisition.get_rel_path())
-    #
-    #             for channel_name, channel in experiment.channels.items():
-    #                 if t % channel.every_t == 0:
-    #                     channel_acquisition = AcquisitionEvent(name, positions[name],
-    #                                                            scheduled_time=scheduled_time,
-    #                                                            exposure_time_ms=channel.exposure,
-    #                                                            config_groups=channel._config_groups,
-    #                                                            devices=channel._device_properties,
-    #                                                            sub_axes=[t, f"channel_{channel_name}"],
-    #                                                            save_output=channel.save,
-    #                                                            )
-    #                     print(channel_acquisition)
-    #                     print(channel_acquisition.get_rel_path())
-
-    # def make_update_pattern_event(self, experiment: Experiment, position: Position, scheduled_time: float, ):
-    #     pass
 
 # todo: include metadata in saving process
 

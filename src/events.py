@@ -1,5 +1,5 @@
 from uuid import uuid4, UUID
-from .experiments import ConfigGroup, Position, DeviceProperty
+from .experiments import ConfigGroup, PositionWithAutoFocus, DeviceProperty, PositionBase
 from typing import Optional
 from h5py import Dataset
 import datetime
@@ -22,9 +22,16 @@ class UpdateStagePositionEvent:
     Moves the stage
     """
 
-    def __init__(self, position):
+    def __init__(self, position: PositionBase, experiment_name: str):
         self.id = uuid4()
         self.position = position
+        self.experiment_name = experiment_name
+
+
+class UpdatePositionWithAutoFocusEvent(UpdateStagePositionEvent):
+
+    def __init__(self, position: PositionWithAutoFocus, experiment_name):
+        super().__init__(position, experiment_name)
 
 
 class GeneratePatternEvent:
@@ -44,12 +51,12 @@ class GeneratePatternEvent:
 
 class AcquisitionEvent:
 
-    def __init__(self, experiment, position: Position, channel_id: UUID,
+    def __init__(self, experiment, position: PositionWithAutoFocus, channel_id: UUID,
                  scheduled_time=0, scheduled_time_since_start=0, exposure_time_ms=10, needs_slm=False,
                  super_axes=None, sub_axes=None,
                  config_groups: Optional[list[ConfigGroup]] = None,
                  devices: Optional[list[DeviceProperty]] = None,
-                 save_output=True,
+                 save_output=True, save_stim=True,
                  do_segmentation=False, segmentation_method=None, save_segmentation=False,
                  raw_goes_to_pattern=False, pattern_method=None, save_pattern=False,
                  segmentation_goes_to_pattern=False,
@@ -89,6 +96,7 @@ class AcquisitionEvent:
 
         # what to do with the output
         self.save_output = save_output
+        self.save_stim = save_stim
 
         self.segment = do_segmentation
         self.seg_method = segmentation_method
@@ -100,6 +108,8 @@ class AcquisitionEvent:
 
         self.pattern_method = pattern_method
         self.save_pattern = save_pattern
+
+        self.pixel_width_um = None
 
     def get_rel_path(self, leading=3) -> (str, str):
         fstring = ""
@@ -172,6 +182,8 @@ class AcquisitionEvent:
 
         dset.attrs["pattern_method"] = self.pattern_method
         dset.attrs["save_pattern"] = self.save_pattern
+
+        dset.attrs["pixel_width_um"] = str(self.pixel_width_um)
 
 # class PositionGrid:
 #     """

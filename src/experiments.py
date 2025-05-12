@@ -100,14 +100,14 @@ class PositionBase:
     pass
 
 
-class Position(PositionBase):
+class PositionWithAutoFocus(PositionBase):
 
-    def __init__(self, x=None, y=None, z=None, pfs=None, label=None):
+    def __init__(self, x=None, y=None, z=None, autofocus_offset=None, label=None):
         self.label = label
         self.x = x
         self.y = y
         self.z = z
-        self.pfs = pfs
+        self.autofocus_offset = autofocus_offset
 
     def get_xy(self):
         if not ((self.x is None) or (self.y is None)):
@@ -118,8 +118,8 @@ class Position(PositionBase):
     def get_z(self):
         return self.z
 
-    def get_pfs(self):
-        return self.pfs
+    def get_autofocus_offset(self):
+        return self.autofocus_offset
 
     def as_dict(self):
         return {
@@ -127,7 +127,7 @@ class Position(PositionBase):
             "x": self.x,
             "y": self.y,
             "z": self.z,
-            "pfs": self.pfs
+            "autofocus_offset": self.autofocus_offset
         }
 
 
@@ -235,11 +235,11 @@ def positions_from_xml(fp):
         if (nv["dPFSOffset"] is not None) and (nv["dPFSOffset"] < 0):
             nv["dPFSOffset"] = None
 
-        positions.append(Position(
+        positions.append(PositionWithAutoFocus(
             x=nv["dXPosition"],
             y=nv["dYPosition"],
             z=nv["dZPosition"],
-            pfs=nv["dPFSOffset"],
+            autofocus_offset=nv["dPFSOffset"],
             label=nv["strName"]
         ))
 
@@ -262,7 +262,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     imaging_exposure = toml_data["imaging"].get("exposure", 10)
     imaging_every_t = toml_data["imaging"].get("every_t", 1)
     imaging_save = toml_data["imaging"].get("save", True)
-    imaging_binning = toml_data["binning"].get("binning", 1)
+    imaging_binning = toml_data["imaging"].get("binning", 1)
     imaging_config_groups = get_config_groups(toml_data["imaging"], "config_groups")
     imaging_device_props = get_device_properties(toml_data["imaging"], "device_properties")
 
@@ -313,7 +313,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     stimulation_config.exposure = toml_data["stimulation"]["exposure"]
     stimulation_config.every_t = toml_data["stimulation"].get("every_t", 1)
     stimulation_config.save = toml_data["stimulation"].get("save", True)
-    stimulation_config.binning = toml_data["stimulation"].get("binning", 1)
+    stimulation_config.binning = toml_data["stimulation"].get("binning", imaging_binning)
 
     stimulation_config.update_config_groups(get_config_groups(toml_data["stimulation"], "config_groups"))
     stimulation_config.update_device_properties(get_device_properties(toml_data["stimulation"], "device_properties"))

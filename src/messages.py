@@ -32,3 +32,19 @@ class UpdatePatternEventMessage(Message):
 
     def __init__(self, event: UpdatePatternEvent):
         self.event = event
+
+
+class UpdatePositionEventMessage(Message):
+
+    message = "update_position_event"
+
+    def __init__(self, event: UpdateStagePositionEvent):
+        self.event = event
+
+
+class UpdateZPositionMessage(Message):
+    message = "update_z_position"
+
+    def __init__(self, new_z_position, experiment_name):
+        self.new_z_position = new_z_position
+        self.experiment_name = experiment_name

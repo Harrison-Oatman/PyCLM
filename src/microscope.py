@@ -2,9 +2,10 @@ from pymmcore_plus import CMMCorePlus
 from .queues import AllQueues
 from time import time, sleep
 import numpy as np
-from .events import AcquisitionEvent, UpdatePatternEvent
-from .experiments import Position, DeviceProperty, ConfigGroup
+from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
+from .experiments import PositionWithAutoFocus, DeviceProperty, ConfigGroup
 from .datatypes import EventSLMPattern, AcquisitionData, StimulationData
+from .messages import UpdateZPositionMessage
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,14 +32,13 @@ class MicroscopeProcess:
 
         self.warned_binning = False
 
-
     def declare_slm(self):
         core = self.core
         dev = core.getSLMDevice()
 
         if dev == "":
             logger.warning("SLM Device not initialized,"
-                            " using dummy slm")
+                           " using dummy slm")
 
             self.slm_device = "dummy"
             self.slm_h = 1140
@@ -53,7 +53,6 @@ class MicroscopeProcess:
 
         self.slm_initialized = True
 
-
     def process(self, event_await_s=0, slm_await_s=5):
 
         logger.debug(f"started MicroscopeProcess on {self.core}")
@@ -64,8 +63,6 @@ class MicroscopeProcess:
         while True:
 
             if self.inbox.empty():
-
-                # debug(f"{time() - event_await_start: .3f}s since last event")
 
                 # check for timeout
                 if (event_await_s != 0) & (time() - event_await_start > event_await_s):
@@ -81,6 +78,9 @@ class MicroscopeProcess:
 
                 case "acquisition_event":
                     self.handle_acquisition_event(msg.event)
+
+                case "update_position_event":
+                    self.handle_update_position_event(msg.event)
 
                 case "close":
                     return 0
@@ -104,9 +104,7 @@ class MicroscopeProcess:
         if devices is None:
             return 0
 
-
         for label, name, value, t in devices:
-
             t_func = {
                 "str": str,
                 "float": float,
@@ -139,33 +137,76 @@ class MicroscopeProcess:
             logger.warning(f"attempted set binning {binning_str}, allowed binnings {allowed}")
             self.warned_binning = True
 
+    def move_to_position(self, position: PositionWithAutoFocus) -> tuple[bool, float]:
 
-    def move_to_position(self, position: Position):
+        start_time = time()
 
         core = self.core
 
         xy = position.get_xy()
+        z = position.get_z()
+        pfs = position.get_autofocus_offset()
+
+        z_moved = False
+
+        if (z is not None) and (z < self.core.getZPosition()):
+            core.setPosition(z)
+            z_moved = True
+
         if xy is not None:
             logger.info(f"moving to xy {xy}")
             core.setXYPosition(xy[0], -xy[1])
         else:
             logger.debug(f"move_to_position called with no xy position: {position}")
 
-        z = position.get_z()
         if z is not None:
-            logger.info(f"moving to z position {z}")
-            core.setPosition(z)
+            if not z_moved:
+                logger.info(f"moving to z position {z}")
+                core.setPosition(z)
+
+                z_moved = True
         else:
             logger.debug(f"move_to_position called with no z position: {position}")
 
-        pfs = position.get_pfs()
         if pfs is not None:
             logger.info(f"setting pfs offset {pfs}")
             core.setAutoFocusOffset(pfs)
+
+            z_moved = True
         else:
             logger.debug(f"move_to_position called with no pfs offset: {position}")
 
-        return 0
+        if not z_moved:
+            return False, 0
+
+        core.setProperty("PFS", "FocusMaintenance", "On")
+
+        while core.getProperty("PFS", "PFS Status") != "0000001100001010":
+            pass
+
+        print(f"move+focus took {time() - start_time:0.3f}")
+
+        return True, core.getZPosition()
+
+    def handle_update_position_event(self, up_event: UpdateStagePositionEvent):
+
+        if isinstance(up_event.position, PositionWithAutoFocus):
+
+            z_moved, z_new_position = self.move_to_position(up_event.position)
+
+
+            if z_moved:
+                old_z = up_event.position.get_z()
+                print(old_z, z_new_position)
+                if abs(z_new_position - old_z) > 1.0:
+                    self.manager.put(
+                        UpdateZPositionMessage(
+                            z_new_position, up_event.experiment_name
+                        )
+                    )
+
+        else:
+            raise NotImplementedError("only implemented PositionWithAutoFocus")
 
     def handle_update_pattern_event(self, up_event: UpdatePatternEvent, slm_await_s):
         event_id = up_event.id
@@ -199,8 +240,6 @@ class MicroscopeProcess:
         self.handle_config_update(aq_event.config_groups)
         self.core.setExposure(aq_event.exposure_time_ms)
 
-        self.move_to_position(aq_event.position)
-
         self.set_binning(aq_event.binning)
 
         target_time = aq_event.scheduled_time
@@ -215,10 +254,16 @@ class MicroscopeProcess:
         self.core.waitForSystem()
         logger.debug(f"took {time() - wait_time: .3f}s")
 
+        sleep(1.0)
+
+        # print(aq_event.position.get_z(), self.core.getPosition())
+
         logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
         image = self.snap()
         aq_event.completed_time = time()
         logger.info(f"{self.t(): .3f}| image acquired")
+
+        aq_event.pixel_width_um = self.core.getPixelSizeUm()
 
         # info(f"{self.t(): .3f}| unloading")
 
