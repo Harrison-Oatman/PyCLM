@@ -68,6 +68,7 @@ class Controller:
                     logging.error(traceback.format_exc())
                 # future.result()
 
+
 def get_slm_shape(core: CMMCorePlus):
 
     dev = core.getSLMDevice()
@@ -76,13 +77,30 @@ def get_slm_shape(core: CMMCorePlus):
 
 def main():
     args = process_args()
-    base_path = Path(str(r"E:\Harrison\cells\test_calibration"))
+    base_path = Path(str(r"E:\Harrison\cells\barspeed3"))
 
-    logging.basicConfig(filename=base_path / "log.log")
+    console_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler(base_path / 'log.log')
+
+    # Set levels for handlers
+    console_handler.setLevel(logging.WARNING)
+    file_handler.setLevel(logging.INFO)
+
+    # Create formatters and add them to handlers
+    console_format = logging.Formatter('%(levelname)s - %(message)s')
+    file_format = logging.Formatter('%(asctime)s - %(filename)-12s \t - %(levelname)-8s - %(message)s',
+                                    datefmt='%H:%M:%S')
+
+    console_handler.setFormatter(console_format)
+    file_handler.setFormatter(file_format)
+
+    logging.basicConfig(handlers=[console_handler, file_handler])
 
     c = Controller(r"C:\Program Files\Micro-Manager-2.0\Ti2MightexCrestSolaSpectra.cfg")
 
     core = c.core
+    core.describe()
+
     for group in core.getAvailableConfigGroups():
         cg = core.getConfigGroupObject(group, False)
         print(cg.name, list(cg.items()))
@@ -96,11 +114,11 @@ def main():
     print(core.getAutoFocusDevice())
     print(core.getAutoFocusOffset())
 
-    core.setAutoFocusOffset(9980.0)
+    core.setAutoFocusOffset(list(schedule.positions.values())[0].get_autofocus_offset())
 
     at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
     c.initialize(schedule, slm_shape, at, base_path)
-    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+    # logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
     c.run()
 
