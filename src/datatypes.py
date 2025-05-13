@@ -48,10 +48,11 @@ class SegmentationData(AcquisitionData):
 
 class CameraPattern(GenericData):
 
-    def __init__(self, experiment_name, data: np.ndarray, slm_coords=False):
+    def __init__(self, experiment_name, data: np.ndarray, slm_coords=False, binning=1):
         super().__init__(data)
 
         self.experiment = experiment_name
         self.pattern_id = uuid4()
 
         self.slm_coords = slm_coords
+        self.binning = binning

@@ -38,13 +38,34 @@ class Controller:
 
         self.camera_properties = None
 
+    def set_binning(self, binning: int):
+        core = self.core
+        camera = self.core.getCameraDevice()
+
+        try:
+            allowed = core.getAllowedPropertyValues(camera, "Binning")
+        except:
+            return None
+
+        binning_str = f"{binning}x{binning}"
+
+        if binning_str in allowed:
+            core.setProperty(camera, "Binning", binning_str)
+
+        else:
+            logger.warning(f"attempted set binning {binning_str}, allowed binnings {allowed}")
+
     def initialize(self, schedule: ExperimentSchedule, slm_shape: tuple[int, int], affine_transform: np.ndarray,
                    out_path: Path):
+
+        self.set_binning(1)
 
         camera_roi = ROI(*self.core.getROI())
         camera_resolution = self.core.getPixelSizeUm()
 
         self.camera_properties = CameraProperties(camera_roi, camera_resolution)
+
+        logger.info(f"camera properties: {self.camera_properties}")
 
         self.pattern.initialize(self.camera_properties)
 
@@ -77,7 +98,7 @@ def get_slm_shape(core: CMMCorePlus):
 
 def main():
     args = process_args()
-    base_path = Path(str(r"E:\Harrison\cells\barspeed3"))
+    base_path = Path(str(r"E:\Harrison\cells\barspeed4"))
 
     console_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(base_path / 'log.log')

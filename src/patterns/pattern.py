@@ -2,7 +2,7 @@ from ..queues import AllQueues
 from ..experiments import Experiment, ImagingConfig
 from ..messages import Message
 from ..datatypes import AcquisitionData, SegmentationData, CameraPattern
-from logging import warning
+import logging
 from typing import NamedTuple, Union
 from uuid import UUID, uuid4
 from collections import defaultdict
@@ -10,6 +10,8 @@ from pathlib import Path
 from h5py import File
 import numpy as np
 from natsort import natsorted
+
+logger = logging.getLogger(__name__)
 
 
 AcquiredImageRequest = NamedTuple("AcquiredImageRequest", [("id", UUID), ("needs_raw", bool), ("needs_seg", bool)])
@@ -28,6 +30,7 @@ CameraProperties = NamedTuple("CameraProperties", [("roi", ROI), ("pixel_size_um
 #
 #     def __init__(self, requirements: list[AcquiredImageRequest]):
 #         self.requirements = requirements
+
 
 class RequestPattern(Message):
     """
@@ -102,7 +105,6 @@ class DataDock:
         return len(self.get_awaiting()) == 0
 
 
-
 class PatternModel:
 
     name = "base"
@@ -112,33 +114,50 @@ class PatternModel:
         self.camera_properties = camera_properties
         self.pixel_size_um = camera_properties.pixel_size_um
         self.pattern_shape = (camera_properties.roi.height, camera_properties.roi.width)
+        self.binning = 1
 
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-        raise NotImplementedError
+
+        binning = experiment.stimulation.binning
+
+        self.update_binning(binning)
+
+        return []
+
+    def get_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
+        h, w = self.pattern_shape
+
+        y_range = np.arange(h) * self.pixel_size_um
+        x_range = np.arange(w) * self.pixel_size_um
+
+        xx, yy = np.meshgrid(x_range, y_range)
+
+        return xx, yy
 
     def generate(self, data_dock: DataDock) -> np.ndarray:
         raise NotImplementedError
+
+    def update_binning(self, binning: int):
+
+        binning_rescale = binning / self.binning
+
+        self.pixel_size_um = self.pixel_size_um * binning_rescale
+        self.pattern_shape = (self.pattern_shape[0] // binning_rescale, self.pattern_shape[1] // binning_rescale)
+
+        logger.info(f"model {self.name} updated pixel size (um) to {self.pixel_size_um}")
+        logger.info(f"model {self.name} updated pattern_shape to {self.pattern_shape}")
+
+        self.binning = binning
+
 
 class PatternModelReturnsSLM(PatternModel):
 
     pass
 
 
-# class OpenLoopPatternModel(PatternModel):
-#
-#     name = "open loop"
-#
-#     def __init__(self, experiment_name, camera_properties, **kwargs):
-#         super().__init__(experiment_name, camera_properties)
-#
-#
-#     def initialize(self, experiment):
-#         return []
-
 class PatternReview(PatternModelReturnsSLM):
 
     name = "pattern_review"
-
 
     def __init__(self, experiment_name, camera_properties, h5fp: Union[str, Path] = None, channel="545", **kwargs):
         super().__init__(experiment_name, camera_properties)
@@ -186,26 +205,75 @@ class CirclePattern(PatternModel):
         self.rad = rad
 
     def initialize(self, experiment):
+
+        super().initialize(experiment)
+
         return []
 
     def generate(self, data_dock: DataDock):
 
         h, w = self.pattern_shape
-
-        y_range = np.arange(h) * self.pixel_size_um
-        x_range = np.arange(w) * self.pixel_size_um
-
         center_x = w / 2.
         center_y = h / 2.
 
-        xx, yy = np.meshgrid(x_range, y_range)
+        xx, yy = self.get_meshgrid()
 
         pattern = np.ones((h, w), dtype=np.float16)
 
-        return (pattern * ((xx - center_x)**2 + (yy - center_y)**2 < self.rad**2)).astype(np.float16)
+        return (pattern * (((xx - center_x)**2 + (yy - center_y)**2) < (self.rad**2))).astype(np.float16)
 
 
-class BarPattern(PatternModel):
+class BarPatternBase(PatternModel):
+    def __new__(cls, *args, **kwargs):
+        if cls is BarPatternBase:  # Check if the base class is being instantiated
+            if kwargs.get("bar_speed") != 0:
+                return super().__new__(BarPattern)
+            else:
+                return super().__new__(StationaryBarPattern)
+        return super().__new__(cls)
+
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        print(f"Initializing {self.__class__.__name__}")
+
+
+class StationaryBarPattern(BarPatternBase):
+    """
+    moves a bar along the y-axis
+    """
+
+    name = "bar (stationary)"
+
+    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2, bar_speed=0, period=30, **kwargs):
+        """
+        :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
+                           vertical axis containing "on" pixels
+        :param bar_speed: speed in um/min
+        :param period: period in um
+        """
+        super().__init__(experiment_name, camera_properties)
+
+        self.duty_cycle = duty_cycle
+        self.bar_speed = 0
+        self.period_space = period    # in um
+        self.period_time = 0    # in minutes
+
+    def initialize(self, experiment):
+        super().initialize(experiment)
+
+        return []
+
+    def generate(self, data_dock: DataDock):
+
+        xx, yy = self.get_meshgrid()
+
+        is_on = ((yy / self.period_space) % 1.0) < self.duty_cycle
+
+        return is_on.astype(np.float16)
+
+
+class BarPattern(BarPatternBase):
     """
     moves a bar along the y-axis
     """
@@ -219,7 +287,6 @@ class BarPattern(PatternModel):
         :param bar_speed: speed in um/min
         :param period: period in um
         """
-
         super().__init__(experiment_name, camera_properties)
 
         self.duty_cycle = duty_cycle
@@ -228,24 +295,17 @@ class BarPattern(PatternModel):
         self.period_time = period / bar_speed    # in minutes
 
     def initialize(self, experiment):
+        super().initialize(experiment)
+
         return []
 
     def generate(self, data_dock: DataDock):
 
         t = data_dock.t / 60
 
-        px_um = self.pixel_size_um
+        xx, yy = self.get_meshgrid()
 
-        h, w = self.pattern_shape
-
-        y_range = np.arange(h)
-        x_range = np.arange(w)
-
-        xx, yy = np.meshgrid(x_range, y_range)
-
-        y_um = px_um*yy
-
-        is_on = ((t - (y_um / self.bar_speed)) % self.period_time) < self.duty_cycle*self.period_time
+        is_on = ((t - (yy / self.bar_speed)) % self.period_time) < self.duty_cycle*self.period_time
 
         return is_on.astype(np.float16)
 
@@ -259,7 +319,7 @@ class PatternProcess:
 
     known_models = {
         "circle": CirclePattern,
-        "bar": BarPattern,
+        "bar": BarPatternBase,
         "pattern_review": PatternReview,
 
     }
@@ -308,7 +368,7 @@ class PatternProcess:
         model_name = model.name
 
         if model_name in self.known_models:
-            warning(f"overwriting known model {model_name}")
+            logging.warning(f"overwriting known model {model_name}")
 
         self.known_models[model_name] = model
 
@@ -329,7 +389,7 @@ class PatternProcess:
 
             pattern = model.generate(data_dock)
 
-            self.slm.put(CameraPattern(experiment_name, pattern))
+            self.slm.put(CameraPattern(experiment_name, pattern, slm_coords=False, binning=model.binning))
 
     def check(self, experiment_name):
 

@@ -194,7 +194,7 @@ class SLMBuffer(DataPassingProcess):
 
         self.initialized = True
 
-    def pattern_to_slm(self, pattern: np.ndarray, slm_coords=False):
+    def pattern_to_slm(self, pattern: np.ndarray, slm_coords=False, binning=1):
         """
         This function takes a pattern and applies the stored affine transformation
         :param pattern: np array of type float scaled from 0-1, in coordinates of camera
@@ -206,8 +206,12 @@ class SLMBuffer(DataPassingProcess):
         if slm_coords:
             return np.round(pattern).astype(np.uint8)
 
+        at = np.copy(self.affine_transform)
+        if binning != 1:
+            at[:, :2] = at[:, :2] * binning
+
         return warpAffine(np.round(pattern * 255).astype(np.uint8),
-                          self.affine_transform,
+                          at,
                           (self.slm_shape[1],
                            self.slm_shape[0]))
 
@@ -220,7 +224,7 @@ class SLMBuffer(DataPassingProcess):
 
         experiment_name = data.experiment
 
-        slm_pattern = self.pattern_to_slm(pattern, data.slm_coords)
+        slm_pattern = self.pattern_to_slm(pattern, data.slm_coords, data.binning)
 
         # Store the pattern in the dictionary
         if experiment_name in self.slm_patterns:
