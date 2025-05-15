@@ -9,6 +9,7 @@ from pathlib import Path
 import tifffile
 import logging
 from laptrack import LapTrack
+from multiprocessing import Pool
 
 logging.basicConfig(level="INFO")
 
@@ -74,30 +75,46 @@ def track_spots(spots_df):
         only_coordinate_cols=False,
     )
 
+    track_df = track_df.rename(columns={"frame_y": "frame"})
+
     return track_df
 
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument("file", type=str, help="Path to the input file")
+    parser.add_argument("dir", type=str, help="Path to the input dir")
     return parser.parse_args()
+
+
+def process_file(infile):
+
+    masks_outfile = masks_dir / f"{infile.stem}_masks.tif"
+    tracks_outfile = tracks_dir / f"{infile.stem}_tracks.csv"
+
+    cellpose_masks = run_cellpose(str(infile))
+    tifffile.imwrite(masks_outfile, cellpose_masks.astype(np.uint16), imagej=True, metadata={"axes": "tyx"})
+
+    spots = process_masks(cellpose_masks)
+
+    tracks = track_spots(spots)
+    tracks.to_csv(tracks_outfile, index=False)
 
 
 if __name__ == "__main__":
     args = parse_args()
 
-    file = args.file
-    masks_outfile = file[:-4] + '_masks.tif'
-    spots_outfile = file[:-4] + '_spots.csv'
-    tracks_outfile = file[:-4] + '_tracks.csv'
+    in_dir = Path(args.file)
 
-    # cellpose_masks = run_cellpose(file)
-    # tifffile.imwrite(masks_outfile, cellpose_masks.astype(np.uint16), imagej=True, metadata={"axes": "tyx"})
+    masks_dir = in_dir / "masks"
+    tracks_dir = in_dir / "tracks"
 
-    cellpose_masks = tifffile.imread(masks_outfile)
+    masks_dir.mkdir(exist_ok=True)
+    tracks_dir.mkdir(exist_ok=True)
 
-    spots = process_masks(cellpose_masks)
-    spots.to_csv(spots_outfile, index=False)
+    files = list(in_dir.glob("*.tif"))
 
-    tracks = track_spots(spots)
-    tracks.to_csv(tracks_outfile, index=False)
+    # Use multiprocessing to process files in parallel
+    with Pool(processes=4) as pool:
+        pool.map(process_file, files)
+
+
