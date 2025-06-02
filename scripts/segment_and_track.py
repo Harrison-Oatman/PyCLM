@@ -86,7 +86,10 @@ def parse_args():
     return parser.parse_args()
 
 
-def process_file(infile):
+def process_file(infile, in_dir):
+
+    masks_dir = in_dir / "masks"
+    tracks_dir = in_dir / "tracks"
 
     masks_outfile = masks_dir / f"{infile.stem}_masks.tif"
     tracks_outfile = tracks_dir / f"{infile.stem}_tracks.csv"
@@ -103,7 +106,7 @@ def process_file(infile):
 if __name__ == "__main__":
     args = parse_args()
 
-    in_dir = Path(args.file)
+    in_dir = Path(args.dir)
 
     masks_dir = in_dir / "masks"
     tracks_dir = in_dir / "tracks"
@@ -114,7 +117,8 @@ if __name__ == "__main__":
     files = list(in_dir.glob("*.tif"))
 
     # Use multiprocessing to process files in parallel
-    with Pool(processes=4) as pool:
-        pool.map(process_file, files)
+    for i, file in enumerate(files):
+        print(f"segmenting and tracking file {i}/{len(files)}: {file.stem}")
+        process_file(file, in_dir)
 
 
