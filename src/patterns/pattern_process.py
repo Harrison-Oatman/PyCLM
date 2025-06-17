@@ -1,12 +1,12 @@
 import logging
 
-from src import AllQueues, CameraProperties
-from src.datatypes import CameraPattern, AcquisitionData, SegmentationData
-from src.experiments import Experiment
-from src.messages import Message
-from src.patterns import PatternReview, PatternModel, PatternModelReturnsSLM, DataDock, AcquiredImageRequest
-from src.patterns.bar_patterns import BouncingBarPattern, BarPatternBase
-from src.patterns.static_patterns import CirclePattern
+from .. import AllQueues, CameraProperties
+from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
+from ..experiments import Experiment
+from ..messages import Message
+from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDock, AcquiredImageRequest
+from .bar_patterns import BouncingBarPattern, BarPatternBase
+from .static_patterns import CirclePattern
 
 
 class PatternProcess:

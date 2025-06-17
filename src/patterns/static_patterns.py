@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.patterns import PatternModel, DataDock
+from .pattern import PatternModel, DataDock
 
 
 class CirclePattern(PatternModel):

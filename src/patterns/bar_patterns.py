@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.patterns import DataDock, PatternModel
+from .pattern import DataDock, PatternModel
 
 
 class BarPatternBase(PatternModel):
