@@ -15,7 +15,8 @@ from .experiments import (experiment_from_toml, PositionWithAutoFocus, Experimen
 from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData
 from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
                        UpdateZPositionMessage)
-from .patterns import RequestPattern, AcquiredImageRequest
+from .patterns.pattern_process import RequestPattern
+from .patterns import AcquiredImageRequest
 from h5py import File
 from pathlib import Path
 import numpy as np
@@ -449,26 +450,28 @@ class Manager:
                         self.construct_position_event_message(self.positions[name], name)
                         position_passed = True
 
-                    # create update pattern and acquisition event
-                    channel_kwargs = self.get_kwargs(experiment, stim, make_pattern)
-                    update_pattern = UpdatePatternEvent(name, stim.get_config_groups(), stim.get_device_properties())
-                    pattern_acquisition = AcquisitionEvent(name, self.positions[name], stim.channel_id,
-                                                           scheduled_time=scheduled_time,
-                                                           scheduled_time_since_start=scheduled_time - start_time,
-                                                           exposure_time_ms=stim.exposure,
-                                                           needs_slm=True,
-                                                           config_groups=stim.get_config_groups(),
-                                                           devices=stim.get_device_properties(),
-                                                           sub_axes=[f"{t: 05d}", "stim_aq"],
-                                                           **channel_kwargs,
-                                                           )
+                    if stim.exposure > 0:
 
-                    upmsg = UpdatePatternEventMessage(update_pattern)
-                    aqmsg = AcquisitionEventMessage(pattern_acquisition)
+                        # create update pattern and acquisition event
+                        channel_kwargs = self.get_kwargs(experiment, stim, make_pattern)
+                        update_pattern = UpdatePatternEvent(name, stim.get_config_groups(), stim.get_device_properties())
+                        pattern_acquisition = AcquisitionEvent(name, self.positions[name], stim.channel_id,
+                                                               scheduled_time=scheduled_time,
+                                                               scheduled_time_since_start=scheduled_time - start_time,
+                                                               exposure_time_ms=stim.exposure,
+                                                               needs_slm=True,
+                                                               config_groups=stim.get_config_groups(),
+                                                               devices=stim.get_device_properties(),
+                                                               sub_axes=[f"{t: 05d}", "stim_aq"],
+                                                               **channel_kwargs,
+                                                               )
 
-                    self.msgout["slm_buffer"].put(upmsg)
-                    self.msgout["microscope"].put(upmsg)
-                    self.msgout["microscope"].put(aqmsg)
+                        upmsg = UpdatePatternEventMessage(update_pattern)
+                        aqmsg = AcquisitionEventMessage(pattern_acquisition)
+
+                        self.msgout["slm_buffer"].put(upmsg)
+                        self.msgout["microscope"].put(upmsg)
+                        self.msgout["microscope"].put(aqmsg)
 
                 """Image Acquisition Events (each channel)"""
                 for channel_name, channel in experiment.channels.items():
