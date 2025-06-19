@@ -154,6 +154,7 @@ class MicroscopeOutbox(DataPassingProcess):
                     if aq_event.save_stim:
                         dset = f.create_dataset(relpath + r"dmd", data=data.dmd_pattern)
                         dset.attrs["pattern_id"] = str(data.pattern_id)
+                        aq_event.write_attrs(dset)
 
     # def test_write_data(self):
     #     aq_event = AcquisitionEvent("test", Position(1, 2, 0), scheduled_time=0, exposure_time_ms=1,
