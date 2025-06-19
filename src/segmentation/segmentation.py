@@ -28,6 +28,8 @@ class SegmentationProcess:
         self.manager = aq.seg_to_manager
 
         self.from_raw = aq.outbox_to_seg
+        self.to_outbox = aq.seg_to_outbox
+
         self.to_pattern = aq.seg_to_pattern
 
         self.initialized = False
@@ -80,9 +82,17 @@ class SegmentationProcess:
 
     def handle_segment_data(self, aq_data: AcquisitionData):
 
-        name = aq_data.event.experiment_name
+        event = aq_data.event
+        name = event.experiment_name
 
+        # pass data to pattern process for pattern gen
         seg_data = self.run_model(name, aq_data)
+        self.to_pattern.put(seg_data)
+
+        # pass data to outbox for saving
+        if event.save_seg:
+            self.to_outbox.put(seg_data)
+
 
     def handle_message(self, message: Message):
 
