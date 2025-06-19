@@ -24,6 +24,7 @@ class AllQueues:
 
         # raw data to be segmented queue
         self.outbox_to_seg = Queue()
+        self.seg_to_outbox = Queue()
 
         # segmented for pattern generation queue
         # and raw to pattern queue
