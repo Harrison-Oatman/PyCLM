@@ -12,7 +12,7 @@ from .queues import AllQueues
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdatePositionWithAutoFocusEvent
 from .experiments import (experiment_from_toml, PositionWithAutoFocus, ExperimentSchedule, TimeCourse,
                           Experiment, ImagingConfig)
-from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData
+from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData, SegmentationData
 from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
                        UpdateZPositionMessage)
 from .patterns.pattern_process import RequestPattern
@@ -49,19 +49,20 @@ class DataPassingProcess(metaclass=ABCMeta):
                 if must_break:
                     break
 
-            if not self.data_in.empty():
-                data = self.data_in.get()
+            for data_channel in self.data_in:
+                if not data_channel.empty():
+                    data = data_channel.get()
 
-                if isinstance(data, Message):
-                    must_break = self.handle_message(data)
+                    if isinstance(data, Message):
+                        must_break = self.handle_message(data)
 
-                    if must_break:
-                        break
+                        if must_break:
+                            break
 
-                assert isinstance(data, GenericData), \
-                    f"Unexpected data type: {type(data)}, expected subtype of GenericData"
+                    assert isinstance(data, GenericData), \
+                        f"Unexpected data type: {type(data)}, expected subtype of GenericData"
 
-                self.handle_data(data)
+                    self.handle_data(data)
 
     @abstractmethod
     def handle_data(self, data):
@@ -88,7 +89,8 @@ class MicroscopeOutbox(DataPassingProcess):
         super().__init__(aq)
 
         self.from_manager = aq.manager_to_outbox
-        self.data_in = aq.acquisition_outbox
+        self.data_in = [aq.acquisition_outbox,
+                        aq.seg_to_outbox]
 
         self.manager = aq.outbox_to_manager
 
@@ -129,6 +131,11 @@ class MicroscopeOutbox(DataPassingProcess):
 
         file_relpath, relpath = aq_event.get_rel_path()
 
+        # acquisition is saved as "data", its segmentation is saved as "seg"
+        dset_name = r"data"
+        if isinstance(data, SegmentationData):
+            dset_name = r"seg"
+
         if self.save_type == "tif":
 
             fullpath = self.base_path / file_relpath / relpath
@@ -140,7 +147,7 @@ class MicroscopeOutbox(DataPassingProcess):
             filepath = self.base_path / f"{file_relpath}.hdf5"
             with File(filepath, "a") as f:
                 if aq_event.save_output:
-                    dset = f.create_dataset(relpath + r"data", data=data.data)
+                    dset = f.create_dataset(relpath + dset_name, data=data.data)
                     aq_event.write_attrs(dset)
 
                 if isinstance(data, StimulationData):
@@ -162,7 +169,7 @@ class SLMBuffer(DataPassingProcess):
         super().__init__(aq)
 
         self.from_manager = aq.manager_to_slm_buffer
-        self.data_in = aq.pattern_to_slm
+        self.data_in = [aq.pattern_to_slm]
 
         self.manager = aq.slm_buffer_to_manager
 
