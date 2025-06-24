@@ -5,11 +5,13 @@ from ..datatypes import AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
 from ..segmentation import SegmentationModel
+from .cellpose_segmentation import CellposeSegmentationModel
 
 
 class SegmentationProcess:
 
     known_models = {
+        "cellpose": CellposeSegmentationModel
     }
 
     def __init__(self, aq: AllQueues):
@@ -77,6 +79,7 @@ class SegmentationProcess:
 
             # provide the resource to the model
             model.provide_resource(resource)
+
     def register_model(self, model: type):
 
         assert issubclass(model, SegmentationModel), "model must be a subclass of PatternModel"
