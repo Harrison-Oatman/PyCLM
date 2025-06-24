@@ -15,7 +15,7 @@ class SharedSegmentationResourceRequest:
     Used to avoid loading duplicates of large models.
     """
 
-    def __init__(self, resource: type[SharedSegmentationResource], init_kwargs: dict):
+    def __init__(self, resource: type[SharedSegmentationResource], **init_kwargs):
         """
 
         :param resource: **class** of shared resource
@@ -38,7 +38,7 @@ class SegmentationModel:
     name = "base_model"
 
     def __init__(self, experiment_name, **kwargs):
-        pass
+        self.experiment_name = experiment_name
 
     def request_resource(self) -> Optional[SharedSegmentationResourceRequest]:
         pass
