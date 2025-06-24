@@ -98,7 +98,7 @@ def get_slm_shape(core: CMMCorePlus):
 
 def main():
     args = process_args()
-    base_path = Path(str(r"E:\Harrison\cells\barbounce2"))
+    base_path = Path(str(r"E:\Harrison\cells\barbounce4_jt"))
 
     console_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(base_path / 'log.log')
