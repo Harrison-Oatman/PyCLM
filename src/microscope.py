@@ -94,8 +94,12 @@ class MicroscopeProcess:
         if config_groups is None:
             return 0
 
+        logger.info(f"setting config groups:")
+
         for group, config in config_groups:
             self.core.setConfig(group, config)
+
+            logger.info(f"{group} = {config}")
 
         return 0
 
@@ -104,6 +108,8 @@ class MicroscopeProcess:
         if devices is None:
             return 0
 
+        logger.info(f"setting device properties:")
+
         for label, name, value, t in devices:
             t_func = {
                 "str": str,
@@ -111,6 +117,8 @@ class MicroscopeProcess:
                 "int": int,
                 "bool": bool,
             }[t]
+
+            logger.info(f"{label}-{name}: {t} = {value}")
 
             self.core.setProperty(label, name, t_func(value))
 
@@ -186,7 +194,7 @@ class MicroscopeProcess:
         while core.getProperty("PFS", "PFS Status") != "0000001100001010":
             pass
 
-        print(f"move+focus took {time() - start_time:0.3f}")
+        logger.info(f"move+focus took {time() - start_time:0.3f}")
 
         return True, core.getZPosition()
 
@@ -198,7 +206,10 @@ class MicroscopeProcess:
 
             if z_moved:
                 old_z = up_event.position.get_z()
-                print(old_z, z_new_position)
+
+                if np.abs(old_z - z_new_position) > 5:
+                    logger.warning( f"Major Z position change: {old_z}, {z_new_position}")
+
                 if abs(z_new_position - old_z) > 1.0:
                     self.manager.put(
                         UpdateZPositionMessage(
@@ -237,8 +248,8 @@ class MicroscopeProcess:
         event_id = aq_event.id
         logger.debug(f"{self.t(): .3f}| handling acquisition event {event_id}")
 
-        self.handle_device_update(aq_event.devices)
         self.handle_config_update(aq_event.config_groups)
+        self.handle_device_update(aq_event.devices)
         self.core.setExposure(aq_event.exposure_time_ms)
 
         self.set_binning(aq_event.binning)

@@ -358,8 +358,6 @@ class Manager:
 
     def handle_message(self, msg: Message):
 
-        print("handling message")
-
         match msg.message:
             case "update_z_position":
 
@@ -423,6 +421,8 @@ class Manager:
 
         # time iter loop
         for t in range(times.count):
+
+            print(f"t = {t}: {(time() - start_time) / 60: 0.1f} minutes")
 
             # wait until preparatory phase
             # todo: check if we are behind schedule

@@ -8,6 +8,8 @@ from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDo
 from .bar_patterns import BouncingBarPattern, BarPatternBase
 from .static_patterns import CirclePattern, FullOnPattern
 
+logger = logging.getLogger(__name__)
+
 
 class PatternProcess:
 
@@ -53,6 +55,8 @@ class PatternProcess:
         model = model_class(experiment_name, self.camera_properties, **method_kwargs)
 
         self.models[experiment_name] = model
+
+        logger.info(f"initializing pattern model \"{method_name}\"")
 
         return model.initialize(experiment)
 
