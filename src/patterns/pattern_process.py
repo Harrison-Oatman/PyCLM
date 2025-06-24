@@ -6,7 +6,7 @@ from ..experiments import Experiment
 from ..messages import Message
 from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
 from .bar_patterns import BouncingBarPattern, BarPatternBase
-from .static_patterns import CirclePattern
+from .static_patterns import CirclePattern, FullOnPattern
 
 
 class PatternProcess:
@@ -16,7 +16,7 @@ class PatternProcess:
         "bar": BarPatternBase,
         "pattern_review": PatternReview,
         "bar_bounce": BouncingBarPattern,
-
+        "full_on": FullOnPattern,
     }
 
     def __init__(self, aq: AllQueues):
