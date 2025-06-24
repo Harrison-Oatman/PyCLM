@@ -62,11 +62,16 @@ def make_tif(fp, at=None, chan="channel_638"):
 
             if at is not None:
 
-                pattern = np.array(f[t_val]["stim_aq"]["dmd"])
-                target_size = data.shape
-                tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati, (target_size[1]*2, target_size[0]*2)).astype(np.uint16)
-                ds =  downscale_local_mean(tf, (2, 2)).astype(np.uint16)
-                patterned.append(np.stack([data,ds]).astype(np.uint16))
+                if "stim_aq" in f[t_val].keys():
+
+                    pattern = np.array(f[t_val]["stim_aq"]["dmd"])
+                    target_size = data.shape
+                    tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati, (target_size[1]*2, target_size[0]*2)).astype(np.uint16)
+                    ds =  downscale_local_mean(tf, (2, 2)).astype(np.uint16)
+                    patterned.append(np.stack([data,ds]).astype(np.uint16))
+
+                else:
+                    patterned.append(np.stack([data, np.zeros(data.shape)]).astype(np.uint16))
 
 
     outpath = fp[:-5] + ".tif"
@@ -91,10 +96,10 @@ if __name__ == "__main__":
 
     # input_dir = args.dir
 
-    input_dir = r"E:\Harrison\cells\barbounce2\final"
+    input_dir = r"E:\Yang\20250618_lightplusdox_multiwelltimeseries\timeseries\eval2"
     at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
-        make_tif(str(val), at, "channel_638")
+        make_tif(str(val), at, "channel_477")
 
     # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")
