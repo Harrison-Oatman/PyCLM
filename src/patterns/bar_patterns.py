@@ -84,7 +84,7 @@ class BarPattern(BarPatternBase):
 
     def generate(self, data_dock: DataDock):
 
-        t = data_dock.t / 60
+        t = data_dock.time_seconds / 60
 
         xx, yy = self.get_meshgrid()
 
@@ -111,7 +111,7 @@ class BouncingBarPattern(BarPattern):
         self.t_loop_s = t_loop * 60
 
     def generate(self, data_dock: DataDock):
-        t = data_dock.t
+        t = data_dock.time_seconds
         t = t % self.t_loop_s
 
         halfway = self.t_loop_s / 2
@@ -119,6 +119,6 @@ class BouncingBarPattern(BarPattern):
         if t > halfway:
             t = halfway - (t - halfway)
 
-        data_dock.t = t
+        data_dock.time_seconds = t
 
         return super().generate(data_dock)
