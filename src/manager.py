@@ -441,17 +441,25 @@ class Manager:
 
             # iterate through each experiment
             for i, (name, experiment) in enumerate(self.experiments.items()):
+
                 scheduled_time = start_time + (t * times.interval) + (i * times.between)
 
+                # account for scheduled delay if applicable
+                t_delay = experiment.t_delay  # 0 unless specified
+                if t < t_delay:
+                    continue
+
+                this_t = t - t_delay
+
                 # determine and send if new pattern should be generated
-                make_pattern = self.send_make_pattern_request(t, name, scheduled_time - start_time)
+                make_pattern = self.send_make_pattern_request(this_t, name, scheduled_time - start_time)
 
                 # tracks when to send update position message
                 position_passed = False
 
                 """Stimulation Event"""
                 stim = experiment.stimulation
-                if t % stim.every_t == 0:
+                if this_t % stim.every_t == 0:
 
                     # create update position event if first imaging condition in loop
                     if not position_passed:
@@ -483,7 +491,7 @@ class Manager:
 
                 """Image Acquisition Events (each channel)"""
                 for channel_name, channel in experiment.channels.items():
-                    if t % channel.every_t == 0:
+                    if this_t % channel.every_t == 0:
 
                         # create update position event if first imaging condition in loop
                         if not position_passed:

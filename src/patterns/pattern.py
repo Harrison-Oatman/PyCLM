@@ -20,7 +20,7 @@ class DataDock:
 
     def __init__(self, t, requirements: list[AcquiredImageRequest]):
 
-        self.t = t
+        self.time_seconds = t
         self.requirements = requirements
         self.data = defaultdict(dict)
 
@@ -166,8 +166,4 @@ if __name__ == "__main__":
     air = AcquiredImageRequest(uuid4(), True, False)
     print(air)
 
-# todo: what is the dynamic range of patterns? [0-1] float16?
-# todo: dummy model
-# todo: register model
-# todo: intialize pattern process with pattern shape
 # todo: handle raw and segmentation input

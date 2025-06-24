@@ -179,6 +179,8 @@ class MicroscopeProcess:
         if not z_moved:
             return False, 0
 
+        # todo: fix hard-coded PFS status property and PFS required on
+
         core.setProperty("PFS", "FocusMaintenance", "On")
 
         while core.getProperty("PFS", "PFS Status") != "0000001100001010":
@@ -193,7 +195,6 @@ class MicroscopeProcess:
         if isinstance(up_event.position, PositionWithAutoFocus):
 
             z_moved, z_new_position = self.move_to_position(up_event.position)
-
 
             if z_moved:
                 old_z = up_event.position.get_z()
