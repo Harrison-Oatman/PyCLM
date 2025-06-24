@@ -25,6 +25,9 @@ class SegmentationProcess:
 
         self.models = {}
 
+        self.accommodated_requests = []
+        self.shared_resources = dict()
+
     def initialize(self):
         self.initialized = True
 
@@ -42,8 +45,38 @@ class SegmentationProcess:
 
         model = model_class(experiment_name, **method_kwargs)
 
+        this_resource_request = model.request_resource()
+
+        if this_resource_request:
+            self.handle_resource_request(model, this_resource_request)
+
         self.models[experiment_name] = model
 
+    def handle_resource_request(self, model, request):
+        preexisting_resource = None
+
+        for accommodated_resource_request in self.accommodated_requests:
+            if accommodated_resource_request == request:
+                preexisting_resource = accommodated_resource_request.request_id
+
+        if preexisting_resource:
+            model.provide_resource(self.shared_resources[preexisting_resource])
+
+        else:
+            # initialize the resource
+            resource_class = request.resource
+            kwargs = request.init_kwargs
+
+            resource = resource_class(**kwargs)
+
+            # keep track of the requested resource for future requests
+            self.accommodated_requests.append(request)
+
+            this_request_id = request.request_id
+            self.shared_resources[this_request_id] = resource
+
+            # provide the resource to the model
+            model.provide_resource(resource)
     def register_model(self, model: type):
 
         assert issubclass(model, SegmentationModel), "model must be a subclass of PatternModel"
