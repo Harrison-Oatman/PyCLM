@@ -53,7 +53,7 @@ class AcquisitionEvent:
 
     def __init__(self, experiment, position: PositionWithAutoFocus, channel_id: UUID,
                  scheduled_time=0, scheduled_time_since_start=0, exposure_time_ms=10, needs_slm=False,
-                 super_axes=None, sub_axes=None,
+                 super_axes=None, sub_axes=None, t_index=0,
                  config_groups: Optional[list[ConfigGroup]] = None,
                  devices: Optional[list[DeviceProperty]] = None,
                  save_output=True, save_stim=True,
@@ -75,6 +75,7 @@ class AcquisitionEvent:
         self.time_since_start = scheduled_time_since_start
         self.complete = False
         self.completed_time = None
+        self.t_index = t_index
 
         # acquisition details
         self.exposure_time_ms = exposure_time_ms
@@ -184,6 +185,56 @@ class AcquisitionEvent:
         dset.attrs["save_pattern"] = self.save_pattern
 
         dset.attrs["pixel_width_um"] = str(self.pixel_width_um)
+
+    def __repr__(self):
+        repr_out = {}
+
+        repr_out["id"] = str(self.id)
+        repr_out["position"] = [(k, str(v)) for k, v in self.position.as_dict().items()]
+
+        repr_out["experiment_name"] = self.experiment_name
+
+        value = datetime.datetime.fromtimestamp(self.scheduled_time)
+        repr_out["time_scheduled"] = value.strftime('%Y-%m-%d %H:%M:%S')
+        repr_out["time_since_start"] = str(datetime.timedelta(seconds=self.time_since_start))
+        repr_out["time_completed"] = datetime.datetime.fromtimestamp(self.completed_time).strftime(
+            '%Y-%m-%d %H:%M:%S')
+        repr_out["complete"] = self.complete
+
+        repr_out["exposure_time_ms"] = self.exposure_time_ms
+        repr_out["needs_slm"] = self.needs_slm
+        repr_out["binning"] = self.binning
+
+        if self.super_axes is not None:
+            repr_out["super_axes"] = [str(a) for a in self.super_axes]
+
+        if self.sub_axes is not None:
+            repr_out["sub_axes"] = [str(a) for a in self.sub_axes]
+
+        if self.config_groups is not None:
+            for cg in self.config_groups:
+                repr_out[f"config_groups: {cg.group}"] = str(cg.config)
+
+        if self.devices is not None:
+            for dp in self.devices:
+                repr_out[f"devices: {dp.device}-{dp.property}"] = str(dp.value)
+
+        repr_out["save_output"] = self.save_output
+        repr_out["segment"] = self.segment
+        repr_out["seg_method"] = self.seg_method
+        repr_out["save_seg"] = self.save_seg
+
+        repr_out["raw_goes_to_pattern"] = self.raw_goes_to_pattern
+        repr_out["seg_goes_to_pattern"] = self.seg_goes_to_pattern
+        repr_out["channel_id"] = str(self.channel_id)
+
+        repr_out["pattern_method"] = self.pattern_method
+        repr_out["save_pattern"] = self.save_pattern
+
+        repr_out["pixel_width_um"] = str(self.pixel_width_um)
+
+        return repr(repr_out)
+
 
 # class PositionGrid:
 #     """

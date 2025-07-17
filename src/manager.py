@@ -105,6 +105,11 @@ class MicroscopeOutbox(DataPassingProcess):
 
         self.write_data(data)
 
+        if isinstance(data, SegmentationData):
+            return
+
+        print(aq_event)
+
         if aq_event.segment:
             self.seg_queue.put(data)
 
@@ -335,6 +340,8 @@ class Manager:
             "segmentation_goes_to_pattern": False,
         }
 
+        print(f"channel {channel}")
+
         requirements = self.pattern_requirements[experiment.experiment_name]
         channel_id = channel.channel_id
 
@@ -345,6 +352,8 @@ class Manager:
 
         for air in requirements:
             air: AcquiredImageRequest
+
+            print(f"air: {air}")
 
             if channel_id == air.id:
                 value = air
@@ -411,9 +420,11 @@ class Manager:
         """
         make_pattern = (loop_iter % self.pattern_lcms[experiment_name]) == 0
 
+        print(f"pattern_requirements: {self.pattern_requirements[experiment_name]}")
+
         if make_pattern:
             pattern_request = RequestPattern(
-                time_sec, experiment_name, self.pattern_requirements[experiment_name]
+                loop_iter, time_sec, experiment_name, self.pattern_requirements[experiment_name]
             )
 
             self.msgout["pattern"].put(pattern_request)
@@ -479,6 +490,7 @@ class Manager:
                                                                config_groups=stim.get_config_groups(),
                                                                devices=stim.get_device_properties(),
                                                                sub_axes=[f"{t: 05d}", "stim_aq"],
+                                                               t_index=t,
                                                                **channel_kwargs,
                                                                )
 
@@ -507,6 +519,7 @@ class Manager:
                                                                config_groups=channel.get_config_groups(),
                                                                devices=channel.get_device_properties(),
                                                                sub_axes=[f"{t: 05d}", f"channel_{channel_name}"],
+                                                               t_index=t,
                                                                **channel_kwargs,
                                                                )
 

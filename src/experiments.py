@@ -58,8 +58,11 @@ class ImagingConfig:
     def get_device_properties(self) -> list[DeviceProperty]:
         return list(self._device_properties.values())
 
+    def set_id(self):
+        self.channel_id = uuid4()
+
     def __repr__(self):
-        return (f"ImagingConfig(exposure={self.exposure}ms, image_every={self.every_t}, "
+        return (f"ImagingConfig({self.channel_id}: exposure={self.exposure}ms, image_every={self.every_t}, "
                 f"configs={self._config_groups}, device_props={self._device_properties})")
 
 
@@ -270,6 +273,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
     # copy base imaging config and update
     imaging_config = deepcopy(base_config)
+    imaging_config.set_id()
     imaging_config.update_config_groups(imaging_config_groups)
     imaging_config.update_device_properties(imaging_device_props)
     imaging_config.exposure = imaging_exposure
@@ -284,6 +288,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     for preset in presets:
         # copy base imaging config
         cfg = deepcopy(imaging_config)
+        cfg.set_id()
         cfg.update_config_groups([ConfigGroup(channel_group, preset)])
 
         # get channel-specific config, if it exists
@@ -312,6 +317,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
     # make stimulation config - inherits base config
     stimulation_config = deepcopy(base_config)
+    stimulation_config.set_id()
     stimulation_config.exposure = toml_data["stimulation"]["exposure"]
     stimulation_config.every_t = toml_data["stimulation"].get("every_t", 1)
     stimulation_config.save = toml_data["stimulation"].get("save", True)

@@ -21,7 +21,7 @@ def run_cellpose(infile):
     stack = imread(infile)
     stack = [frame for frame in stack]
 
-    masks, flows, styles = model.eval(stack, batch_size=8,)
+    masks, flows, styles = model.eval(stack, batch_size=8, normalize={"lowhigh": [0, 5000]})
 
     masks = np.stack(masks, axis=0)
 

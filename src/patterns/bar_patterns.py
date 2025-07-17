@@ -93,6 +93,50 @@ class BarPattern(BarPatternBase):
         return is_on.astype(np.float16)
 
 
+class SawToothModel(PatternModel):
+
+    name = "sawtooth"
+
+    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2,
+                 bar_speed=1, period=30, inverse=False, **kwargs):
+        """
+        :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
+                           vertical axis containing "on" pixels
+        :param bar_speed: speed in um/min
+        :param period: period in um
+        """
+        super().__init__(experiment_name, camera_properties)
+
+        self.duty_cycle = duty_cycle
+        self.bar_speed = bar_speed
+        self.period_space = period  # in um
+        self.period_time = period / bar_speed  # in minutes
+        self.inverse = inverse
+
+    def initialize(self, experiment):
+        super().initialize(experiment)
+
+        return []
+
+    def generate(self, data_dock: DataDock):
+        t = data_dock.time_seconds / 60
+
+        xx, yy = self.get_meshgrid()
+
+        is_on = ((t - (yy / self.bar_speed)) % self.period_time) < self.duty_cycle * self.period_time
+
+        val = ((t - (yy / self.bar_speed)) % self.period_time) / (self.duty_cycle * self.period_time)
+
+        if not self.inverse:
+            val = 1 - val
+
+        pattern_out = (is_on*val).astype(np.float16)
+
+        print(np.min(pattern_out), np.max(pattern_out))
+
+        return pattern_out
+
+
 class BouncingBarPattern(BarPattern):
 
     name = "bar_bounce"

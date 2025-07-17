@@ -1,6 +1,6 @@
 import logging
 
-from .. import AllQueues
+from ..queues import AllQueues
 from ..datatypes import AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
@@ -35,15 +35,15 @@ class SegmentationProcess:
 
     def request_model(self, experiment: Experiment):
 
-        method_name = experiment.pattern.method_name
+        method_name = experiment.segmentation.method_name
 
         model_class: type = self.known_models.get(method_name)
 
         assert model_class is not None, f"method {method_name} is not a registered model"
-        assert issubclass(model_class, SegmentationModel), f"{method_name} is not a PatternModel"
+        assert issubclass(model_class, SegmentationModel), f"{method_name} is not a SegmentationModel"
 
         experiment_name = experiment.experiment_name
-        method_kwargs = experiment.pattern.kwargs
+        method_kwargs = experiment.segmentation.kwargs
 
         model = model_class(experiment_name, **method_kwargs)
 
@@ -62,9 +62,11 @@ class SegmentationProcess:
                 preexisting_resource = accommodated_resource_request.request_id
 
         if preexisting_resource:
+            print("using existing resource")
             model.provide_resource(self.shared_resources[preexisting_resource])
 
         else:
+            print("creating new resource")
             # initialize the resource
             resource_class = request.resource
             kwargs = request.init_kwargs
@@ -82,7 +84,7 @@ class SegmentationProcess:
 
     def register_model(self, model: type):
 
-        assert issubclass(model, SegmentationModel), "model must be a subclass of PatternModel"
+        assert issubclass(model, SegmentationModel), "model must be a subclass of SegmentationModel"
 
         model_name = model.name
 
@@ -95,7 +97,10 @@ class SegmentationProcess:
 
         model = self.models.get(experiment_name, None)
 
-        assert isinstance(model, SegmentationModel), f"self.models[{'experiment_name'}] is not a PatternModel"
+        # print(self.models)
+        # print(self.models[experiment_name])
+
+        assert isinstance(model, SegmentationModel), f"self.models[{experiment_name}] is not a SegmentationModel"
 
         data_to_seg = aq_data.data
         segmented = model.segment(data_to_seg)
@@ -109,6 +114,8 @@ class SegmentationProcess:
 
         event = aq_data.event
         name = event.experiment_name
+
+        print(f"segmenting {name}: t = {event.t_index}")
 
         # pass data to pattern process for pattern gen
         seg_data = self.run_model(name, aq_data)
@@ -134,7 +141,6 @@ class SegmentationProcess:
                 msg = self.inbox.get()
 
                 self.handle_message(msg)
-
             if not self.from_raw.empty():
                 data = self.from_raw.get()
 

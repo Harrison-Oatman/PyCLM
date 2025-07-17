@@ -5,8 +5,9 @@ from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
 from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
-from .bar_patterns import BouncingBarPattern, BarPatternBase
+from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothModel
 from .static_patterns import CirclePattern, FullOnPattern
+from .feedback_control_patterns import RotateCcwModel
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,8 @@ class PatternProcess:
         "pattern_review": PatternReview,
         "bar_bounce": BouncingBarPattern,
         "full_on": FullOnPattern,
+        "rotate_ccw": RotateCcwModel,
+        "sawtooth": SawToothModel
     }
 
     def __init__(self, aq: AllQueues):
@@ -71,9 +74,9 @@ class PatternProcess:
 
         self.known_models[model_name] = model
 
-    def run_model(self, experiment_name):
+    def run_model(self, experiment_name, dockname):
 
-        data_dock = self.docks.pop(experiment_name)
+        data_dock = self.docks.pop(dockname)
 
         model = self.models.get(experiment_name, None)
 
@@ -90,12 +93,15 @@ class PatternProcess:
 
             self.slm.put(CameraPattern(experiment_name, pattern, slm_coords=False, binning=model.binning))
 
-    def check(self, experiment_name):
+    def dock_string(self, experiment_name, t):
+        return f"{experiment_name}_{t:05d}"
 
-        dock: DataDock = self.docks.get(experiment_name)
+    def check(self, experiment_name, dockname):
+
+        dock: DataDock = self.docks.get(dockname)
 
         if dock.check_complete():
-            self.run_model(experiment_name)
+            self.run_model(experiment_name, dockname)
 
     def handle_message(self, message: Message):
 
@@ -107,13 +113,17 @@ class PatternProcess:
 
                 req = message.requirements
                 name = message.experiment_name
-                t = message.t
+                t_sec = message.time_sec
+                t_index = message.t_index
 
-                dock = DataDock(t, req)
+                dock = DataDock(t_sec, req)
+                dockname = self.dock_string(name, t_index)
 
-                self.docks[name] = dock
+                print(f"pattern request {dockname}")
 
-                self.check(name)
+                self.docks[dockname] = dock
+
+                self.check(name, dockname)
 
             case _:
                 raise NotImplementedError
@@ -130,20 +140,28 @@ class PatternProcess:
 
                 assert isinstance(data, AcquisitionData)
                 name = data.event.experiment_name
+                t_index = data.event.t_index
 
-                self.docks[name].add_raw(data)
+                dockname = self.dock_string(name, t_index)
 
-                self.check(name)
+                self.docks[dockname].add_raw(data)
+
+                self.check(name, dockname)
 
             if not self.from_seg.empty():
                 data = self.from_seg.get()
 
                 assert isinstance(data, SegmentationData)
                 name = data.event.experiment_name
+                t_index = data.event.t_index
 
-                self.docks[name].add_seg(data)
+                dockname = self.dock_string(name, t_index)
 
-                self.check(name)
+                print(f"seg found {dockname}")
+
+                self.docks[dockname].add_seg(data)
+
+                self.check(name, dockname)
 
 
 class RequestPattern(Message):
@@ -155,9 +173,10 @@ class RequestPattern(Message):
 
     message = "request_pattern"
 
-    def __init__(self, t, experiment_name: str, requirements: list[AcquiredImageRequest]):
+    def __init__(self, t_index, time_sec, experiment_name: str, requirements: list[AcquiredImageRequest]):
 
-        self.t = t
+        self.t_index = t_index
+        self.time_sec = time_sec
         self.experiment_name = experiment_name
         self.requirements = requirements
 

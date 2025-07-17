@@ -31,7 +31,7 @@ class CellposeSegmentationModel(SegmentationModel):
 
     name = "cellpose"
 
-    def __init__(self, experiment_name, model="cpsam", use_gpu=True, normlow=0, normhigh=5000):
+    def __init__(self, experiment_name, model="cpsam", use_gpu=True, normlow=0, normhigh=5000, **kwargs):
         super().__init__(experiment_name)
 
         self.model_name = model
