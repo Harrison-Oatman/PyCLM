@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
     # input_dir = args.dir
 
-    input_dir = r"E:\Yang\20250618_lightplusdox_multiwelltimeseries\timeseries\eval2"
+    input_dir = r"E:\Yang\20250717_lightplusdox_part2\timeseries\eval"
     at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):

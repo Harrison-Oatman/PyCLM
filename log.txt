@@ -1,511 +1,547 @@
-2025-06-24 16:45:38.506 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:41.897 SetImage ( Grayscale )
-2025-06-24 16:45:41.905 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:41.906 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:44.430 SetImage ( Grayscale )
-2025-06-24 16:45:44.438 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:44.438 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:47.581 SetImage ( Grayscale )
-2025-06-24 16:45:47.589 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:47.589 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:50.553 SetImage ( Grayscale )
-2025-06-24 16:45:50.561 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:50.561 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:53.714 SetImage ( Grayscale )
-2025-06-24 16:45:53.722 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:53.722 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:56.850 SetImage ( Grayscale )
-2025-06-24 16:45:56.857 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:56.857 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:45:59.481 SetImage ( Grayscale )
-2025-06-24 16:45:59.489 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:45:59.489 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:02.485 SetImage ( Grayscale )
-2025-06-24 16:46:02.493 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:02.493 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:10.689 SetImage ( Grayscale )
-2025-06-24 16:46:10.697 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:10.697 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:16.990 SetImage ( Grayscale )
-2025-06-24 16:46:16.998 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:16.999 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:22.413 SetImage ( Grayscale )
-2025-06-24 16:46:22.422 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:22.422 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:27.849 SetImage ( Grayscale )
-2025-06-24 16:46:27.857 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:27.857 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:33.706 SetImage ( Grayscale )
-2025-06-24 16:46:33.714 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:33.714 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:39.030 SetImage ( Grayscale )
-2025-06-24 16:46:39.038 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:39.038 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:44.490 SetImage ( Grayscale )
-2025-06-24 16:46:44.498 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:44.498 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:50.501 SetImage ( Grayscale )
-2025-06-24 16:46:50.509 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:50.509 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:46:56.006 SetImage ( Grayscale )
-2025-06-24 16:46:56.014 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:46:56.014 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:01.513 SetImage ( Grayscale )
-2025-06-24 16:47:01.521 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:01.522 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:07.237 SetImage ( Grayscale )
-2025-06-24 16:47:07.245 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:07.245 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:12.785 SetImage ( Grayscale )
-2025-06-24 16:47:12.793 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:12.794 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:18.481 SetImage ( Grayscale )
-2025-06-24 16:47:18.489 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:18.489 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:24.041 SetImage ( Grayscale )
-2025-06-24 16:47:24.049 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:24.049 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:29.918 SetImage ( Grayscale )
-2025-06-24 16:47:29.926 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:29.926 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:35.830 SetImage ( Grayscale )
-2025-06-24 16:47:35.838 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:35.838 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:41.466 SetImage ( Grayscale )
-2025-06-24 16:47:41.474 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:41.474 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:46.913 SetImage ( Grayscale )
-2025-06-24 16:47:46.921 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:46.921 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:52.645 SetImage ( Grayscale )
-2025-06-24 16:47:52.653 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:52.654 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:55.842 SetImage ( Grayscale )
-2025-06-24 16:47:55.850 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:55.850 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:47:58.485 SetImage ( Grayscale )
-2025-06-24 16:47:58.493 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:47:58.493 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:01.005 SetImage ( Grayscale )
-2025-06-24 16:48:01.013 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:01.013 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:03.886 SetImage ( Grayscale )
-2025-06-24 16:48:03.894 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:03.894 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:06.417 SetImage ( Grayscale )
-2025-06-24 16:48:06.425 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:06.425 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:08.865 SetImage ( Grayscale )
-2025-06-24 16:48:08.873 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:08.874 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:11.729 SetImage ( Grayscale )
-2025-06-24 16:48:11.737 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:11.737 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:14.362 SetImage ( Grayscale )
-2025-06-24 16:48:14.370 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:14.370 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:16.881 SetImage ( Grayscale )
-2025-06-24 16:48:16.889 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:16.889 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:19.795 SetImage ( Grayscale )
-2025-06-24 16:48:19.803 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:19.803 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:22.378 SetImage ( Grayscale )
-2025-06-24 16:48:22.386 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:22.386 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:24.847 SetImage ( Grayscale )
-2025-06-24 16:48:24.854 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:24.855 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:27.475 SetImage ( Grayscale )
-2025-06-24 16:48:27.483 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:27.483 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:30.350 SetImage ( Grayscale )
-2025-06-24 16:48:30.358 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:30.358 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:33.222 SetImage ( Grayscale )
-2025-06-24 16:48:33.230 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:33.230 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:35.694 SetImage ( Grayscale )
-2025-06-24 16:48:35.702 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:35.702 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:38.145 SetImage ( Grayscale )
-2025-06-24 16:48:38.154 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:38.154 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:40.963 SetImage ( Grayscale )
-2025-06-24 16:48:40.971 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:40.971 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:43.493 SetImage ( Grayscale )
-2025-06-24 16:48:43.501 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:43.502 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:46.001 SetImage ( Grayscale )
-2025-06-24 16:48:46.010 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:46.010 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:48.346 SetImage ( Grayscale )
-2025-06-24 16:48:48.355 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:48.355 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:51.273 SetImage ( Grayscale )
-2025-06-24 16:48:51.281 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:51.281 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:53.665 SetImage ( Grayscale )
-2025-06-24 16:48:53.673 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:53.673 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:56.206 SetImage ( Grayscale )
-2025-06-24 16:48:56.214 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:56.214 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:48:59.082 SetImage ( Grayscale )
-2025-06-24 16:48:59.090 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:48:59.090 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:01.674 SetImage ( Grayscale )
-2025-06-24 16:49:01.682 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:01.682 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:04.158 SetImage ( Grayscale )
-2025-06-24 16:49:04.166 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:04.166 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:07.213 SetImage ( Grayscale )
-2025-06-24 16:49:07.221 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:07.221 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:09.697 SetImage ( Grayscale )
-2025-06-24 16:49:09.705 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:09.705 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:12.101 SetImage ( Grayscale )
-2025-06-24 16:49:12.109 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:12.109 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:14.557 SetImage ( Grayscale )
-2025-06-24 16:49:14.565 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:14.566 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:17.493 SetImage ( Grayscale )
-2025-06-24 16:49:17.501 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:17.501 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:20.381 SetImage ( Grayscale )
-2025-06-24 16:49:20.389 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:20.389 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:22.904 SetImage ( Grayscale )
-2025-06-24 16:49:22.912 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:22.913 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:25.469 SetImage ( Grayscale )
-2025-06-24 16:49:25.477 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:25.477 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:28.201 SetImage ( Grayscale )
-2025-06-24 16:49:28.209 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:28.209 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:30.809 SetImage ( Grayscale )
-2025-06-24 16:49:30.817 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:30.817 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:33.357 SetImage ( Grayscale )
-2025-06-24 16:49:33.365 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:33.366 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:35.829 SetImage ( Grayscale )
-2025-06-24 16:49:35.837 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:35.838 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:38.713 SetImage ( Grayscale )
-2025-06-24 16:49:38.721 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:38.721 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:41.194 SetImage ( Grayscale )
-2025-06-24 16:49:41.202 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:41.202 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:43.734 SetImage ( Grayscale )
-2025-06-24 16:49:43.742 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:43.742 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:46.541 SetImage ( Grayscale )
-2025-06-24 16:49:46.549 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:46.549 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:49.153 SetImage ( Grayscale )
-2025-06-24 16:49:49.161 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:49.161 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:51.705 SetImage ( Grayscale )
-2025-06-24 16:49:51.713 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:51.713 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:54.132 SetImage ( Grayscale )
-2025-06-24 16:49:54.140 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:54.141 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:56.621 SetImage ( Grayscale )
-2025-06-24 16:49:56.629 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:56.629 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:49:59.042 SetImage ( Grayscale )
-2025-06-24 16:49:59.050 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:49:59.050 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:01.545 SetImage ( Grayscale )
-2025-06-24 16:50:01.553 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:01.554 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:04.457 SetImage ( Grayscale )
-2025-06-24 16:50:04.465 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:04.465 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:07.381 SetImage ( Grayscale )
-2025-06-24 16:50:07.389 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:07.390 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:09.742 SetImage ( Grayscale )
-2025-06-24 16:50:09.750 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:09.750 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:12.113 SetImage ( Grayscale )
-2025-06-24 16:50:12.121 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:12.121 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:14.806 SetImage ( Grayscale )
-2025-06-24 16:50:14.814 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:14.814 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:17.265 SetImage ( Grayscale )
-2025-06-24 16:50:17.273 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:17.274 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:19.765 SetImage ( Grayscale )
-2025-06-24 16:50:19.773 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:19.773 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:22.193 SetImage ( Grayscale )
-2025-06-24 16:50:22.201 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:22.202 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:25.093 SetImage ( Grayscale )
-2025-06-24 16:50:25.101 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:25.101 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:27.162 SetImage ( Grayscale )
-2025-06-24 16:50:27.170 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:27.171 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:29.690 SetImage ( Grayscale )
-2025-06-24 16:50:29.698 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:29.698 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:32.637 SetImage ( Grayscale )
-2025-06-24 16:50:32.645 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:32.645 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:35.526 SetImage ( Grayscale )
-2025-06-24 16:50:35.534 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:35.534 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:38.389 SetImage ( Grayscale )
-2025-06-24 16:50:38.397 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:38.397 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:41.350 SetImage ( Grayscale )
-2025-06-24 16:50:41.359 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:41.359 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:44.092 SetImage ( Grayscale )
-2025-06-24 16:50:44.100 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:44.100 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:46.985 SetImage ( Grayscale )
-2025-06-24 16:50:46.994 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:46.994 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:50.073 SetImage ( Grayscale )
-2025-06-24 16:50:50.082 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:50.082 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:53.376 SetImage ( Grayscale )
-2025-06-24 16:50:53.384 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:53.384 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:56.622 SetImage ( Grayscale )
-2025-06-24 16:50:56.630 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:56.630 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:50:59.004 SetImage ( Grayscale )
-2025-06-24 16:50:59.013 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:50:59.013 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:02.037 SetImage ( Grayscale )
-2025-06-24 16:51:02.045 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:02.045 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:10.400 SetImage ( Grayscale )
-2025-06-24 16:51:10.409 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:10.409 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:16.821 SetImage ( Grayscale )
-2025-06-24 16:51:16.829 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:16.829 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:22.353 SetImage ( Grayscale )
-2025-06-24 16:51:22.361 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:22.361 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:27.742 SetImage ( Grayscale )
-2025-06-24 16:51:27.750 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:27.750 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:33.472 SetImage ( Grayscale )
-2025-06-24 16:51:33.480 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:33.481 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:38.834 SetImage ( Grayscale )
-2025-06-24 16:51:38.842 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:38.842 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:44.261 SetImage ( Grayscale )
-2025-06-24 16:51:44.269 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:44.269 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:50.058 SetImage ( Grayscale )
-2025-06-24 16:51:50.066 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:50.066 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:51:55.657 SetImage ( Grayscale )
-2025-06-24 16:51:55.665 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:51:55.665 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:01.102 SetImage ( Grayscale )
-2025-06-24 16:52:01.110 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:01.110 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:06.485 SetImage ( Grayscale )
-2025-06-24 16:52:06.493 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:06.493 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:11.818 SetImage ( Grayscale )
-2025-06-24 16:52:11.827 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:11.827 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:16.789 SetImage ( Grayscale )
-2025-06-24 16:52:16.797 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:16.798 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:21.881 SetImage ( Grayscale )
-2025-06-24 16:52:21.889 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:21.890 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:27.208 SetImage ( Grayscale )
-2025-06-24 16:52:27.216 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:27.216 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:32.521 SetImage ( Grayscale )
-2025-06-24 16:52:32.529 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:32.529 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:37.549 SetImage ( Grayscale )
-2025-06-24 16:52:37.558 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:37.558 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:42.585 SetImage ( Grayscale )
-2025-06-24 16:52:42.593 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:42.594 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:48.034 SetImage ( Grayscale )
-2025-06-24 16:52:48.042 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:48.043 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:50.849 SetImage ( Grayscale )
-2025-06-24 16:52:50.857 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:50.857 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:53.452 SetImage ( Grayscale )
-2025-06-24 16:52:53.460 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:53.460 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:55.973 SetImage ( Grayscale )
-2025-06-24 16:52:55.981 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:55.982 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:52:58.405 SetImage ( Grayscale )
-2025-06-24 16:52:58.414 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:52:58.414 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:00.489 SetImage ( Grayscale )
-2025-06-24 16:53:00.498 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:00.498 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:02.552 SetImage ( Grayscale )
-2025-06-24 16:53:02.560 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:02.560 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:05.097 SetImage ( Grayscale )
-2025-06-24 16:53:05.105 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:05.106 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:07.505 SetImage ( Grayscale )
-2025-06-24 16:53:07.513 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:07.513 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:09.549 SetImage ( Grayscale )
-2025-06-24 16:53:09.557 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:09.558 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:12.421 SetImage ( Grayscale )
-2025-06-24 16:53:12.429 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:12.430 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:14.784 SetImage ( Grayscale )
-2025-06-24 16:53:14.792 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:14.793 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:17.227 SetImage ( Grayscale )
-2025-06-24 16:53:17.235 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:17.235 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:19.835 SetImage ( Grayscale )
-2025-06-24 16:53:19.843 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:19.843 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:22.700 SetImage ( Grayscale )
-2025-06-24 16:53:22.708 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:22.709 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:25.147 SetImage ( Grayscale )
-2025-06-24 16:53:25.155 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:25.156 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:27.295 SetImage ( Grayscale )
-2025-06-24 16:53:27.303 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:27.303 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:29.340 SetImage ( Grayscale )
-2025-06-24 16:53:29.349 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:29.349 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:31.764 SetImage ( Grayscale )
-2025-06-24 16:53:31.773 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:31.773 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:33.802 SetImage ( Grayscale )
-2025-06-24 16:53:33.809 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:33.809 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:35.987 SetImage ( Grayscale )
-2025-06-24 16:53:35.995 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:35.995 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:38.009 SetImage ( Grayscale )
-2025-06-24 16:53:38.018 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:38.018 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:40.519 SetImage ( Grayscale )
-2025-06-24 16:53:40.528 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:40.528 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:42.886 SetImage ( Grayscale )
-2025-06-24 16:53:42.898 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:42.898 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:44.999 SetImage ( Grayscale )
-2025-06-24 16:53:45.008 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:45.008 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:47.901 SetImage ( Grayscale )
-2025-06-24 16:53:47.909 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:47.909 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:50.049 SetImage ( Grayscale )
-2025-06-24 16:53:50.057 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:50.058 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:52.495 SetImage ( Grayscale )
-2025-06-24 16:53:52.502 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:52.502 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:55.426 SetImage ( Grayscale )
-2025-06-24 16:53:55.434 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:55.434 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:53:57.896 SetImage ( Grayscale )
-2025-06-24 16:53:57.904 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:53:57.905 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:00.458 SetImage ( Grayscale )
-2025-06-24 16:54:00.466 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:00.466 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:02.993 SetImage ( Grayscale )
-2025-06-24 16:54:03.001 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:03.001 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:05.769 SetImage ( Grayscale )
-2025-06-24 16:54:05.777 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:05.777 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:08.530 SetImage ( Grayscale )
-2025-06-24 16:54:08.538 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:08.538 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:11.141 SetImage ( Grayscale )
-2025-06-24 16:54:11.149 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:11.149 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:13.677 SetImage ( Grayscale )
-2025-06-24 16:54:13.686 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:13.686 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:16.097 SetImage ( Grayscale )
-2025-06-24 16:54:16.106 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:16.106 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:18.122 SetImage ( Grayscale )
-2025-06-24 16:54:18.130 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:18.130 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:20.213 SetImage ( Grayscale )
-2025-06-24 16:54:20.221 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:20.221 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:22.293 SetImage ( Grayscale )
-2025-06-24 16:54:22.302 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:22.302 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:25.145 SetImage ( Grayscale )
-2025-06-24 16:54:25.153 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:25.154 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:27.704 SetImage ( Grayscale )
-2025-06-24 16:54:27.712 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:27.712 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:29.810 SetImage ( Grayscale )
-2025-06-24 16:54:29.819 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:29.819 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:32.745 SetImage ( Grayscale )
-2025-06-24 16:54:32.753 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:32.753 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:35.088 SetImage ( Grayscale )
-2025-06-24 16:54:35.096 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:35.096 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:38.414 SetImage ( Grayscale )
-2025-06-24 16:54:38.422 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:38.422 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:41.657 SetImage ( Grayscale )
-2025-06-24 16:54:41.665 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:41.665 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:44.570 SetImage ( Grayscale )
-2025-06-24 16:54:44.578 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:44.578 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:47.505 SetImage ( Grayscale )
-2025-06-24 16:54:47.513 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:47.513 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:50.290 SetImage ( Grayscale )
-2025-06-24 16:54:50.298 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:50.298 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:53.830 SetImage ( Grayscale )
-2025-06-24 16:54:53.838 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:53.838 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:56.969 SetImage ( Grayscale )
-2025-06-24 16:54:56.977 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:56.977 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:54:59.452 SetImage ( Grayscale )
-2025-06-24 16:54:59.460 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:54:59.460 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
-2025-06-24 16:55:02.381 SetImage ( Grayscale )
-2025-06-24 16:55:02.389 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
-2025-06-24 16:55:02.390 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:19.961 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:19.962 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:23.035 SetImage ( Grayscale )
+2025-07-17 16:45:23.043 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:23.044 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:32.951 SetImage ( Grayscale )
+2025-07-17 16:45:32.960 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:32.961 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:36.251 SetImage ( Grayscale )
+2025-07-17 16:45:36.259 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:36.260 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:39.514 SetImage ( Grayscale )
+2025-07-17 16:45:39.523 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:39.523 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:42.711 SetImage ( Grayscale )
+2025-07-17 16:45:42.719 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:42.719 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:45.703 SetImage ( Grayscale )
+2025-07-17 16:45:45.712 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:45.712 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:48.367 SetImage ( Grayscale )
+2025-07-17 16:45:48.376 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:48.376 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:51.803 SetImage ( Grayscale )
+2025-07-17 16:45:51.812 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:51.812 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:54.495 SetImage ( Grayscale )
+2025-07-17 16:45:54.504 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:54.504 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:45:57.564 SetImage ( Grayscale )
+2025-07-17 16:45:57.572 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:45:57.573 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:00.283 SetImage ( Grayscale )
+2025-07-17 16:46:00.292 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:00.292 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:03.164 SetImage ( Grayscale )
+2025-07-17 16:46:03.173 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:03.173 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:06.371 SetImage ( Grayscale )
+2025-07-17 16:46:06.379 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:06.379 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:09.229 SetImage ( Grayscale )
+2025-07-17 16:46:09.237 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:09.237 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:12.059 SetImage ( Grayscale )
+2025-07-17 16:46:12.067 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:12.067 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:14.886 SetImage ( Grayscale )
+2025-07-17 16:46:14.895 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:14.895 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:17.819 SetImage ( Grayscale )
+2025-07-17 16:46:17.827 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:17.827 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:20.932 SetImage ( Grayscale )
+2025-07-17 16:46:20.941 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:20.941 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:24.047 SetImage ( Grayscale )
+2025-07-17 16:46:24.055 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:24.055 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:33.048 SetImage ( Grayscale )
+2025-07-17 16:46:33.056 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:33.056 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:36.535 SetImage ( Grayscale )
+2025-07-17 16:46:36.543 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:36.544 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:40.083 SetImage ( Grayscale )
+2025-07-17 16:46:40.091 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:40.091 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:43.387 SetImage ( Grayscale )
+2025-07-17 16:46:43.396 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:43.396 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:46.815 SetImage ( Grayscale )
+2025-07-17 16:46:46.823 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:46.824 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:49.490 SetImage ( Grayscale )
+2025-07-17 16:46:49.499 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:49.499 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:52.811 SetImage ( Grayscale )
+2025-07-17 16:46:52.819 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:52.820 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:55.498 SetImage ( Grayscale )
+2025-07-17 16:46:55.507 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:55.507 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:46:58.583 SetImage ( Grayscale )
+2025-07-17 16:46:58.592 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:46:58.592 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:01.282 SetImage ( Grayscale )
+2025-07-17 16:47:01.291 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:01.291 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:04.327 SetImage ( Grayscale )
+2025-07-17 16:47:04.336 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:04.336 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:07.471 SetImage ( Grayscale )
+2025-07-17 16:47:07.479 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:07.479 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:10.366 SetImage ( Grayscale )
+2025-07-17 16:47:10.375 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:10.375 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:13.386 SetImage ( Grayscale )
+2025-07-17 16:47:13.394 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:13.395 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:16.243 SetImage ( Grayscale )
+2025-07-17 16:47:16.252 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:16.252 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:19.378 SetImage ( Grayscale )
+2025-07-17 16:47:19.386 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:19.386 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:22.532 SetImage ( Grayscale )
+2025-07-17 16:47:22.540 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:22.541 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:25.663 SetImage ( Grayscale )
+2025-07-17 16:47:25.671 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:25.671 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:33.031 SetImage ( Grayscale )
+2025-07-17 16:47:33.039 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:33.039 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:36.299 SetImage ( Grayscale )
+2025-07-17 16:47:36.307 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:36.307 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:39.808 SetImage ( Grayscale )
+2025-07-17 16:47:39.816 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:39.817 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:43.023 SetImage ( Grayscale )
+2025-07-17 16:47:43.031 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:43.031 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:46.175 SetImage ( Grayscale )
+2025-07-17 16:47:46.184 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:46.184 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:48.796 SetImage ( Grayscale )
+2025-07-17 16:47:48.805 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:48.805 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:52.319 SetImage ( Grayscale )
+2025-07-17 16:47:52.327 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:52.327 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:55.072 SetImage ( Grayscale )
+2025-07-17 16:47:55.080 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:55.080 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:47:58.176 SetImage ( Grayscale )
+2025-07-17 16:47:58.184 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:47:58.184 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:00.875 SetImage ( Grayscale )
+2025-07-17 16:48:00.884 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:00.884 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:03.732 SetImage ( Grayscale )
+2025-07-17 16:48:03.740 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:03.740 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:06.756 SetImage ( Grayscale )
+2025-07-17 16:48:06.764 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:06.764 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:09.605 SetImage ( Grayscale )
+2025-07-17 16:48:09.614 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:09.614 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:12.256 SetImage ( Grayscale )
+2025-07-17 16:48:12.264 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:12.264 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:15.082 SetImage ( Grayscale )
+2025-07-17 16:48:15.090 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:15.091 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:17.629 SetImage ( Grayscale )
+2025-07-17 16:48:17.645 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:17.645 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:20.671 SetImage ( Grayscale )
+2025-07-17 16:48:20.679 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:20.679 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:23.795 SetImage ( Grayscale )
+2025-07-17 16:48:23.804 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:23.804 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:32.938 SetImage ( Grayscale )
+2025-07-17 16:48:32.946 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:32.946 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:36.138 SetImage ( Grayscale )
+2025-07-17 16:48:36.147 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:36.147 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:39.220 SetImage ( Grayscale )
+2025-07-17 16:48:39.228 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:39.228 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:41.982 SetImage ( Grayscale )
+2025-07-17 16:48:41.991 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:41.991 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:44.989 SetImage ( Grayscale )
+2025-07-17 16:48:44.997 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:44.997 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:48.043 SetImage ( Grayscale )
+2025-07-17 16:48:48.051 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:48.051 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:51.081 SetImage ( Grayscale )
+2025-07-17 16:48:51.089 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:51.090 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:54.288 SetImage ( Grayscale )
+2025-07-17 16:48:54.296 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:54.297 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:48:57.734 SetImage ( Grayscale )
+2025-07-17 16:48:57.742 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:48:57.743 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:00.875 SetImage ( Grayscale )
+2025-07-17 16:49:00.883 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:00.883 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:04.263 SetImage ( Grayscale )
+2025-07-17 16:49:04.271 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:04.272 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:06.912 SetImage ( Grayscale )
+2025-07-17 16:49:06.921 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:06.921 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:10.091 SetImage ( Grayscale )
+2025-07-17 16:49:10.099 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:10.099 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:12.652 SetImage ( Grayscale )
+2025-07-17 16:49:12.660 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:12.660 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:15.803 SetImage ( Grayscale )
+2025-07-17 16:49:15.811 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:15.811 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:18.426 SetImage ( Grayscale )
+2025-07-17 16:49:18.435 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:18.435 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:21.940 SetImage ( Grayscale )
+2025-07-17 16:49:21.948 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:21.949 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:24.634 SetImage ( Grayscale )
+2025-07-17 16:49:24.642 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:24.642 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:33.484 SetImage ( Grayscale )
+2025-07-17 16:49:33.492 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:33.492 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:36.318 SetImage ( Grayscale )
+2025-07-17 16:49:36.327 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:36.327 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:39.743 SetImage ( Grayscale )
+2025-07-17 16:49:39.751 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:39.751 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:42.551 SetImage ( Grayscale )
+2025-07-17 16:49:42.560 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:42.560 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:45.606 SetImage ( Grayscale )
+2025-07-17 16:49:45.614 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:45.615 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:48.670 SetImage ( Grayscale )
+2025-07-17 16:49:48.679 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:48.679 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:51.728 SetImage ( Grayscale )
+2025-07-17 16:49:51.736 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:51.737 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:54.863 SetImage ( Grayscale )
+2025-07-17 16:49:54.871 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:54.871 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:49:58.335 SetImage ( Grayscale )
+2025-07-17 16:49:58.344 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:49:58.344 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:01.511 SetImage ( Grayscale )
+2025-07-17 16:50:01.519 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:01.519 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:04.824 SetImage ( Grayscale )
+2025-07-17 16:50:04.832 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:04.833 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:07.531 SetImage ( Grayscale )
+2025-07-17 16:50:07.540 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:07.540 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:10.860 SetImage ( Grayscale )
+2025-07-17 16:50:10.868 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:10.869 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:13.839 SetImage ( Grayscale )
+2025-07-17 16:50:13.847 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:13.848 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:16.975 SetImage ( Grayscale )
+2025-07-17 16:50:16.983 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:16.983 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:19.907 SetImage ( Grayscale )
+2025-07-17 16:50:19.915 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:19.915 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:23.335 SetImage ( Grayscale )
+2025-07-17 16:50:23.344 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:23.344 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:26.018 SetImage ( Grayscale )
+2025-07-17 16:50:26.027 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:26.027 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:33.584 SetImage ( Grayscale )
+2025-07-17 16:50:33.592 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:33.592 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:36.406 SetImage ( Grayscale )
+2025-07-17 16:50:36.415 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:36.415 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:39.874 SetImage ( Grayscale )
+2025-07-17 16:50:39.882 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:39.883 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:42.707 SetImage ( Grayscale )
+2025-07-17 16:50:42.715 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:42.715 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:45.635 SetImage ( Grayscale )
+2025-07-17 16:50:45.643 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:45.644 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:48.811 SetImage ( Grayscale )
+2025-07-17 16:50:48.819 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:48.819 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:52.316 SetImage ( Grayscale )
+2025-07-17 16:50:52.324 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:52.324 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:55.531 SetImage ( Grayscale )
+2025-07-17 16:50:55.539 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:55.539 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:50:58.963 SetImage ( Grayscale )
+2025-07-17 16:50:58.972 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:50:58.972 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:02.211 SetImage ( Grayscale )
+2025-07-17 16:51:02.219 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:02.219 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:05.484 SetImage ( Grayscale )
+2025-07-17 16:51:05.492 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:05.492 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:08.511 SetImage ( Grayscale )
+2025-07-17 16:51:08.519 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:08.519 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:11.832 SetImage ( Grayscale )
+2025-07-17 16:51:11.840 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:11.840 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:14.902 SetImage ( Grayscale )
+2025-07-17 16:51:14.911 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:14.911 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:18.220 SetImage ( Grayscale )
+2025-07-17 16:51:18.228 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:18.228 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:21.283 SetImage ( Grayscale )
+2025-07-17 16:51:21.291 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:21.291 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:25.035 SetImage ( Grayscale )
+2025-07-17 16:51:25.044 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:25.044 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:27.746 SetImage ( Grayscale )
+2025-07-17 16:51:27.754 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:27.755 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:34.319 SetImage ( Grayscale )
+2025-07-17 16:51:34.327 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:34.328 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:37.251 SetImage ( Grayscale )
+2025-07-17 16:51:37.259 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:37.259 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:40.794 SetImage ( Grayscale )
+2025-07-17 16:51:40.802 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:40.803 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:43.904 SetImage ( Grayscale )
+2025-07-17 16:51:43.912 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:43.912 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:46.873 SetImage ( Grayscale )
+2025-07-17 16:51:46.882 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:46.882 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:50.199 SetImage ( Grayscale )
+2025-07-17 16:51:50.207 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:50.207 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:53.716 SetImage ( Grayscale )
+2025-07-17 16:51:53.724 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:53.724 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:51:56.723 SetImage ( Grayscale )
+2025-07-17 16:51:56.731 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:51:56.732 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:00.340 SetImage ( Grayscale )
+2025-07-17 16:52:00.348 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:00.348 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:03.558 SetImage ( Grayscale )
+2025-07-17 16:52:03.566 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:03.567 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:06.955 SetImage ( Grayscale )
+2025-07-17 16:52:06.963 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:06.963 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:10.003 SetImage ( Grayscale )
+2025-07-17 16:52:10.011 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:10.011 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:13.212 SetImage ( Grayscale )
+2025-07-17 16:52:13.220 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:13.221 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:16.298 SetImage ( Grayscale )
+2025-07-17 16:52:16.306 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:16.307 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:19.516 SetImage ( Grayscale )
+2025-07-17 16:52:19.524 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:19.525 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:22.535 SetImage ( Grayscale )
+2025-07-17 16:52:22.543 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:22.543 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:25.867 SetImage ( Grayscale )
+2025-07-17 16:52:25.876 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:25.876 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:28.858 SetImage ( Grayscale )
+2025-07-17 16:52:28.867 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:28.867 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:35.379 SetImage ( Grayscale )
+2025-07-17 16:52:35.387 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:35.388 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:38.643 SetImage ( Grayscale )
+2025-07-17 16:52:38.651 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:38.652 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:42.218 SetImage ( Grayscale )
+2025-07-17 16:52:42.226 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:42.227 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:45.479 SetImage ( Grayscale )
+2025-07-17 16:52:45.487 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:45.487 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:49.000 SetImage ( Grayscale )
+2025-07-17 16:52:49.008 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:49.008 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:52.167 SetImage ( Grayscale )
+2025-07-17 16:52:52.175 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:52.175 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:55.819 SetImage ( Grayscale )
+2025-07-17 16:52:55.827 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:55.827 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:52:58.999 SetImage ( Grayscale )
+2025-07-17 16:52:59.007 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:52:59.007 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:02.326 SetImage ( Grayscale )
+2025-07-17 16:53:02.334 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:02.335 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:05.511 SetImage ( Grayscale )
+2025-07-17 16:53:05.519 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:05.519 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:08.895 SetImage ( Grayscale )
+2025-07-17 16:53:08.903 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:08.903 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:12.143 SetImage ( Grayscale )
+2025-07-17 16:53:12.152 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:12.152 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:15.470 SetImage ( Grayscale )
+2025-07-17 16:53:15.479 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:15.479 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:18.220 SetImage ( Grayscale )
+2025-07-17 16:53:18.228 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:18.228 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:21.294 SetImage ( Grayscale )
+2025-07-17 16:53:21.302 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:21.302 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:24.342 SetImage ( Grayscale )
+2025-07-17 16:53:24.351 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:24.351 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:27.523 SetImage ( Grayscale )
+2025-07-17 16:53:27.531 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:27.531 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:30.420 SetImage ( Grayscale )
+2025-07-17 16:53:30.428 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:30.428 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:36.311 SetImage ( Grayscale )
+2025-07-17 16:53:36.320 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:36.320 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:39.334 SetImage ( Grayscale )
+2025-07-17 16:53:39.342 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:39.342 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:42.887 SetImage ( Grayscale )
+2025-07-17 16:53:42.895 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:42.896 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:45.990 SetImage ( Grayscale )
+2025-07-17 16:53:45.999 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:45.999 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:48.982 SetImage ( Grayscale )
+2025-07-17 16:53:48.991 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:48.991 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:51.563 SetImage ( Grayscale )
+2025-07-17 16:53:51.571 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:51.571 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:54.622 SetImage ( Grayscale )
+2025-07-17 16:53:54.631 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:54.631 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:53:57.799 SetImage ( Grayscale )
+2025-07-17 16:53:57.807 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:53:57.807 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:00.900 SetImage ( Grayscale )
+2025-07-17 16:54:00.908 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:00.908 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:03.879 SetImage ( Grayscale )
+2025-07-17 16:54:03.887 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:03.887 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:06.823 SetImage ( Grayscale )
+2025-07-17 16:54:06.831 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:06.831 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:09.464 SetImage ( Grayscale )
+2025-07-17 16:54:09.472 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:09.472 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:12.591 SetImage ( Grayscale )
+2025-07-17 16:54:12.599 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:12.599 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:15.232 SetImage ( Grayscale )
+2025-07-17 16:54:15.240 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:15.241 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:18.028 SetImage ( Grayscale )
+2025-07-17 16:54:18.036 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:18.036 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:20.664 SetImage ( Grayscale )
+2025-07-17 16:54:20.673 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:20.673 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:23.693 SetImage ( Grayscale )
+2025-07-17 16:54:23.701 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:23.701 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:26.294 SetImage ( Grayscale )
+2025-07-17 16:54:26.303 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:26.303 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:32.953 SetImage ( Grayscale )
+2025-07-17 16:54:32.962 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:32.962 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:40.395 SetImage ( Grayscale )
+2025-07-17 16:54:40.404 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:40.404 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:48.839 SetImage ( Grayscale )
+2025-07-17 16:54:48.847 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:48.847 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:54:56.914 SetImage ( Grayscale )
+2025-07-17 16:54:56.922 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:54:56.923 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:04.896 SetImage ( Grayscale )
+2025-07-17 16:55:04.905 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:04.905 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:12.398 SetImage ( Grayscale )
+2025-07-17 16:55:12.406 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:12.407 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:20.432 SetImage ( Grayscale )
+2025-07-17 16:55:20.441 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:20.441 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:28.382 SetImage ( Grayscale )
+2025-07-17 16:55:28.391 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:28.391 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:36.411 SetImage ( Grayscale )
+2025-07-17 16:55:36.420 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:36.421 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:44.015 SetImage ( Grayscale )
+2025-07-17 16:55:44.024 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:44.024 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:51.912 SetImage ( Grayscale )
+2025-07-17 16:55:51.920 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:51.920 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:55:59.910 SetImage ( Grayscale )
+2025-07-17 16:55:59.919 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:55:59.919 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:56:07.759 SetImage ( Grayscale )
+2025-07-17 16:56:07.768 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:56:07.768 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:56:15.525 SetImage ( Grayscale )
+2025-07-17 16:56:15.534 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:56:15.534 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:56:23.364 SetImage ( Grayscale )
+2025-07-17 16:56:23.371 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:56:23.372 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:56:30.892 SetImage ( Grayscale )
+2025-07-17 16:56:30.900 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:56:30.901 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:56:38.936 SetImage ( Grayscale )
+2025-07-17 16:56:38.944 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:56:38.945 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 16:56:46.544 SetImage ( Grayscale )
+2025-07-17 16:56:46.553 MightexPolygon::SetPatternSettings: Input parameters: TrigType = 0, PtnNumber = 1, ExposureTime = 0.000000
+2025-07-17 16:56:46.553 MightexPolygon::SetPatternSettings: PatternTrigType = 0, TrigEdge = 1, PtnNumber = 1, ExposureTime = 0
+2025-07-17 17:14:54.122 InitializeModuleData
+2025-07-17 17:14:54.122 CreateDevice
