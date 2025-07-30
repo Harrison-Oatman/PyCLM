@@ -123,3 +123,90 @@ class RotateCcwModel(PerCellPatternModel):
         return self.prop_vector(prop, vec)
 
 
+class MoveOutModel(PerCellPatternModel):
+
+    name = "move_out"
+
+    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+
+        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+
+    def process_prop(self, prop) -> np.ndarray:
+
+        center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
+        prop_centroid = prop.centroid
+
+        vec = prop_centroid[0] - center_y, (prop_centroid[1] - center_x)
+
+        return self.prop_vector(prop, vec)
+
+
+class MoveInModel(PerCellPatternModel):
+
+    name = "move_in"
+
+    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+
+        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+
+    def process_prop(self, prop) -> np.ndarray:
+
+        center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
+        prop_centroid = prop.centroid
+
+        vec = -(prop_centroid[0] - center_y), -(prop_centroid[1] - center_x)
+
+        return self.prop_vector(prop, vec)
+
+
+class MoveDownModel(PerCellPatternModel):
+
+    name = "move_down"
+
+    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+
+        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+
+    def process_prop(self, prop) -> np.ndarray:
+
+        center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
+        prop_centroid = prop.centroid
+
+        vec = (1, 0)
+
+        return self.prop_vector(prop, vec)
+
+
+class BounceModel(PerCellPatternModel):
+
+    name = "fb_bounce"
+
+    def __init__(self, experiment_name, camera_properties, channel=None, t_loop=60, **kwargs):
+
+        self.t_loop_s = t_loop * 60
+        self.down = True
+
+        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+
+    def process_prop(self, prop) -> np.ndarray:
+
+        center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
+        prop_centroid = prop.centroid
+
+        vec = (1, 0) if self.down else (-1, 0)
+
+        return self.prop_vector(prop, vec)
+
+    def generate(self, data_dock: DataDock) -> np.ndarray:
+
+        t = data_dock.time_seconds
+        t = t % self.t_loop_s
+
+        halfway = self.t_loop_s / 2
+
+        if t > halfway:
+            self.down = False
+
+        return super().generate(data_dock)
+
+

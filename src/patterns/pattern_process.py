@@ -7,7 +7,7 @@ from ..messages import Message
 from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
 from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothModel
 from .static_patterns import CirclePattern, FullOnPattern
-from .feedback_control_patterns import RotateCcwModel
+from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,11 @@ class PatternProcess:
         "bar_bounce": BouncingBarPattern,
         "full_on": FullOnPattern,
         "rotate_ccw": RotateCcwModel,
-        "sawtooth": SawToothModel
+        "sawtooth": SawToothModel,
+        "move_out": MoveOutModel,
+        "move_in": MoveInModel,
+        "move_down": MoveDownModel,
+        "fb_bounce": BounceModel,
     }
 
     def __init__(self, aq: AllQueues):
