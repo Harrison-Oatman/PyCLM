@@ -444,8 +444,9 @@ class Manager:
 
                 this_t = t - t_delay
 
+                # check if stop early
                 if experiment.t_stop > 0:
-                    if this_t > experiment.t_stop:
+                    if this_t >= experiment.t_stop:
                         continue
 
                 # determine and send if new pattern should be generated
