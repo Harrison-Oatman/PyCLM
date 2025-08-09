@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # input_dir = args.dir
 
-    input_dir = r"E:\Harrison\cells\control2\final"
+    input_dir = r"E:\Jared\2025-08-08 10A optosos test\feedbackcontrol\clamps\final"
     at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):

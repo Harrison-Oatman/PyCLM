@@ -383,7 +383,10 @@ def schedule_from_directory(experiment_dir: Path):
         exp_stem = name.split(".")[0]
 
         experiment_path = tomls.get(exp_stem)
-        assert experiment_path is not None, f"could not find {exp_stem} in {list(tomls.keys())}"
+
+        if experiment_path is None:
+            print(f"could not find {exp_stem} in {list(tomls.keys())}")
+            continue
 
         positions[name] = position
         experiments[name] = experiment_from_toml(experiment_path, name)
