@@ -4,6 +4,7 @@ from . import DataDock
 from .pattern import PatternModel, AcquiredImageRequest
 from skimage.measure import regionprops, regionprops_table
 from scipy.spatial import KDTree
+from scipy.ndimage import distance_transform_edt
 
 import tifffile
 
@@ -89,7 +90,10 @@ class PerCellPatternModel(PatternModel):
         seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
 
         if self.voronoi:
+            px_dis = distance_transform_edt(seg == 0)
             seg = self.voronoi_rebuild(seg)
+
+            seg = seg * (px_dis < 50)
 
         h, w = self.pattern_shape
 
