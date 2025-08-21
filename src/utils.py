@@ -111,10 +111,10 @@ if __name__ == "__main__":
 
     # input_dir = args.dir
 
-    input_dir = r"E:\Jared\2025-08-08 10A optosos test\feedbackcontrol\clamps\final"
+    input_dir = r"E:\Harrison\RTx3 imaging\2025-08-21 tag-rfp 1\global cycle\logofinal"
     at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
-        make_tif(str(val), at, "channel_638")
+        make_tif(str(val), at, "channel_545")
 
     # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")
