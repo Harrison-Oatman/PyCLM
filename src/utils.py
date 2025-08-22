@@ -34,6 +34,30 @@ def get_mapping(projector_api):
 #
 #
 
+def extract_channels_tifs(fp, chans):
+    for chan in chans:
+        collected_frames = []
+        channel_key = f"{chan}"
+
+        with (File(fp, mode="r") as f):
+
+            indices = []
+
+            for t_val, data in f.items():
+
+                if channel_key not in data:
+                    continue
+
+                indices.append(t_val)
+
+            for t_val in natsorted(indices):
+
+                data = np.array(f[t_val][channel_key]["data"])
+                collected_frames.append(data)
+
+        outpath = f"{fp[:-5]}_{chan}.tif"
+        tifffile.imwrite(outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"})
+
 
 def make_tif(fp, at=None, chan="channel_638"):
 
@@ -107,14 +131,15 @@ def parse_args():
 
 if __name__ == "__main__":
 
-    args = parse_args()
+    # args = parse_args()
 
     # input_dir = args.dir
 
-    input_dir = r"E:\Jared\2025-08-08 10A optosos test\feedbackcontrol\clamps\final"
-    at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
+    input_dir = r"D:\Harrison\RTx3 imaging\2025-08-20 bars 3"
+    # at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
-        make_tif(str(val), at, "channel_638")
+        # make_tif(str(val), at, "channel_545")
 
+        extract_channels_tifs(str(val), ["channel_545", "channel_638"])
     # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")
