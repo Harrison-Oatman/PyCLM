@@ -99,7 +99,7 @@ def get_slm_shape(core: CMMCorePlus):
 
 def main():
     args = process_args()
-    base_path = Path(str(r"E:\Jared\2025-08-08 10A optosos test\feedbackcontrol\clamps"))
+    base_path = Path(str(r"E:\Harrison\RTx3 imaging\2025-08-21 tag-rfp 1\global cycle"))
 
     console_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(base_path / 'log.log')
