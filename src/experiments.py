@@ -73,6 +73,8 @@ class MethodBasedConfig:
         self.save = save_output
         self.every_t = every_t
 
+        print(f"method kwargs: {kwargs}")
+
         self.kwargs = kwargs
 
     def __repr__(self):

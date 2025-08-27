@@ -10,6 +10,8 @@ class CellposeResource(SharedSegmentationResource):
         self.pretrained_model = pretrained_model
         self.gpu = gpu
 
+        print(f"requesting cellpose model: {pretrained_model}")
+
         self.model = models.CellposeModel(gpu=gpu, pretrained_model=pretrained_model)
 
     def eval(self, data, **cellpose_kwargs):
@@ -33,6 +35,8 @@ class CellposeSegmentationModel(SegmentationModel):
 
     def __init__(self, experiment_name, model="cpsam", use_gpu=True, normlow=0, normhigh=5000, **kwargs):
         super().__init__(experiment_name)
+
+        print(model)
 
         self.model_name = model
         self.use_gpu = use_gpu
