@@ -303,7 +303,8 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         channel_every_t = channel_toml.get("every_t", imaging_every_t)
         cfg.every_t = channel_every_t
 
-        cfg.binning = channel_toml.get("binning", imaging_binning)
+        # todo: allow channel-specific binning
+        # cfg.binning = channel_toml.get("binning", imaging_binning)
 
         # get channel-specific config groups and device properties
         device_properties = channel_toml.get("device_properties", {})
