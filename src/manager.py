@@ -462,6 +462,11 @@ class Manager:
 
                 this_t = t - t_delay
 
+                # check if stop early
+                if experiment.t_stop > 0:
+                    if this_t >= experiment.t_stop:
+                        continue
+
                 # determine and send if new pattern should be generated
                 make_pattern = self.send_make_pattern_request(this_t, name, scheduled_time - start_time)
 
