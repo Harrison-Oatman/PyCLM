@@ -72,7 +72,9 @@ class Controller:
         pattern_requirements = {}
         for name, experiment in schedule.experiments.items():
             pattern_requirements[name] = self.pattern.request_model(experiment)
-            self.segmentation.request_model(experiment)
+
+            if any([req.needs_seg for req in pattern_requirements[name]]):
+                self.segmentation.request_model(experiment)
 
         self.manager.initialize(schedule, pattern_requirements)
         self.slm_buffer.initialize(slm_shape, affine_transform, schedule.experiment_names)
