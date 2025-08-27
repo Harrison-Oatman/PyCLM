@@ -34,6 +34,30 @@ def get_mapping(projector_api):
 #
 #
 
+def extract_channels_tifs(fp, chans):
+    for chan in chans:
+        collected_frames = []
+        channel_key = f"{chan}"
+
+        with (File(fp, mode="r") as f):
+
+            indices = []
+
+            for t_val, data in f.items():
+
+                if channel_key not in data:
+                    continue
+
+                indices.append(t_val)
+
+            for t_val in natsorted(indices):
+
+                data = np.array(f[t_val][channel_key]["data"])
+                collected_frames.append(data)
+
+        outpath = f"{fp[:-5]}_{chan}.tif"
+        tifffile.imwrite(outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"})
+
 
 def make_tif(fp, at=None, chan="channel_638"):
 
@@ -55,23 +79,38 @@ def make_tif(fp, at=None, chan="channel_638"):
 
             indices.append(t_val)
 
+        seg_seen = False
+
         for t_val in natsorted(indices):
 
             data = np.array(f[t_val][channel_key]["data"])
             collected_frames.append(data)
 
+            patterned_stack = [data]
+
             if at is not None:
+
+                if "seg" in f[t_val][channel_key].keys():
+
+                    patterned_stack.append(f[t_val][channel_key]["seg"])
+
+                    seg_seen = True
+
+                elif seg_seen:
+                    continue
 
                 if "stim_aq" in f[t_val].keys():
 
                     pattern = np.array(f[t_val]["stim_aq"]["dmd"])
                     target_size = data.shape
                     tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati, (target_size[1]*2, target_size[0]*2)).astype(np.uint16)
-                    ds =  downscale_local_mean(tf, (2, 2)).astype(np.uint16)
-                    patterned.append(np.stack([data,ds]).astype(np.uint16))
+                    ds = downscale_local_mean(tf, (2, 2)).astype(np.uint16)
+                    patterned_stack.append(ds)
 
                 else:
-                    patterned.append(np.stack([data, np.zeros(data.shape)]).astype(np.uint16))
+                    patterned_stack.append(np.zeros(data.shape))
+
+                patterned.append(np.stack(patterned_stack).astype(np.uint16))
 
 
     outpath = fp[:-5] + ".tif"
@@ -92,14 +131,15 @@ def parse_args():
 
 if __name__ == "__main__":
 
-    args = parse_args()
+    # args = parse_args()
 
     # input_dir = args.dir
 
-    input_dir = r"E:\Yang\20250717_lightplusdox_part2\timeseries\eval"
-    at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
+    input_dir = r"D:\Harrison\RTx3 imaging\2025-08-20 bars 3"
+    # at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
-        make_tif(str(val), at, "channel_477")
+        # make_tif(str(val), at, "channel_545")
 
+        extract_channels_tifs(str(val), ["channel_545", "channel_638"])
     # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")

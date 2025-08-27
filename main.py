@@ -72,6 +72,7 @@ class Controller:
         pattern_requirements = {}
         for name, experiment in schedule.experiments.items():
             pattern_requirements[name] = self.pattern.request_model(experiment)
+            self.segmentation.request_model(experiment)
 
         self.manager.initialize(schedule, pattern_requirements)
         self.slm_buffer.initialize(slm_shape, affine_transform, schedule.experiment_names)
@@ -98,7 +99,7 @@ def get_slm_shape(core: CMMCorePlus):
 
 def main():
     args = process_args()
-    base_path = Path(str(r"E:\Yang\20250717_lightplusdox_part2\timeseries"))
+    base_path = Path(str(r"E:\Jared\2025-08-08 10A optosos test\feedbackcontrol\clamps"))
 
     console_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(base_path / 'log.log')

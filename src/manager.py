@@ -12,7 +12,7 @@ from .queues import AllQueues
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdatePositionWithAutoFocusEvent
 from .experiments import (experiment_from_toml, PositionWithAutoFocus, ExperimentSchedule, TimeCourse,
                           Experiment, ImagingConfig)
-from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData
+from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData, SegmentationData
 from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
                        UpdateZPositionMessage)
 from .patterns.pattern_process import RequestPattern
@@ -49,19 +49,20 @@ class DataPassingProcess(metaclass=ABCMeta):
                 if must_break:
                     break
 
-            if not self.data_in.empty():
-                data = self.data_in.get()
+            for data_channel in self.data_in:
+                if not data_channel.empty():
+                    data = data_channel.get()
 
-                if isinstance(data, Message):
-                    must_break = self.handle_message(data)
+                    if isinstance(data, Message):
+                        must_break = self.handle_message(data)
 
-                    if must_break:
-                        break
+                        if must_break:
+                            break
 
-                assert isinstance(data, GenericData), \
-                    f"Unexpected data type: {type(data)}, expected subtype of GenericData"
+                    assert isinstance(data, GenericData), \
+                        f"Unexpected data type: {type(data)}, expected subtype of GenericData"
 
-                self.handle_data(data)
+                    self.handle_data(data)
 
     @abstractmethod
     def handle_data(self, data):
@@ -88,7 +89,8 @@ class MicroscopeOutbox(DataPassingProcess):
         super().__init__(aq)
 
         self.from_manager = aq.manager_to_outbox
-        self.data_in = aq.acquisition_outbox
+        self.data_in = [aq.acquisition_outbox,
+                        aq.seg_to_outbox]
 
         self.manager = aq.outbox_to_manager
 
@@ -102,6 +104,11 @@ class MicroscopeOutbox(DataPassingProcess):
         aq_event = data.event
 
         self.write_data(data)
+
+        if isinstance(data, SegmentationData):
+            return
+
+        print(aq_event)
 
         if aq_event.segment:
             self.seg_queue.put(data)
@@ -129,6 +136,11 @@ class MicroscopeOutbox(DataPassingProcess):
 
         file_relpath, relpath = aq_event.get_rel_path()
 
+        # acquisition is saved as "data", its segmentation is saved as "seg"
+        dset_name = r"data"
+        if isinstance(data, SegmentationData):
+            dset_name = r"seg"
+
         if self.save_type == "tif":
 
             fullpath = self.base_path / file_relpath / relpath
@@ -140,7 +152,7 @@ class MicroscopeOutbox(DataPassingProcess):
             filepath = self.base_path / f"{file_relpath}.hdf5"
             with File(filepath, "a") as f:
                 if aq_event.save_output:
-                    dset = f.create_dataset(relpath + r"data", data=data.data)
+                    dset = f.create_dataset(relpath + dset_name, data=data.data)
                     aq_event.write_attrs(dset)
 
                 if isinstance(data, StimulationData):
@@ -163,7 +175,7 @@ class SLMBuffer(DataPassingProcess):
         super().__init__(aq)
 
         self.from_manager = aq.manager_to_slm_buffer
-        self.data_in = aq.pattern_to_slm
+        self.data_in = [aq.pattern_to_slm]
 
         self.manager = aq.slm_buffer_to_manager
 
@@ -328,6 +340,8 @@ class Manager:
             "segmentation_goes_to_pattern": False,
         }
 
+        print(f"channel {channel}")
+
         requirements = self.pattern_requirements[experiment.experiment_name]
         channel_id = channel.channel_id
 
@@ -338,6 +352,8 @@ class Manager:
 
         for air in requirements:
             air: AcquiredImageRequest
+
+            print(f"air: {air}")
 
             if channel_id == air.id:
                 value = air
@@ -404,9 +420,11 @@ class Manager:
         """
         make_pattern = (loop_iter % self.pattern_lcms[experiment_name]) == 0
 
+        print(f"pattern_requirements: {self.pattern_requirements[experiment_name]}")
+
         if make_pattern:
             pattern_request = RequestPattern(
-                time_sec, experiment_name, self.pattern_requirements[experiment_name]
+                loop_iter, time_sec, experiment_name, self.pattern_requirements[experiment_name]
             )
 
             self.msgout["pattern"].put(pattern_request)
@@ -477,6 +495,7 @@ class Manager:
                                                                config_groups=stim.get_config_groups(),
                                                                devices=stim.get_device_properties(),
                                                                sub_axes=[f"{t: 05d}", "stim_aq"],
+                                                               t_index=t,
                                                                **channel_kwargs,
                                                                )
 
@@ -505,6 +524,7 @@ class Manager:
                                                                config_groups=channel.get_config_groups(),
                                                                devices=channel.get_device_properties(),
                                                                sub_axes=[f"{t: 05d}", f"channel_{channel_name}"],
+                                                               t_index=t,
                                                                **channel_kwargs,
                                                                )
 

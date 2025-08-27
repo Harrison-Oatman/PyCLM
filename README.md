@@ -1,2 +1,2 @@
-# FeedbackControl
- Pycromanager-based feedback control
+# PyCLM
+A Modular Closed-Loop Microscopy Software in Python

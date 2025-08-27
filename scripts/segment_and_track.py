@@ -10,18 +10,21 @@ import tifffile
 import logging
 from laptrack import LapTrack
 from multiprocessing import Pool
+from skimage.transform import downscale_local_mean
+from random import shuffle
 
 logging.basicConfig(level="INFO")
 
 
 def run_cellpose(infile):
 
-    model = models.CellposeModel(gpu=True)
+    model = models.CellposeModel(gpu=True, pretrained_model="nuclei02")
 
     stack = imread(infile)
-    stack = [frame for frame in stack]
 
-    masks, flows, styles = model.eval(stack, batch_size=8,)
+    stack = [downscale_local_mean(frame, (2, 2)).astype(np.uint16) for frame in stack]
+
+    masks, flows, styles = model.eval(stack, batch_size=8, normalize={"lowhigh": [0, 15000]})
 
     masks = np.stack(masks, axis=0)
 
@@ -114,9 +117,9 @@ if __name__ == "__main__":
     masks_dir.mkdir(exist_ok=True)
     tracks_dir.mkdir(exist_ok=True)
 
-    files = list(in_dir.glob("*.tif"))
+    files = (list(in_dir.glob("*_545.tif")))
+    shuffle(files)
 
-    # Use multiprocessing to process files in parallel
     for i, file in enumerate(files):
         print(f"segmenting and tracking file {i}/{len(files)}: {file.stem}")
         process_file(file, in_dir)

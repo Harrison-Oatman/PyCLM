@@ -18,9 +18,9 @@ AcquiredImageRequest = NamedTuple("AcquiredImageRequest", [("id", UUID), ("needs
 
 class DataDock:
 
-    def __init__(self, t, requirements: list[AcquiredImageRequest]):
+    def __init__(self, time_seconds, requirements: list[AcquiredImageRequest]):
 
-        self.time_seconds = t
+        self.time_seconds = time_seconds
         self.requirements = requirements
         self.data = defaultdict(dict)
 
@@ -65,6 +65,8 @@ class DataDock:
             for img in self.data[channel]:
                 if self.data[channel][img] is None:
                     awaiting.append((channel, img))
+
+        print(awaiting)
 
         return awaiting
 

@@ -77,5 +77,5 @@ def process_trackmate_tree(tree: ET) -> (pd.DataFrame, DiGraph):
     return spots_df, graph
 
 
-
-if __name__ == "__main__"
+#
+# if __name__ == "__main__"

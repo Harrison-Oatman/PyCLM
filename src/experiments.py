@@ -58,14 +58,17 @@ class ImagingConfig:
     def get_device_properties(self) -> list[DeviceProperty]:
         return list(self._device_properties.values())
 
+    def set_id(self):
+        self.channel_id = uuid4()
+
     def __repr__(self):
-        return (f"ImagingConfig(exposure={self.exposure}ms, image_every={self.every_t}, "
+        return (f"ImagingConfig({self.channel_id}: exposure={self.exposure}ms, image_every={self.every_t}, "
                 f"configs={self._config_groups}, device_props={self._device_properties})")
 
 
 class MethodBasedConfig:
 
-    def __init__(self, method_name: str, save_output: bool = True, every_t=1, **kwargs):
+    def __init__(self, method_name: str, save_output: bool = True, every_t = 1, **kwargs):
         self.method_name = method_name
         self.save = save_output
         self.every_t = every_t
@@ -83,7 +86,7 @@ PatternConfig = MethodBasedConfig
 class Experiment:
 
     def __init__(self, experiment_name, imaging_configs: dict[str, ImagingConfig], stimulation_config: ImagingConfig,
-                 segmentation: SegmentationConfig, pattern: PatternConfig, t_delay: int = 0, t_stop: int = 0):
+                 segmentation: SegmentationConfig, pattern: PatternConfig, t_delay: int = 0):
         self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
@@ -92,7 +95,6 @@ class Experiment:
         self.pattern = pattern
 
         self.t_delay = t_delay
-        self.t_stop = t_stop
 
     def __repr__(self):
         return (f"Experiment('{self.experiment_name}': Channels={self.channels}, Stimulation={self.stimulation}, "
@@ -271,6 +273,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
     # copy base imaging config and update
     imaging_config = deepcopy(base_config)
+    imaging_config.set_id()
     imaging_config.update_config_groups(imaging_config_groups)
     imaging_config.update_device_properties(imaging_device_props)
     imaging_config.exposure = imaging_exposure
@@ -285,6 +288,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     for preset in presets:
         # copy base imaging config
         cfg = deepcopy(imaging_config)
+        cfg.set_id()
         cfg.update_config_groups([ConfigGroup(channel_group, preset)])
 
         # get channel-specific config, if it exists
@@ -313,6 +317,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
     # make stimulation config - inherits base config
     stimulation_config = deepcopy(base_config)
+    stimulation_config.set_id()
     stimulation_config.exposure = toml_data["stimulation"]["exposure"]
     stimulation_config.every_t = toml_data["stimulation"].get("every_t", 1)
     stimulation_config.save = toml_data["stimulation"].get("save", True)
@@ -332,7 +337,6 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     pattern_config = PatternConfig(method, **pattern)
 
     t_delay = int(toml_data.get("t_delay", 0))
-    t_stop = int(toml_data.get("t_stop", 0))
 
     return Experiment(
         experiment_name=name,
@@ -341,7 +345,6 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         segmentation=segmentation_config,
         pattern=pattern_config,
         t_delay=t_delay,
-        t_stop=t_stop,
     )
 
 
@@ -383,10 +386,7 @@ def schedule_from_directory(experiment_dir: Path):
 
         if experiment_path is None:
             print(f"could not find {exp_stem} in {list(tomls.keys())}")
-
             continue
-
-        assert experiment_path is not None, f"could not find {exp_stem} in {list(tomls.keys())}"
 
         positions[name] = position
         experiments[name] = experiment_from_toml(experiment_path, name)
