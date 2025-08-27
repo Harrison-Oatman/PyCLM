@@ -8,6 +8,7 @@ from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDo
 from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothModel
 from .static_patterns import CirclePattern, FullOnPattern
 from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel
+from .ktr_patterns import BinaryNucleusClampModel
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class PatternProcess:
         "move_in": MoveInModel,
         "move_down": MoveDownModel,
         "fb_bounce": BounceModel,
+        "binary_nucleus_clamp": BinaryNucleusClampModel,
     }
 
     def __init__(self, aq: AllQueues):
