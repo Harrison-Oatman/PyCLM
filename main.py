@@ -4,7 +4,7 @@ import traceback
 
 import numpy as np
 
-from PyCLM.src import *
+from pyclm.src import *
 from pymmcore_plus import CMMCorePlus
 # from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
