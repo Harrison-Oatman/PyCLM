@@ -9,5 +9,5 @@ notebooks/gol_snaps/
 /real/
 *log.txt
 log.txt
-/other/
+/other/*
 *.pdf
