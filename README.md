@@ -37,10 +37,11 @@ Once a directory for the multi-experiment has been set up, close out of all exis
 
 ### 3. Analyzing a completed multi-experiment:
 Data is exported into separate .hdf5 files for each experiment, which alongside acquired images contain important metadata about timing and imaging configurations. These files also track the light pattern applied at each timepoint and the segmentation generated, if applicable. 
-- These .hdf5 files can be converted to .tif stacks, with or without pattern/segmentation overlay by running the convert_to_tifs script.
+- These .hdf5 files can be converted to .tif stacks, with or without pattern/segmentation overlay by running the `convert_to_tifs.py` script.
 - For convenience, a script for simple tracking (or segmentation and tracking) is also available.
 
 ### (Bonus: Reusing experiments)
 Ease of reusability is a major advantage of PyCLM. {experiment}.toml files as well as schedule.toml files can be quickly copied over from old experiments to new ones. Running old experiments on a new day is as simple as copying over old files and picking out imaging positions. The details of past experiments are contained in the structure of the experiment setup.
 
 ## Installation
+PyCLM is tested on a Nikon Ti2-Eclipse confocal microscope with a Mightex Polygon 1000 DMD, running on a Windows OS. 
