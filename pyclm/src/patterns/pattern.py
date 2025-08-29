@@ -75,7 +75,7 @@ class DataDock:
         return len(self.get_awaiting()) == 0
 
 
-class PatternModel:
+class PatternMethod:
 
     name = "base"
 
@@ -120,12 +120,12 @@ class PatternModel:
         self.binning = binning
 
 
-class PatternModelReturnsSLM(PatternModel):
+class PatternMethodReturnsSLM(PatternMethod):
 
     pass
 
 
-class PatternReview(PatternModelReturnsSLM):
+class PatternReview(PatternMethodReturnsSLM):
 
     name = "pattern_review"
 
@@ -164,7 +164,7 @@ class PatternReview(PatternModelReturnsSLM):
 
 
 if __name__ == "__main__":
-    print(type(PatternModel))
+    print(type(PatternMethod))
     air = AcquiredImageRequest(uuid4(), True, False)
     print(air)
 

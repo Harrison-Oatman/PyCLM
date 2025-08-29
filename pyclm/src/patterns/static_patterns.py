@@ -1,9 +1,9 @@
 import numpy as np
 
-from .pattern import PatternModel, DataDock
+from .pattern import PatternMethod, DataDock
 
 
-class CirclePattern(PatternModel):
+class CirclePattern(PatternMethod):
     """
     Projects a circle of radius rad in the center of the camera
     """
@@ -37,7 +37,7 @@ class CirclePattern(PatternModel):
         return (((xx - center_x)**2 + (yy - center_y)**2) < (self.rad**2)).astype(np.float16)
 
 
-class FullOnPattern(PatternModel):
+class FullOnPattern(PatternMethod):
     """
     Turns on the entire ROI
     """

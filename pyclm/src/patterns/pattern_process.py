@@ -4,8 +4,8 @@ from ..queues import AllQueues
 from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
-from .pattern import PatternReview, PatternModel, PatternModelReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
-from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothModel
+from .pattern import PatternReview, PatternMethod, PatternMethodReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
+from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothMethod
 from .static_patterns import CirclePattern, FullOnPattern
 from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel
 from .ktr_patterns import BinaryNucleusClampModel, GlobalCycleModel, CenteredImageModel
@@ -22,7 +22,7 @@ class PatternProcess:
         "bar_bounce": BouncingBarPattern,
         "full_on": FullOnPattern,
         "rotate_ccw": RotateCcwModel,
-        "sawtooth": SawToothModel,
+        "sawtooth": SawToothMethod,
         "move_out": MoveOutModel,
         "move_in": MoveInModel,
         "move_down": MoveDownModel,
@@ -51,14 +51,14 @@ class PatternProcess:
 
         self.initialized = True
 
-    def request_model(self, experiment: Experiment) -> list[AcquiredImageRequest]:
+    def request_method(self, experiment: Experiment) -> list[AcquiredImageRequest]:
 
         method_name = experiment.pattern.method_name
 
         model_class: type = self.known_models.get(method_name)
 
-        assert model_class is not None, f"method {method_name} is not a registered model"
-        assert issubclass(model_class, PatternModel), f"{method_name} is not a PatternModel"
+        assert model_class is not None, f"method {method_name} is not a registered method"
+        assert issubclass(model_class, PatternMethod), f"{method_name} is not a PatternMethod"
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.pattern.kwargs
@@ -71,11 +71,13 @@ class PatternProcess:
 
         return model.initialize(experiment)
 
-    def register_model(self, model: type):
+    def register_method(self, model: type, name: str = None):
 
-        assert issubclass(model, PatternModel), "model must be a subclass of PatternModel"
+        assert issubclass(model, PatternMethod), "model must be a subclass of PatternMethod"
 
         model_name = model.name
+        if name is not None:
+            model_name = name
 
         if model_name in self.known_models:
             logging.warning(f"overwriting known model {model_name}")
@@ -88,9 +90,9 @@ class PatternProcess:
 
         model = self.models.get(experiment_name, None)
 
-        assert isinstance(model, PatternModel), f"self.models[{'experiment_name'}] is not a PatternModel"
+        assert isinstance(model, PatternMethod), f"self.models[{'experiment_name'}] is not a PatternMethod"
 
-        if isinstance(model, PatternModelReturnsSLM):
+        if isinstance(model, PatternMethodReturnsSLM):
             slm_pattern = model.generate(data_dock)
 
             self.slm.put(CameraPattern(experiment_name, slm_pattern, slm_coords=True))

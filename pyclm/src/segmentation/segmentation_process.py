@@ -4,14 +4,14 @@ from ..queues import AllQueues
 from ..datatypes import AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
-from ..segmentation import SegmentationModel
-from .cellpose_segmentation import CellposeSegmentationModel
+from ..segmentation import SegmentationMethod
+from .cellpose_segmentation import CellposeSegmentationMethod
 
 
 class SegmentationProcess:
 
     known_models = {
-        "cellpose": CellposeSegmentationModel
+        "cellpose": CellposeSegmentationMethod
     }
 
     def __init__(self, aq: AllQueues):
@@ -33,14 +33,27 @@ class SegmentationProcess:
     def initialize(self):
         self.initialized = True
 
-    def request_model(self, experiment: Experiment):
+    def register_method(self, method: type, name: str = None):
+
+        assert issubclass(method, SegmentationMethod), "model must be a subclass of PatternModel"
+
+        model_name = method.name
+        if name is not None:
+            model_name = name
+
+        if model_name in self.known_models:
+            logging.warning(f"overwriting known model {model_name}")
+
+        self.known_models[model_name] = method
+
+    def request_method(self, experiment: Experiment):
 
         method_name = experiment.segmentation.method_name
 
         model_class: type = self.known_models.get(method_name)
 
         assert model_class is not None, f"method {method_name} is not a registered model"
-        assert issubclass(model_class, SegmentationModel), f"{method_name} is not a SegmentationModel"
+        assert issubclass(model_class, SegmentationMethod), f"{method_name} is not a SegmentationModel"
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.segmentation.kwargs
@@ -82,17 +95,6 @@ class SegmentationProcess:
             # provide the resource to the model
             model.provide_resource(resource)
 
-    def register_model(self, model: type):
-
-        assert issubclass(model, SegmentationModel), "model must be a subclass of SegmentationModel"
-
-        model_name = model.name
-
-        if model_name in self.known_models:
-            logging.warning(f"overwriting known model {model_name}")
-
-        self.known_models[model_name] = model
-
     def run_model(self, experiment_name, aq_data: AcquisitionData) -> SegmentationData:
 
         model = self.models.get(experiment_name, None)
@@ -100,7 +102,7 @@ class SegmentationProcess:
         # print(self.models)
         # print(self.models[experiment_name])
 
-        assert isinstance(model, SegmentationModel), f"self.models[{experiment_name}] is not a SegmentationModel"
+        assert isinstance(model, SegmentationMethod), f"self.models[{experiment_name}] is not a SegmentationModel"
 
         data_to_seg = aq_data.data
         segmented = model.segment(data_to_seg)

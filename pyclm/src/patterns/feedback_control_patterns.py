@@ -1,14 +1,14 @@
 import numpy as np
 
 from . import DataDock
-from .pattern import PatternModel, AcquiredImageRequest
+from .pattern import PatternMethod, AcquiredImageRequest
 from skimage.measure import regionprops, regionprops_table
 from scipy.spatial import KDTree
 from scipy.ndimage import distance_transform_edt
 
 import tifffile
 
-class PerCellPatternModel(PatternModel):
+class PerCellPatternMethod(PatternMethod):
 
     name = "per_cell_base"
 
@@ -109,7 +109,7 @@ class PerCellPatternModel(PatternModel):
         return new_img_clamped
 
 
-class RotateCcwModel(PerCellPatternModel):
+class RotateCcwModel(PerCellPatternMethod):
 
     name = "rotate_ccw"
 
@@ -127,7 +127,7 @@ class RotateCcwModel(PerCellPatternModel):
         return self.prop_vector(prop, vec)
 
 
-class MoveOutModel(PerCellPatternModel):
+class MoveOutModel(PerCellPatternMethod):
 
     name = "move_out"
 
@@ -145,7 +145,7 @@ class MoveOutModel(PerCellPatternModel):
         return self.prop_vector(prop, vec)
 
 
-class MoveInModel(PerCellPatternModel):
+class MoveInModel(PerCellPatternMethod):
 
     name = "move_in"
 
@@ -163,7 +163,7 @@ class MoveInModel(PerCellPatternModel):
         return self.prop_vector(prop, vec)
 
 
-class MoveDownModel(PerCellPatternModel):
+class MoveDownModel(PerCellPatternMethod):
 
     name = "move_down"
 
@@ -181,7 +181,7 @@ class MoveDownModel(PerCellPatternModel):
         return self.prop_vector(prop, vec)
 
 
-class BounceModel(PerCellPatternModel):
+class BounceModel(PerCellPatternMethod):
 
     name = "fb_bounce"
 

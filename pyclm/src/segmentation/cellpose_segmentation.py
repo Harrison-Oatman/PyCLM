@@ -29,7 +29,7 @@ class CellposeResourceRequest(SharedSegmentationResourceRequest):
         super().__init__(CellposeResource, pretrained_model=model_name, gpu=use_gpu)
 
 
-class CellposeSegmentationModel(SegmentationModel):
+class CellposeSegmentationMethod(SegmentationMethod):
 
     name = "cellpose"
 

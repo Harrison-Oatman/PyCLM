@@ -1,12 +1,12 @@
 import numpy as np
 
 from . import DataDock
-from .pattern import PatternModel, AcquiredImageRequest
+from .pattern import PatternMethod, AcquiredImageRequest
 from skimage.measure import regionprops, regionprops_table
 import tifffile
 
 
-class NucleusControlModel(PatternModel):
+class NucleusControlMethod(PatternMethod):
 
     name = "nucleus_control_base"
 
@@ -54,7 +54,7 @@ class NucleusControlModel(PatternModel):
         return new_img_clamped
 
 
-class BinaryNucleusClampModel(NucleusControlModel):
+class BinaryNucleusClampModel(NucleusControlMethod):
 
     name = "binary_nucleus_clamp"
 
@@ -71,7 +71,7 @@ class BinaryNucleusClampModel(NucleusControlModel):
         return prop.image
 
 
-class CenteredImageModel(NucleusControlModel):
+class CenteredImageModel(NucleusControlMethod):
 
     name = "centered_image"
 
@@ -144,7 +144,7 @@ class CenteredImageModel(NucleusControlModel):
         return super().generate(data_dock)
 
 
-class GlobalCycleModel(NucleusControlModel):
+class GlobalCycleModel(NucleusControlMethod):
 
     name = "global_cycle"
 

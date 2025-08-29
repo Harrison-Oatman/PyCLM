@@ -1,9 +1,9 @@
 import numpy as np
 
-from .pattern import DataDock, PatternModel
+from .pattern import DataDock, PatternMethod
 
 
-class BarPatternBase(PatternModel):
+class BarPatternBase(PatternMethod):
     """
     Creates a BarPattern or StationaryBarPattern depending on the requested barspeed
     """
@@ -93,7 +93,7 @@ class BarPattern(BarPatternBase):
         return is_on.astype(np.float16)
 
 
-class SawToothModel(PatternModel):
+class SawToothMethod(PatternMethod):
 
     name = "sawtooth"
 
