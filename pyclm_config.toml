@@ -1,0 +1,7 @@
+# MicroManager Configuration Path
+config_path = "C:\\Program Files\\Micro-Manager-2.0\\Ti2MightexCrestSolaSpectra.cfg"
+
+# SLM Configuration
+affine_transform = [[-0.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]]
+slm_shape_h =  1140
+slm_shape_w =  900
