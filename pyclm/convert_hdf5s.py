@@ -8,6 +8,7 @@ from natsort import natsorted
 from skimage.transform import downscale_local_mean
 import cv2
 from tqdm import tqdm
+from toml import load
 
 
 def get_mapping(projector_api):
@@ -28,11 +29,6 @@ def get_mapping(projector_api):
     print(f"Affine Transform from calibration: {at}")
     return at
 
-
-# def apply_at(img, at, target_size):
-#
-#
-#
 
 def extract_channels_tifs(fp, chans):
     for chan in chans:
@@ -113,33 +109,64 @@ def make_tif(fp, at=None, chan="channel_638"):
                 patterned.append(np.stack(patterned_stack).astype(np.uint16))
 
 
-    outpath = fp[:-5] + ".tif"
+    outpath = fp[:-5] + chan + ".tif"
     tifffile.imwrite(outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"})
 
     if at is not None:
         # print(np.array(patterned).shape)
-        tifffile.imwrite(fp[:-5] + "_patterns.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tcyx"})
+        tifffile.imwrite(fp[:-5] + chan + "_patterns.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tcyx"})
 
 
-def parse_args():
-    args = ArgumentParser()
+def process_args():
+    parser = ArgumentParser()
+    parser.add_argument("directory", help="directory containing experiment files")
+    parser.add_argument("channels", nargs='+', help="channels to extract")
+    parser.add_argument("--config", type=str, help="path to pyclm_config.toml file", default=None)
+    parser.add_argument("--overlay_pattern", action="store_true", help="whether to overlay the pattern on the tif")
 
-    args.add_argument("dir")
-
-    return args.parse_args()
+    return parser.parse_args()
 
 
-if __name__ == "__main__":
+def find_affine_transform(input_dir, config_path):
+    # copied from main.py
+    # search for config file if not provided
+    if config_path is None:
+        # look in the experiment directory for pyclm_config.toml
+        config_path = input_dir / "pyclm_config.toml"
 
-    # args = parse_args()
+        # look in the current working directory for pyclm_config.toml
+        if not config_path.exists():
+            config_path = Path("pyclm_config.toml")
 
-    # input_dir = args.dir
+    config_path = Path(config_path)
 
-    input_dir = r"D:\Harrison\RTx3 imaging\2025-08-20 bars 3"
-    # at = np.array([[-.289, 0.006, 959.025], [-0.012, -0.579, 1540.03]], dtype=np.float32)
+    assert input_dir.exists(), f"experiment directory {input_dir} does not exist"
+    assert config_path.exists(), (
+        f"config file {config_path} does not exist: pyclm_config.toml must be specified or be "
+        f"present in the experiment directory")
+
+    config = load(config_path)
+    return np.array(config["affine_transform"], dtype=np.float32)
+
+def main():
+    args = process_args()
+    input_dir = args.dir
+    config_path = args.config
+    channels = args.channels
+    overlay_pattern = args.overlay_pattern
+
+    if overlay_pattern:
+        at = find_affine_transform(Path(input_dir), config_path)
+    else:
+        at = None
 
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
-        # make_tif(str(val), at, "channel_545")
+        for c in channels:
+            if overlay_pattern:
+                make_tif(str(val), at, "channel_545")
 
-        extract_channels_tifs(str(val), ["channel_545", "channel_638"])
-    # make_tif(r"D:\FeedbackControl\bar5.08.hdf5")
+            else:
+                extract_channels_tifs(str(val), [f"channel_{c}"])
+
+if __name__ == "__main__":
+    main()
