@@ -5,7 +5,6 @@ from typing import Optional
 
 import numpy as np
 
-# from pathlib import Path
 from pathlib import Path
 
 from pyclm import Controller, SegmentationMethod, PatternMethod, schedule_from_directory
