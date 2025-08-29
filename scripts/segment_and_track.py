@@ -16,15 +16,21 @@ from random import shuffle
 logging.basicConfig(level="INFO")
 
 
-def run_cellpose(infile):
+def run_cellpose(infile, args):
 
-    model = models.CellposeModel(gpu=True, pretrained_model="nuclei02")
+    model = models.CellposeModel(gpu=True, pretrained_model=args.model)
 
     stack = imread(infile)
 
     stack = [downscale_local_mean(frame, (2, 2)).astype(np.uint16) for frame in stack]
 
-    masks, flows, styles = model.eval(stack, batch_size=8, normalize={"lowhigh": [0, 15000]})
+    if len(args.cellpose_norm) == 2:
+        normalize = {"lowhigh": [args.cellpose_norm[0], args.cellpose_norm[1]]}
+
+    else:
+        normalize = True
+
+    masks, flows, styles = model.eval(stack, batch_size=8, normalize=normalize)
 
     masks = np.stack(masks, axis=0)
 
@@ -86,10 +92,14 @@ def track_spots(spots_df):
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument("dir", type=str, help="Path to the input dir")
+    parser.add_argument("glob", type="str", help="glob pattern to match files, e.g. '*_545.tif'", default="*.tif")
+    parser.add_argument("--cellpose_norm", type=float, nargs='+',
+                        help="optionally specify low and high intensity values for cellpose: e.g. --cellpose_norm 0 5000", default=[])
+    parser.add_argument("--model", type=str, help="cellpose model to use", default="cpsam")
     return parser.parse_args()
 
 
-def process_file(infile, in_dir):
+def process_file(infile, in_dir, args):
 
     masks_dir = in_dir / "masks"
     tracks_dir = in_dir / "tracks"
@@ -97,7 +107,7 @@ def process_file(infile, in_dir):
     masks_outfile = masks_dir / f"{infile.stem}_masks.tif"
     tracks_outfile = tracks_dir / f"{infile.stem}_tracks.csv"
 
-    cellpose_masks = run_cellpose(str(infile))
+    cellpose_masks = run_cellpose(str(infile), args)
     tifffile.imwrite(masks_outfile, cellpose_masks.astype(np.uint16), imagej=True, metadata={"axes": "tyx"})
 
     spots = process_masks(cellpose_masks)
@@ -105,8 +115,7 @@ def process_file(infile, in_dir):
     tracks = track_spots(spots)
     tracks.to_csv(tracks_outfile, index=False)
 
-
-if __name__ == "__main__":
+def main():
     args = parse_args()
 
     in_dir = Path(args.dir)
@@ -122,6 +131,7 @@ if __name__ == "__main__":
 
     for i, file in enumerate(files):
         print(f"segmenting and tracking file {i}/{len(files)}: {file.stem}")
-        process_file(file, in_dir)
+        process_file(file, in_dir, args)
 
-
+if __name__ == "__main__":
+    main()
