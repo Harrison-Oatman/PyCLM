@@ -330,9 +330,24 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     stimulation_config.update_device_properties(get_device_properties(toml_data["stimulation"], "device_properties"))
 
     # make segmentation config
-    segmentation = toml_data["segmentation"]
-    method = segmentation.pop("method")
-    segmentation_config = SegmentationConfig(method, **segmentation)
+    segmentation = toml_data.get(["segmentation"], None)
+
+    no_seg = False
+
+    if segmentation:
+        if "method" in segmentation:
+            method = segmentation.pop("method")
+            segmentation_config = SegmentationConfig(method, **segmentation)
+
+        else:
+            no_seg = True
+
+    else:
+        no_seg = True
+
+    if no_seg:
+        segmentation_config = SegmentationConfig("none")
+
 
     # make pattern config
     pattern = toml_data["pattern"]
