@@ -1,9 +1,13 @@
 # PyCLM
 A Modular Closed-Loop Microscopy Software in Python
 
+![](documentation\imgs\Figure%201.png "PyCLM Overview")
+
 ## Overview
 
-This approach to smart microscopy is oriented around three major goals:
+PyCLM is a python-based closed-loop microscopy software designed for running many dynamic and/or feedback-controlled optogenetic experiments simultaneously. Through PyCLM, it is possible to design spatial light patterns that change over time, follow individual cell positions, or change in response to cell features.
+
+This approach to closed-loop microscopy is oriented around three major goals:
 
 1. **Efficiency.**
 Ideally, the number of possible simultaneous experiments should be limited only by the physical constraints of the microscopy system.
@@ -44,4 +48,27 @@ Data is exported into separate .hdf5 files for each experiment, which alongside 
 Ease of reusability is a major advantage of PyCLM. {experiment}.toml files as well as schedule.toml files can be quickly copied over from old experiments to new ones. Running old experiments on a new day is as simple as copying over old files and picking out imaging positions. The details of past experiments are contained in the structure of the experiment setup.
 
 ## Installation
-PyCLM is tested on a Nikon Ti2-Eclipse confocal microscope with a Mightex Polygon 1000 DMD, running on a Windows OS. 
+_Documentation is currently incomplete. Insterested users are recommended to check back in over the next week as the documentation is continually updated._
+
+Installation can be technically demanding, and ease of installation will depend on your microscope setup. PyCLM is tested on a Nikon Ti2-Eclipse confocal microscope with a Mightex Polygon 1000 DMD, running on a Windows OS. 
+
+### 1. Install and configure MicroManager
+PyCLM does not communicate with your microscope hardware directly. Instead, it operates through pymmcore-plus, which is built on top of [MicroManager](https://micro-manager.org/), a well-documented microscope control platform with support for a wide range of devices. MicroManager software will be used to determine imaging configurations, and define config groups. It is worth familiarizing yourself with MicroManager before using PyCLM.
+
+### 2. Create a Python virtual environment
+Clone this GitHub repository to a directory where you can run code:
+
+``git clone https://github.com/Harrison-Oatman/PyCLM.git``
+
+### 3. Install and configure pymmcore-plus
+
+
+### 4. Install CellposeSAM
+
+### 5. Calibrate your DMD
+For PyCLM to deliver spatially modulated stimuli, the relationship between DMD pixel coordinates and camera pixel coordinates needs to be determined. MicroManager provides a tool for calibrating the DMD using the "[Projector](https://micro-manager.org/Projector_Plugin)" plugin. This plugin will generate a set of DMD patterns to approximate the affine transform to/from the DMD.
+
+### 6. Update pyclm_config.toml
+``pyclm_config.toml`` is a configuration file used during every run of PyCLM to get important information about the DMD, including the DMD shape, and the a
+
+
