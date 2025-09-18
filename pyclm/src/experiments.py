@@ -88,7 +88,7 @@ PatternConfig = MethodBasedConfig
 class Experiment:
 
     def __init__(self, experiment_name, imaging_configs: dict[str, ImagingConfig], stimulation_config: ImagingConfig,
-                 segmentation: SegmentationConfig, pattern: PatternConfig, t_delay: int = 0):
+                 segmentation: SegmentationConfig, pattern: PatternConfig, t_delay: int = 0, t_stop: int = 0):
         self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
@@ -97,7 +97,7 @@ class Experiment:
         self.pattern = pattern
 
         self.t_delay = t_delay
-        self.t_stop = 0
+        self.t_stop = t_stop
 
     def __repr__(self):
         return (f"Experiment('{self.experiment_name}': Channels={self.channels}, Stimulation={self.stimulation}, "
@@ -356,12 +356,14 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     pattern_config = PatternConfig(method, **pattern)
 
     t_delay = int(toml_data.get("t_delay", 0))
+    t_stop = int(toml_data.get("t_stop", 0))
 
     return Experiment(
         experiment_name=name,
         imaging_configs=imaging_configs,
         stimulation_config=stimulation_config,
         segmentation=segmentation_config,
+        t_stop = t_stop,
         pattern=pattern_config,
         t_delay=t_delay,
     )
