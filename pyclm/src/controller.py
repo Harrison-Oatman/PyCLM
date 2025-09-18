@@ -7,9 +7,10 @@ from pymmcore_plus import CMMCorePlus
 
 import numpy as np
 
-from main import logger
 from pyclm.src import AllQueues, MicroscopeProcess, Manager, MicroscopeOutbox, SLMBuffer, SegmentationProcess, \
     PatternProcess, ExperimentSchedule, ROI, CameraProperties
+
+logger = logging.getLogger(__name__)
 
 
 class Controller:

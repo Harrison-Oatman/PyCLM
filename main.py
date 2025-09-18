@@ -70,7 +70,7 @@ def run_pyclm(experiment_directory, config_path=None,
 
     base_path = experiment_directory
 
-    c = Controller(config["microscope_config"])
+    c = Controller(config["config_path"])
 
     # register any custom methods
     if segmentation_methods is not None:
@@ -83,6 +83,8 @@ def run_pyclm(experiment_directory, config_path=None,
 
     core = c.core
     core.describe()
+
+    core.setFocusDevice("ZDrive")
 
     print("---listing available config groups---")
     for group in core.getAvailableConfigGroups():

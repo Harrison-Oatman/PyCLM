@@ -97,6 +97,7 @@ class Experiment:
         self.pattern = pattern
 
         self.t_delay = t_delay
+        self.t_stop = 0
 
     def __repr__(self):
         return (f"Experiment('{self.experiment_name}': Channels={self.channels}, Stimulation={self.stimulation}, "
@@ -330,7 +331,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     stimulation_config.update_device_properties(get_device_properties(toml_data["stimulation"], "device_properties"))
 
     # make segmentation config
-    segmentation = toml_data.get(["segmentation"], None)
+    segmentation = toml_data.get("segmentation", None)
 
     no_seg = False
 

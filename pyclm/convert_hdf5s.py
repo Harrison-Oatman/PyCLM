@@ -150,7 +150,7 @@ def find_affine_transform(input_dir, config_path):
 
 def main():
     args = process_args()
-    input_dir = args.dir
+    input_dir = args.directory
     config_path = args.config
     channels = args.channels
     overlay_pattern = args.overlay_pattern
