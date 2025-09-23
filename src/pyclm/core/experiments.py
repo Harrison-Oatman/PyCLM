@@ -8,8 +8,6 @@ from toml import load
 from uuid import uuid4
 from xml.etree import ElementTree
 
-from src.pyclm.directories import experiment_from_toml
-
 ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
 
@@ -277,7 +275,3 @@ def read_schedule(toml_path):
 
 # todo: generate positions from micromanager output
 # todo: make grid-based acquisition
-
-
-if __name__ == "__main__":
-    print(experiment_from_toml(r"/experiments/SampleExperiment.toml"))
