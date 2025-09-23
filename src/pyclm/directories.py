@@ -1,11 +1,12 @@
 from copy import deepcopy
 from pathlib import Path
+from xml.etree import ElementTree
 
 from toml import load
 
 from .core import ExperimentSchedule
 from .core.experiments import get_config_groups, get_device_properties, ImagingConfig, ConfigGroup, \
-    SegmentationConfig, PatternConfig, Experiment, positions_from_xml, read_schedule
+    SegmentationConfig, PatternConfig, Experiment, PositionWithAutoFocus
 
 
 def experiment_from_toml(toml_path, name="SampleExperiment"):
@@ -122,6 +123,54 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         t_delay=t_delay,
     )
 
+def read_schedule(toml_path):
+
+    with open(toml_path, "r") as f:
+        toml_data = load(f)
+
+    toml_data = toml_data["timing"]
+
+    out = {}
+
+    out["t_count"] = toml_data.get("steps", 10)
+    out["t_interval"] = toml_data.get("interval_seconds", 10.0)
+    out["t_setup"] = toml_data.get("setup_time_seconds", 2.0)
+    out["t_between"] = toml_data.get("time_between_positions", 2.0)
+
+    return out
+
+def positions_from_xml(fp):
+
+    tree = ElementTree.parse(fp)
+    root = tree.getroot()
+
+    positions = []
+
+    for node in root[0]:
+        if node.attrib["runtype"] != "NDSetupMultipointListItem":
+            continue
+
+        nv = {n.tag: n.attrib["value"] for n in node if n.attrib.get("value", None) is not None}
+
+        for tag in ["dXPosition", "dYPosition", "dZPosition", "dPFSOffset"]:
+            val = nv.get(tag)
+            if val is not None:
+                val = float(val)
+
+            nv[tag] = val
+
+        if (nv["dPFSOffset"] is not None) and (nv["dPFSOffset"] < 0):
+            nv["dPFSOffset"] = None
+
+        positions.append(PositionWithAutoFocus(
+            x=nv["dXPosition"],
+            y=nv["dYPosition"],
+            z=nv["dZPosition"],
+            autofocus_offset=nv["dPFSOffset"],
+            label=nv["strName"]
+        ))
+
+    return positions
 
 def schedule_from_directory(experiment_dir: Path):
     tomls = experiment_dir.glob("*.toml")

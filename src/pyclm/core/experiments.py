@@ -4,9 +4,7 @@ Defines the Experiment class and related data structures for managing imaging ex
 
 from collections import namedtuple
 from typing import Optional
-from toml import load
 from uuid import uuid4
-from xml.etree import ElementTree
 
 ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
@@ -220,58 +218,6 @@ def get_device_properties(toml_dict, key):
         device_properties.append(DeviceProperty(dev, prop, v, t))
 
     return device_properties
-
-
-def positions_from_xml(fp):
-
-    tree = ElementTree.parse(fp)
-    root = tree.getroot()
-
-    positions = []
-
-    for node in root[0]:
-        if node.attrib["runtype"] != "NDSetupMultipointListItem":
-            continue
-
-        nv = {n.tag: n.attrib["value"] for n in node if n.attrib.get("value", None) is not None}
-
-        for tag in ["dXPosition", "dYPosition", "dZPosition", "dPFSOffset"]:
-            val = nv.get(tag)
-            if val is not None:
-                val = float(val)
-
-            nv[tag] = val
-
-        if (nv["dPFSOffset"] is not None) and (nv["dPFSOffset"] < 0):
-            nv["dPFSOffset"] = None
-
-        positions.append(PositionWithAutoFocus(
-            x=nv["dXPosition"],
-            y=nv["dYPosition"],
-            z=nv["dZPosition"],
-            autofocus_offset=nv["dPFSOffset"],
-            label=nv["strName"]
-        ))
-
-    return positions
-
-
-def read_schedule(toml_path):
-
-    with open(toml_path, "r") as f:
-        toml_data = load(f)
-
-    toml_data = toml_data["timing"]
-
-    out = {}
-
-    out["t_count"] = toml_data.get("steps", 10)
-    out["t_interval"] = toml_data.get("interval_seconds", 10.0)
-    out["t_setup"] = toml_data.get("setup_time_seconds", 2.0)
-    out["t_between"] = toml_data.get("time_between_positions", 2.0)
-
-    return out
-
 
 # todo: generate positions from micromanager output
 # todo: make grid-based acquisition
