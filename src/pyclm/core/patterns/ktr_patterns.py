@@ -1,8 +1,7 @@
 import numpy as np
 
-from . import DataDock
-from .pattern import PatternMethod, AcquiredImageRequest
-from skimage.measure import regionprops, regionprops_table
+from .pattern import PatternMethod, AcquiredImageRequest, DataDock
+from skimage.measure import regionprops
 import tifffile
 
 

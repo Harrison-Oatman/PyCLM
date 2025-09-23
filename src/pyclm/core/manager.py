@@ -541,15 +541,3 @@ class Manager:
         # for box in self.msgout:
         #     self.msgout[box].put(msg)
 
-
-# todo: include metadata in saving process
-
-if __name__ == "__main__":
-    # Example usage
-    all_queues = AllQueues()
-
-    outbox = MicroscopeOutbox(all_queues)
-    outbox.test_write_data()
-    #
-    # manager = Manager(aq)
-    # manager.sample_experiment()

@@ -18,4 +18,5 @@ def process_args():
 
 
 if __name__ == '__main__':
+    print("running pyclm...")
     main()
