@@ -7,7 +7,7 @@ import numpy as np
 
 from pathlib import Path
 
-from pyclm import Controller, SegmentationMethod, PatternMethod, schedule_from_directory
+from src import Controller, SegmentationMethod, PatternMethod, schedule_from_directory
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def run_pyclm(experiment_directory, config_path=None,
               segmentation_methods: Optional[dict[str, type[SegmentationMethod]]]= None,
               pattern_methods: Optional[dict[str, type[PatternMethod]]]= None):
     """
-    Run a pyclm experiment from a given directory and configuration file.
+    Run a src experiment from a given directory and configuration file.
     :param experiment_directory: directory containing experiment files, including schedule.toml. [experiment].toml files,
                                and the position list
     :param config_path: path to pyclm_config.toml file. If None, will look for pyclm_config.toml in the experiment_directory

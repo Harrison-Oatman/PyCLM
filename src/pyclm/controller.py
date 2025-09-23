@@ -7,7 +7,7 @@ from pymmcore_plus import CMMCorePlus
 
 import numpy as np
 
-from pyclm.src import AllQueues, MicroscopeProcess, Manager, MicroscopeOutbox, SLMBuffer, SegmentationProcess, \
+from src.pyclm import AllQueues, MicroscopeProcess, Manager, MicroscopeOutbox, SLMBuffer, SegmentationProcess, \
     PatternProcess, ExperimentSchedule, ROI, CameraProperties
 
 logger = logging.getLogger(__name__)
