@@ -1,2 +1,2 @@
-from .pattern import PatternMethod, CameraProperties, ROI
+from .pattern import PatternMethod, CameraProperties, ROI, AcquiredImageRequest
 from .pattern_process import PatternProcess
