@@ -1,3 +1,7 @@
+"""
+Defines the Experiment class and related data structures for managing imaging experiments.
+"""
+
 from collections import namedtuple
 from typing import Optional
 from toml import load
