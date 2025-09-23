@@ -539,14 +539,3 @@ class Manager:
             msg = Message()
             msg.message = "close"
             self.msgout[box].put(msg)
-
-
-if __name__ == "__main__":
-    # Example usage
-    all_queues = AllQueues()
-
-    outbox = MicroscopeOutbox(all_queues)
-    outbox.test_write_data()
-    #
-    # manager = Manager(aq)
-    # manager.sample_experiment()

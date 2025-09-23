@@ -1,7 +1,6 @@
 import numpy as np
 
-from . import DataDock
-from .pattern import PatternMethod, AcquiredImageRequest
+from .pattern import PatternMethod, AcquiredImageRequest, DataDock
 from skimage.measure import regionprops, regionprops_table
 from scipy.spatial import KDTree
 from scipy.ndimage import distance_transform_edt
