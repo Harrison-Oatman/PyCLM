@@ -1,0 +1,16 @@
+[project]
+name = "PyCLM"
+version = "0.1.0"
+description = "Closed-loop feedback control for optogenetic microscopy in Python"
+readme = "README.md"
+authors = [
+    { name = "Harrison-Oatman", email = "ho6729@princeton.edu" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pymmcore-plus>=0.16.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
