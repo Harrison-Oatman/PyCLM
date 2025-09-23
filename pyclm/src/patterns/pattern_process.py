@@ -117,6 +117,9 @@ class PatternProcess:
 
         match message.message:
 
+            case "close":
+                return True
+
             case "request_pattern":
 
                 assert isinstance(message, RequestPattern)
@@ -135,6 +138,8 @@ class PatternProcess:
 
                 self.check(name, dockname)
 
+                return False
+
             case _:
                 raise NotImplementedError
 
@@ -143,7 +148,8 @@ class PatternProcess:
             if not self.inbox.empty():
                 msg = self.inbox.get()
 
-                self.handle_message(msg)
+                if self.handle_message(msg):
+                    return
 
             if not self.from_raw.empty():
                 data = self.from_raw.get()

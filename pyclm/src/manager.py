@@ -418,6 +418,7 @@ class Manager:
         :param time_sec: scheduled time of pattern (used by pattern generation module)
         :return:
         """
+        print(experiment_name, self.pattern_lcms[experiment_name])
         make_pattern = (loop_iter % self.pattern_lcms[experiment_name]) == 0
 
         print(f"pattern_requirements: {self.pattern_requirements[experiment_name]}")
@@ -533,15 +534,11 @@ class Manager:
 
         print("DONE")
 
-        # todo: figure out when/if to send close messages
-        # msg = Message()
-        # msg.message = "close"
-        #
-        # for box in self.msgout:
-        #     self.msgout[box].put(msg)
+        for box in self.msgout:
+            msg = Message()
+            msg.message = "close"
+            self.msgout[box].put(msg)
 
-
-# todo: include metadata in saving process
 
 if __name__ == "__main__":
     # Example usage

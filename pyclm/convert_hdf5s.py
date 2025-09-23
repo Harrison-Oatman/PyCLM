@@ -116,13 +116,41 @@ def make_tif(fp, at=None, chan="channel_638"):
         # print(np.array(patterned).shape)
         tifffile.imwrite(fp[:-5] + chan + "_patterns.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tcyx"})
 
+def make_stim_tif(fp, at):
+    print(fp)
+
+    ati = cv2.invertAffineTransform(at)
+    patterned = []
+
+    with (File(fp, mode="r") as f):
+
+        indices = []
+
+        for t_val, data in f.items():
+
+            if "stim_aq" not in data:
+                continue
+
+            indices.append(t_val)
+
+        for t_val in natsorted(indices):
+            pattern = np.array(f[t_val]["stim_aq"]["dmd"])
+            target_size = (1600, 1600)
+            tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati,
+                                (target_size[1] * 2, target_size[0] * 2)).astype(np.uint16)
+            ds = downscale_local_mean(tf, (2, 2)).astype(np.uint16)
+            patterned.append(ds)
+
+    tifffile.imwrite(str(fp)[:-5] + "patterns_only.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tyx"})
+
 
 def process_args():
     parser = ArgumentParser()
     parser.add_argument("directory", help="directory containing experiment files")
-    parser.add_argument("channels", nargs='+', help="channels to extract")
+    parser.add_argument("channels", nargs='*', help="channels to extract")
     parser.add_argument("--config", type=str, help="path to pyclm_config.toml file", default=None)
     parser.add_argument("--overlay_pattern", action="store_true", help="whether to overlay the pattern on the tif")
+    parser.add_argument("--just_patterns", action="store_true", help="just add the stimulation")
 
     return parser.parse_args()
 
@@ -148,12 +176,20 @@ def find_affine_transform(input_dir, config_path):
     config = load(config_path)
     return np.array(config["affine_transform"], dtype=np.float32)
 
+
 def main():
     args = process_args()
     input_dir = args.directory
     config_path = args.config
     channels = args.channels
     overlay_pattern = args.overlay_pattern
+
+    if args.just_patterns:
+        at = find_affine_transform(Path(input_dir), config_path)
+        for val in tqdm(Path(input_dir).glob("*.hdf5")):
+            make_stim_tif(val, at)
+
+        return 0
 
     if overlay_pattern:
         at = find_affine_transform(Path(input_dir), config_path)

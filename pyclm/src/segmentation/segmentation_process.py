@@ -132,6 +132,9 @@ class SegmentationProcess:
 
         match message.message:
 
+            case "close":
+                return True
+
             case _:
                 raise NotImplementedError
 
@@ -142,7 +145,9 @@ class SegmentationProcess:
             if not self.inbox.empty():
                 msg = self.inbox.get()
 
-                self.handle_message(msg)
+                if self.handle_message(msg):
+                    return True
+
             if not self.from_raw.empty():
                 data = self.from_raw.get()
 
