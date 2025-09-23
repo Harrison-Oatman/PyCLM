@@ -1,15 +1,14 @@
-from argparse import ArgumentParser
+from typing import Optional
 import logging
 from toml import load
-from typing import Optional
-
 import numpy as np
-
 from pathlib import Path
 
-from pyclm import Controller, SegmentationMethod, PatternMethod, schedule_from_directory
-
 logger = logging.getLogger(__name__)
+
+from .core import PatternMethod, SegmentationMethod
+from .controller import Controller
+from .directories import schedule_from_directory
 
 
 def set_logging(experiment_directory: Path):
@@ -99,21 +98,3 @@ def run_pyclm(experiment_directory, config_path=None,
     c.initialize(schedule, slm_shape, at, base_path)
 
     c.run()
-
-
-def main():
-    args = process_args()
-    base_path = Path(args.directory)
-    run_pyclm(base_path, args.config)
-
-
-def process_args():
-    parser = ArgumentParser()
-    parser.add_argument("directory", help="directory containing experiment files")
-    parser.add_argument("--config", type=str, help="path to pyclm_config.toml file", default=None)
-
-    return parser.parse_args()
-
-
-if __name__ == '__main__':
-    main()
