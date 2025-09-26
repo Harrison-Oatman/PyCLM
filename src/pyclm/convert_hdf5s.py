@@ -199,7 +199,7 @@ def main():
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
         for c in channels:
             if overlay_pattern:
-                make_tif(str(val), at, "channel_545")
+                make_tif(str(val), at, f"channel_{c}")
 
             else:
                 extract_channels_tifs(str(val), [f"channel_{c}"])
