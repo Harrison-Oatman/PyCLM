@@ -12,7 +12,6 @@ from .queues import AllQueues
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdatePositionWithAutoFocusEvent
 from .experiments import (PositionWithAutoFocus, ExperimentSchedule, TimeCourse,
                           Experiment, ImagingConfig)
-from src.pyclm.directories import experiment_from_toml
 from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData, SegmentationData
 from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
                        UpdateZPositionMessage)
