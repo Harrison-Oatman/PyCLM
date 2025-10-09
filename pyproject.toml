@@ -53,6 +53,7 @@ explicit = true
 
 [project.scripts]
 pyclm = "pyclm.__main__:main"
+convert_hdf5s = "pyclm.convert_hdf5s:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
