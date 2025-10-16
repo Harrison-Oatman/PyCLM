@@ -1,8 +1,9 @@
 import numpy as np
 
 from .pattern import PatternMethod, AcquiredImageRequest, DataDock
-from skimage.measure import regionprops, regionprops_table
+from skimage.measure import regionprops, regionprops_table, label
 from scipy.spatial import KDTree
+from scipy.stats import gaussian_kde
 from scipy.ndimage import distance_transform_edt
 
 import tifffile
@@ -213,3 +214,69 @@ class BounceModel(PerCellPatternMethod):
         return super().generate(data_dock)
 
 
+class DensityModel(PerCellPatternMethod):
+
+    name = "density_gradient"
+
+    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+
+        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+
+    # def process_prop(self, prop) -> np.ndarray:
+        # prop_centroid = np.round(prop.centroid).astype(int)
+
+        # vec = grad_direction[prop_centroid[0], prop_centroid[1]]
+        # vec = (np.sin(vec), np.cos(vec))
+
+        # return self.prop_vector(prop, vec)
+
+    def generate(self, data_dock: DataDock) -> np.ndarray:
+
+        seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
+
+        if self.voronoi:
+            px_dis = distance_transform_edt(seg == 0)
+            seg = self.voronoi_rebuild(seg)
+
+            seg = seg * (px_dis < 50)
+
+        def generate_density(img) -> np.ndarray:
+            labels = label(img)
+            props = regionprops(labels)
+            centroids = np.array([p.centroid for p in props])
+            
+            y, x = np.indices(img.shape)
+            coords = np.rot90(centroids)
+            
+            kde = gaussian_kde(coords)
+            
+            density = kde(np.vstack([x.ravel(), y.ravel()])).reshape(img.shape)
+
+            return density
+        
+        h, w = self.pattern_shape
+
+        new_img = np.zeros((int(h), int(w)), dtype=np.float16)
+        
+        density = generate_density(seg)
+
+        dy, dx = np.negative(np.gradient(density))
+        grad_direction = np.arctan2(dy, dx)
+        # vectors = [grad_direction[x,y] for x,y in np.round(centroids_down).astype(int)]
+
+        for prop in regionprops(seg):
+            prop_centroid = np.round(prop.centroid).astype(int)
+
+            vec = grad_direction[prop_centroid[0], prop_centroid[1]]
+            vec = (np.sin(vec), np.cos(vec))
+
+            cell_stim = self.prop_vector(prop, vec)
+            
+            # cell_stim = self.process_prop(prop, grad_direction)
+            # print(cell_stim)
+            
+            new_img[prop.bbox[0]:prop.bbox[2], prop.bbox[1]:prop.bbox[3]] += cell_stim
+
+        new_img_clamped = np.clip(new_img, 0, 1).astype(np.float16)
+
+        return new_img_clamped
