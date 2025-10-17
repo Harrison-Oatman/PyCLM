@@ -12,7 +12,7 @@ class PerCellPatternMethod(PatternMethod):
 
     name = "per_cell_base"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, voronoi=False, gradient=False, **kwargs):
+    def __init__(self, experiment_name, camera_properties, channel=None, voronoi=False, gradient=False, direction = 1, **kwargs):
         super().__init__(experiment_name, camera_properties, **kwargs)
 
         if channel is None:
@@ -24,6 +24,7 @@ class PerCellPatternMethod(PatternMethod):
 
         self.gradient = gradient
         self.voronoi = voronoi
+        self.direction = direction
 
     def initialize(self, experiment):
         super().initialize(experiment)
@@ -222,14 +223,6 @@ class DensityModel(PerCellPatternMethod):
 
         super().__init__(experiment_name, camera_properties, channel, **kwargs)
 
-    # def process_prop(self, prop) -> np.ndarray:
-        # prop_centroid = np.round(prop.centroid).astype(int)
-
-        # vec = grad_direction[prop_centroid[0], prop_centroid[1]]
-        # vec = (np.sin(vec), np.cos(vec))
-
-        # return self.prop_vector(prop, vec)
-
     def generate(self, data_dock: DataDock) -> np.ndarray:
 
         seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
@@ -260,7 +253,11 @@ class DensityModel(PerCellPatternMethod):
         
         density = generate_density(seg)
 
-        dy, dx = np.negative(np.gradient(density))
+        if (self.direction == -1):
+            dy, dx = np.gradient(density)
+        else:
+            dy, dx = np.negative(np.gradient(density))
+
         grad_direction = np.arctan2(dy, dx)
         # vectors = [grad_direction[x,y] for x,y in np.round(centroids_down).astype(int)]
 
