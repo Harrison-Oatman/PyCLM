@@ -1,4 +1,5 @@
 import numpy as np
+from skimage.transform import rescale
 
 from .pattern import PatternMethod, AcquiredImageRequest, DataDock
 from skimage.measure import regionprops, regionprops_table, label
@@ -7,6 +8,22 @@ from scipy.stats import gaussian_kde
 from scipy.ndimage import distance_transform_edt
 
 import tifffile
+
+def generate_density(img, downsampling = 5) -> np.ndarray:
+    labels = label(img)
+    props = regionprops(labels)
+    centroids = np.array([p.centroid for p in props])
+
+    y, x = np.indices(img.shape)
+    coords = np.rot90(centroids)
+
+    kde = gaussian_kde(coords)
+
+    down_dim = tuple(int(i / downsampling) for i in img.shape)
+    density = kde(np.vstack([x[::downsampling, ::downsampling].ravel(), y[::downsampling, ::downsampling].ravel()])).reshape(down_dim)
+
+    return density
+
 
 class PerCellPatternMethod(PatternMethod):
 
@@ -233,25 +250,27 @@ class DensityModel(PerCellPatternMethod):
 
             seg = seg * (px_dis < 50)
 
-        def generate_density(img) -> np.ndarray:
-            labels = label(img)
-            props = regionprops(labels)
-            centroids = np.array([p.centroid for p in props])
-            
-            y, x = np.indices(img.shape)
-            coords = np.rot90(centroids)
-            
-            kde = gaussian_kde(coords)
-            
-            density = kde(np.vstack([x.ravel(), y.ravel()])).reshape(img.shape)
-
-            return density
+        # def generate_density(img) -> np.ndarray:
+        #     labels = label(img)
+        #     props = regionprops(labels)
+        #     centroids = np.array([p.centroid for p in props])
+        #
+        #     y, x = np.indices(img.shape)
+        #     coords = np.rot90(centroids)
+        #
+        #     kde = gaussian_kde(coords)
+        #
+        #     down_dim = tuple(int(i/5) for i in img.shape)
+        #     density = kde(np.vstack([x[::5,::5].ravel(), y[::5,::5].ravel()])).reshape(down_dim)
+        #
+        #     return density
         
         h, w = self.pattern_shape
 
         new_img = np.zeros((int(h), int(w)), dtype=np.float16)
         
-        density = generate_density(seg)
+        density = generate_density(seg, downsampling=5)
+        density = rescale(density, 5)
 
         if (self.direction == -1):
             dy, dx = np.gradient(density)
@@ -259,7 +278,6 @@ class DensityModel(PerCellPatternMethod):
             dy, dx = np.negative(np.gradient(density))
 
         grad_direction = np.arctan2(dy, dx)
-        # vectors = [grad_direction[x,y] for x,y in np.round(centroids_down).astype(int)]
 
         for prop in regionprops(seg):
             prop_centroid = np.round(prop.centroid).astype(int)
@@ -269,11 +287,62 @@ class DensityModel(PerCellPatternMethod):
 
             cell_stim = self.prop_vector(prop, vec)
             
-            # cell_stim = self.process_prop(prop, grad_direction)
-            # print(cell_stim)
-            
             new_img[prop.bbox[0]:prop.bbox[2], prop.bbox[1]:prop.bbox[3]] += cell_stim
 
         new_img_clamped = np.clip(new_img, 0, 1).astype(np.float16)
 
         return new_img_clamped
+
+
+class ErodePeaksModel(PerCellPatternMethod):
+    name = "erode_peaks"
+
+    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+
+        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+
+    def generate(self, data_dock: DataDock) -> np.ndarray:
+
+        t = data_dock.time_seconds / 60
+
+        # need to segment only one time - I think I can do this with a t if?
+        if t < 60:
+            #get segmentation only in the first minute?
+            seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
+
+        h, w = self.pattern_shape
+
+        density = generate_density(seg, downsampling=5)
+        density = rescale(density, 5)
+
+        peaks = density > np.quantile(density, 0.9)
+        peak_labels = label(peaks)
+        peak_props = regionprops_table(peak_labels, properties=['centroid'])
+
+        xx, yy = self.get_meshgrid()
+        peak_centers = np.stack([
+            np.round(peak_props["centroid-0"]).astype(int) * self.pixel_size_um,
+            np.round(peak_props["centroid-1"]).astype(int) * self.pixel_size_um
+        ], axis = -1)
+
+        distances = [np.sqrt((xx - x0) ** 2 + (yy - y0) ** 2) for (x0,y0) in peak_centers]
+
+        # Masks
+        kdtree = KDTree(peak_centers)
+        query_pts = np.stack([xx.flatten(), yy.flatten()], axis = -1)
+        _, nn = kdtree.query(query_pts, k = 1)
+        voronoi_mask = np.reshape(nn, (int(h), int(w)))
+
+        duty_cycle = 0.2
+        wave_speed = 1
+        period_time = 30 / wave_speed
+        direction = self.direction
+        waves = []
+        for i, r_map in enumerate(distances):
+            w = (((t * direction) - (r_map / wave_speed)) % period_time) < duty_cycle * period_time
+            w[voronoi_mask != i] = 0
+            waves.append(w)
+
+        Z = np.sum(waves, axis = 0)
+
+        return Z

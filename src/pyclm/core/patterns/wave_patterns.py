@@ -90,7 +90,11 @@ class WavePattern(WavePatternBase):
         t = data_dock.time_seconds / 60
 
         xx, yy = self.get_meshgrid()
-        center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
+
+        h, w = self.pattern_shape
+        center_x = self.pixel_size_um * w / 2.
+        center_y = self.pixel_size_um * h / 2.
+
         distance = np.sqrt((xx - center_x)**2 + (yy - center_y)**2)
 
         is_on = (((t*self.direction) - (distance / self.wave_speed)) % self.period_time) < self.duty_cycle*self.period_time

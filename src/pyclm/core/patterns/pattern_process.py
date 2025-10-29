@@ -7,7 +7,8 @@ from ..messages import Message
 from .pattern import PatternReview, PatternMethod, PatternMethodReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
 from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothMethod
 from .static_patterns import CirclePattern, FullOnPattern
-from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel
+from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel, DensityModel, ErodePeaksModel
+from .wave_patterns import WavePatternBase
 from .ktr_patterns import BinaryNucleusClampModel, GlobalCycleModel, CenteredImageModel
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,9 @@ class PatternProcess:
         "binary_nucleus_clamp": BinaryNucleusClampModel,
         "global_cycle": GlobalCycleModel,
         "centered_image": CenteredImageModel,
+        "density_gradient": DensityModel,
+        "wave": WavePatternBase,
+        "erode_peaks": ErodePeaksModel
     }
 
     def __init__(self, aq: AllQueues):

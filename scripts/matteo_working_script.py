@@ -83,7 +83,7 @@ class EllipseBoxPattern(PerCellPatternMethod):
         largest_region = max(regions, key=lambda r: r.area)
         binary = labeled == largest_region.label
 
-        base_path = Path(r"E:\Matteo\2025_10_09 test_ellipses\outputs")
+        base_path = Path(r"Z:\Microscopy Data\Matteo\Embryo Illumination\Basic Seg Illumination\Original Environment\outputs")
         tifffile.imwrite(base_path / f"{self.experiment}_raw.tif", image)
         tifffile.imwrite(base_path / f"{self.experiment}_segmented.tif", binary)
 
@@ -200,14 +200,14 @@ class EllipseBoxPattern(PerCellPatternMethod):
             min_row, min_col, max_row, max_col = prop.bbox
             pattern_mask[min_row:max_row, min_col:max_col] = local_mask
 
-        base_path = Path(r"E:\Matteo\2025_10_09 test_ellipses\outputs")
+        base_path = Path(r"Z:\Microscopy Data\Matteo\Embryo Illumination\Basic Seg Illumination\Original Environment\outputs")
         tifffile.imwrite(base_path / f"{self.experiment}_pattern.tif", pattern_mask)
 
         return pattern_mask
 
 def main():
 
-    working_directory = Path(r"E:\Matteo\2025_10_09 test_ellipses")
+    working_directory = Path(r"Z:\Microscopy Data\Matteo\Embryo Illumination\Basic Seg Illumination\Original Environment")
 
     pattern_methods = {
         "ellipse_box": EllipseBoxPattern,
