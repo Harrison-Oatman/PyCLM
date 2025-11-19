@@ -4,9 +4,9 @@ Single pattern module using Cellpose segmentation + PCA-based end illumination
 """
 
 from pyclm import run_pyclm, SegmentationMethod, PatternMethod
-from pyclm.core.experiments import Experiment
 from pyclm.core.patterns.feedback_control_patterns import PerCellPatternMethod, AcquiredImageRequest, DataDock
 from pyclm.core.segmentation.cellpose_segmentation import CellposeSegmentationMethod
+
 
 import numpy as np
 from cellpose import models
@@ -15,124 +15,8 @@ from scipy import ndimage
 from pathlib import Path
 import tifffile
 import logging
-from skimage.transform import rescale, resize
 
 logger = logging.getLogger(__name__)
-
-def
-
-
-class BodySegmentationMethod(CellposeSegmentationMethod):
-    """
-    Image at the body plane of the embryo.
-    Segments the body and passes to pattern method
-    """
-
-    def __init__(self, model="cpsam", use_gpu=True, normlow=0, normhigh=5000, rescale_factor=0.06):
-        super().__init__(model, use_gpu, normlow, normhigh)
-
-        self.rescale_factor = rescale_factor
-
-
-    def segment(self, image):
-
-        # shrink for cellpose
-        image_rescaled = rescale(image, self.rescale_factor)
-
-        masks_downscaled = super().segment(image_rescaled)
-
-        # unshrink to return
-        masks = np.round(resize(masks_downscaled, image.shape)).astype(int)
-
-        # If multiple objects found, keep only the largest
-        if masks.max() > 1:
-            props = measure.regionprops(masks)
-            largest = max(props, key=lambda r: r.area)
-            binary_mask = masks == largest.label
-            logger.debug(f"Cellpose found {masks.max()} objects, kept largest with area={largest.area}")
-        else:
-            binary_mask = masks > 0
-            logger.debug(f"Cellpose found 1 object")
-
-        return binary_mask
-
-
-class BodyCapsPatternMethod(PatternMethod):
-    """
-    Takes in cap parameters
-    Saves the cap mask and returns all zeros on pattern generation
-    """
-
-    def __init__(self,
-                 experiment_name,
-                 camera_properties,
-                 channel=None,
-                 coverage=10):
-
-        super().__init__(experiment_name, camera_properties)
-        self.channel = channel
-        self.seg_channel_id = None
-        self.coverage = coverage
-
-    def initialize(self, experiment):
-        super().initialize(experiment)
-        channel = experiment.channels.get(self.channel, None)
-        assert channel is not None, f"provided channel {self.channel} is not in experiment"
-
-        self.seg_channel_id = channel.channel_id
-
-        return [AcquiredImageRequest(self.seg_channel_id, False, True)]
-
-
-
-
-class NuclearCycleSegmentation(CellposeSegmentationMethod):
-    """
-    Images at the histone plane.
-    Output the segmented nuclei
-    Uses cpsam
-    """
-
-
-class NuclearCycleAppliesCap(PatternMethod):
-    """
-    Loads body cap from file if it exists yet
-    Detects nuclear cycle, and determines whether to start running the pattern
-    If not, all zeros
-    if yet, applies the mask
-    """
-
-    def __init__(self,
-                 experiment_name,
-                 camera_properties,
-                 channel=None,
-                 starting_nc = 11,
-                 pkl_file = None,
-                 ):
-
-        super().__init__(experiment_name, camera_properties)
-        self.channel = channel
-        self.seg_channel_id = None
-
-        self.starting_nc = starting_nc
-        self.pkl_file = pkl_file
-
-        self.mask = None
-
-    def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-
-        super().initialize(experiment)
-
-        channel = experiment.channels.get(self.channel, None)
-        assert channel is not None, f"provided channel {self.channel} is not in experiment"
-
-        self.seg_channel_id = channel.channel_id
-
-        return [AcquiredImageRequest(self.seg_channel_id, False, True)]
-
-    def check_for_mask
-
-
 
 # ============================================================================
 # PATTERN MODULE - HANDLES EVERYTHING (SEGMENTATION + ILLUMINATION)
@@ -150,17 +34,17 @@ class EmbryoEndPatternPCA(PerCellPatternMethod):
     name = "embryo_ends_pca"
 
     def __init__(
-            self,
-            experiment_name,
-            camera_properties,
-            channel=None,
-            coverage=30,
-            cellpose_model='cyto3',
-            cellpose_diameter=500,
-            gpu=True,
-            save_debug=True,
-            debug_path=None,
-            **kwargs
+        self,
+        experiment_name,
+        camera_properties,
+        channel=None,
+        coverage=30,
+        cellpose_model='cyto3',
+        cellpose_diameter=500,
+        gpu=True,
+        save_debug=True,
+        debug_path=None,
+        **kwargs
     ):
         super().__init__(experiment_name, camera_properties, channel, **kwargs)
 
@@ -184,20 +68,20 @@ class EmbryoEndPatternPCA(PerCellPatternMethod):
         self.model = models.CellposeModel(gpu=gpu, model_type=cellpose_model)
 
         logger.info(f"Initialized {self.name} with {coverage}% coverage, "
-                    f"Cellpose diameter={cellpose_diameter}px - debug_path: {self.debug_path}")
+                   f"Cellpose diameter={cellpose_diameter}px - debug_path: {self.debug_path}")
 
-    # def initialize(self, experiment):
-    #     super().initialize(experiment)
-    #
-    #     channel = experiment.channels.get(self.channel, None)
-    #     assert channel is not None, f"provided channel {self.channel} is not in experiment"
-    #
-    #     self.seg_channel_id = channel.channel_id
-    #
-    #     # Request raw image only - we do everything ourselves
-    #     raw_image_request = AcquiredImageRequest(channel.channel_id, needs_raw=True, needs_seg=False)
-    #
-    #     return [raw_image_request]
+    def initialize(self, experiment):
+        super().initialize(experiment)
+
+        channel = experiment.channels.get(self.channel, None)
+        assert channel is not None, f"provided channel {self.channel} is not in experiment"
+
+        self.seg_channel_id = channel.channel_id
+
+        # Request raw image only - we do everything ourselves
+        raw_image_request = AcquiredImageRequest(channel.channel_id, needs_raw=True, needs_seg=False)
+
+        return [raw_image_request]
 
     def segment_embryo(self, image):
         """
@@ -372,9 +256,9 @@ class EmbryoEndPatternPCA(PerCellPatternMethod):
             angle_deg = np.degrees(np.arctan2(major_axis[1], major_axis[0]))
 
             logger.info(f"Created pattern: "
-                        f"length={embryo_length:.1f}px, "
-                        f"angle={angle_deg:.1f}°, "
-                        f"illuminated={pattern_mask.sum():.0f}px")
+                       f"length={embryo_length:.1f}px, "
+                       f"angle={angle_deg:.1f}°, "
+                       f"illuminated={pattern_mask.sum():.0f}px")
 
             # Save debug TIFFs
             if self.save_debug:
@@ -440,19 +324,19 @@ def main():
     """
 
     # Set working directory (where your TOML files are)
-    working_directory = Path(r"Z:\Microscopy Data\Matteo\Embryo Illumination\Basic Seg Illumination\run2_cellpose")
+    working_directory = Path(r"Z:\Microscopy Data\Matteo\Embryo Illumination\Seg Illumination\run5_cellpose_rescue")
 
     # Register custom pattern method
     pattern_methods = {
         "embryo_ends_pca": EmbryoEndPatternPCA,
     }
 
-    print("=" * 70)
+    print("="*70)
     print("STARTING EMBRYO END ILLUMINATION EXPERIMENT (PCA Method)")
-    print("=" * 70)
+    print("="*70)
     print(f"Working directory: {working_directory}")
     print(f"Debug output: Z:\\Microscopy Data\\Matteo\\Embryo Illumination\\Debug Output")
-    print("=" * 70)
+    print("="*70)
 
     # Run PyCLM
     run_pyclm(
