@@ -12,6 +12,7 @@ from laptrack import LapTrack
 from multiprocessing import Pool
 from skimage.transform import downscale_local_mean
 from random import shuffle
+from typing import Optional
 
 logging.basicConfig(level="INFO")
 
@@ -21,6 +22,11 @@ def run_cellpose(infile, args):
     model = models.CellposeModel(gpu=True, pretrained_model=args.model)
 
     stack = imread(infile)
+
+    if args.channel:
+        stack = stack[:, args.channel]
+
+    assert len(stack.shape) == 3, f"stack has {len(stack.shape)} dimensions, maybe specify channel?"
 
     stack = [downscale_local_mean(frame, (2, 2)).astype(np.uint16) for frame in stack]
 
@@ -57,8 +63,8 @@ def process_masks(masks):
     return spots_df
 
 
-def track_spots(spots_df):
-    max_distance = 20
+def track_spots(spots_df, args):
+    max_distance = args.max_distance
 
     lt = LapTrack(
         metric="sqeuclidean",
@@ -86,16 +92,23 @@ def track_spots(spots_df):
 
     track_df = track_df.rename(columns={"frame_y": "frame"})
 
+    if args.resolution:
+        track_df["um_x"] = track_df["px_x"] * args.resolution
+        track_df["um_y"] = track_df["px_y"] * args.resolution
+
     return track_df
 
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument("dir", type=str, help="Path to the input dir")
-    parser.add_argument("glob", type="str", help="glob pattern to match files, e.g. '*_545.tif'", default="*.tif")
+    parser.add_argument("--dir", type=str, help="Path to the input dir")
+    parser.add_argument("--glob", type=str, help="glob pattern to match files, e.g. '*_545.tif'", default="*.tif")
     parser.add_argument("--cellpose_norm", type=float, nargs='+',
                         help="optionally specify low and high intensity values for cellpose: e.g. --cellpose_norm 0 5000", default=[])
     parser.add_argument("--model", type=str, help="cellpose model to use", default="cpsam")
+    parser.add_argument("--channel", type=int, help="segmentation channel 0 indexed", default=None)
+    parser.add_argument("--resolution", type=float, help="resolution in microns per pixel", default=None)
+    parser.add_argument("--max_distance", type=int, help="max tracking distance in px", default=20)
     return parser.parse_args()
 
 
@@ -112,7 +125,7 @@ def process_file(infile, in_dir, args):
 
     spots = process_masks(cellpose_masks)
 
-    tracks = track_spots(spots)
+    tracks = track_spots(spots, args)
     tracks.to_csv(tracks_outfile, index=False)
 
 def main():
@@ -126,7 +139,7 @@ def main():
     masks_dir.mkdir(exist_ok=True)
     tracks_dir.mkdir(exist_ok=True)
 
-    files = (list(in_dir.glob("*_545.tif")))
+    files = (list(in_dir.glob(args.glob)))
     shuffle(files)
 
     for i, file in enumerate(files):
