@@ -6,6 +6,7 @@ from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEve
 from .experiments import PositionWithAutoFocus, DeviceProperty, ConfigGroup
 from .datatypes import EventSLMPattern, AcquisitionData, StimulationData
 from .messages import UpdateZPositionMessage
+from .core_interface import MicroscopeCoreInterface
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class MicroscopeProcess:
 
-    def __init__(self, core: CMMCorePlus, aq: AllQueues):
+    def __init__(self, core: MicroscopeCoreInterface, aq: AllQueues):
         self.core = core
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
