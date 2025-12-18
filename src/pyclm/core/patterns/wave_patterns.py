@@ -91,9 +91,7 @@ class WavePattern(WavePatternBase):
 
         xx, yy = self.get_meshgrid()
 
-        h, w = self.pattern_shape
-        center_x = self.pixel_size_um * w / 2.
-        center_y = self.pixel_size_um * h / 2.
+        center_x, center_y = self.center_um()
 
         distance = np.sqrt((xx - center_x)**2 + (yy - center_y)**2)
 

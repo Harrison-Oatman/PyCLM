@@ -5,7 +5,7 @@ from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
 from .pattern import PatternReview, PatternMethod, PatternMethodReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
-from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothMethod
+from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothMethod, RotatingBarPattern
 from .static_patterns import CirclePattern, FullOnPattern
 from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel, DensityModel, ErodePeaksModel
 from .wave_patterns import WavePatternBase
@@ -33,7 +33,8 @@ class PatternProcess:
         "centered_image": CenteredImageModel,
         "density_gradient": DensityModel,
         "wave": WavePatternBase,
-        "erode_peaks": ErodePeaksModel
+        "erode_peaks": ErodePeaksModel,
+        "rotate_bar": RotatingBarPattern,
     }
 
     def __init__(self, aq: AllQueues):

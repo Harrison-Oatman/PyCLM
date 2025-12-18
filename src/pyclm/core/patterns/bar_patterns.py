@@ -166,3 +166,59 @@ class BouncingBarPattern(BarPattern):
         data_dock.time_seconds = t
 
         return super().generate(data_dock)
+
+
+class RotatingBarPattern(PatternMethod):
+    name = "rotate_bar"
+
+    def __init__(self, experiment_name, camera_properties, num_bars: int = 5, angular_velocity: float = 1.0,
+                 bar_width: float = 20, angular_velocity_rad: float|None = None):
+        """
+        Directs a specified number of bars with fixed width to rotate around the center of the
+        camera view at a specified speed. Note that the default speed is in units of um/min. This
+        is based on the angular velocity of a point on the bar 100um out from the center. To use rad/min,
+        specify angular_velocity_rad
+
+        :param num_bars: number of bars sticking outwards from the center
+        :param angular_velocity: um/min speed of a point on the bar 100um from the center. Can be overwritten
+            by angular_velocity_rad
+        :param bar_width: um width of the bar
+        """
+
+        super().__init__(experiment_name, camera_properties)
+
+        self.num_bars = num_bars
+        self.angular_velocity = angular_velocity
+        self.bar_width = bar_width
+        self.angular_velocity_rad = angular_velocity_rad
+
+        if not self.angular_velocity_rad:
+            self.angular_velocity_rad = self.angular_velocity / 100.
+
+    def generate(self, data_dock: DataDock) -> np.ndarray:
+        t = data_dock.time_seconds / 60.
+
+        xx, yy = self.get_meshgrid()
+        center_x, center_y = self.center_um()
+
+        xx = xx - center_x
+        yy = yy - center_y
+
+        output = xx * 0.
+
+        for spoke_n in range(self.num_bars):
+            angles_between = 2*np.pi / self.num_bars
+            spoke_theta = spoke_n * angles_between + self.angular_velocity_rad * t
+
+            spoke_x = np.cos(spoke_theta)
+            spoke_y = np.sin(spoke_theta)
+
+            projection_mag = xx*spoke_x + yy*spoke_y
+            projection_x = projection_mag*spoke_x
+            projection_y = projection_mag*spoke_y
+
+            projection_distance = np.sqrt((xx - projection_x) ** 2 + (yy - projection_y) ** 2)
+
+            output += (projection_mag > 0) & (np.abs(projection_distance) < (self.bar_width / 2))
+
+        return output > 0

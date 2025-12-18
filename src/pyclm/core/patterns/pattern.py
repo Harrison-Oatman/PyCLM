@@ -104,6 +104,16 @@ class PatternMethod:
 
         return xx, yy
 
+    def center_um(self) -> tuple[float, float]:
+        """
+        :return: (x, y) of the pattern center in um
+        """
+        h, w = self.pattern_shape
+        center_x = self.pixel_size_um * w / 2.
+        center_y = self.pixel_size_um * h / 2.
+
+        return center_x, center_y
+
     def generate(self, data_dock: DataDock) -> np.ndarray:
         raise NotImplementedError
 
