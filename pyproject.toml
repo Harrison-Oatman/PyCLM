@@ -11,6 +11,7 @@ dependencies = [
     "cellpose>=4.0.6",
     "h5py>=3.14.0",
     "natsort>=8.4.0",
+    "notebook>=7.5.1",
     "pandas-stubs==2.3.2.250827",
     "pymmcore-plus==0.13.7",
     "pymmcore==11.2.1.71.0",
@@ -18,7 +19,7 @@ dependencies = [
     "tifffile>=2025.9.20",
     "toml>=0.10.2",
     "torch",
-    "torchvision"
+    "torchvision",
 ]
 
 [dependency-groups]
@@ -27,6 +28,9 @@ analysis = [
     "matplotlib>=3.10.6",
     "pandas>=2.3.2",
     "tqdm>=4.67.1",
+]
+calibration = [
+    "pycromanager>=1.0.2",
 ]
 
 dev = [
