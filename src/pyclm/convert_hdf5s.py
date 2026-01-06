@@ -55,7 +55,7 @@ def extract_channels_tifs(fp, chans):
         tifffile.imwrite(outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"})
 
 
-def make_tif(fp, at=None, chan="channel_638"):
+def make_tif(fp, at=None, chan="channel_638", binning=2):
 
     if at is not None:
         ati = cv2.invertAffineTransform(at)
@@ -99,8 +99,8 @@ def make_tif(fp, at=None, chan="channel_638"):
 
                     pattern = np.array(f[t_val]["stim_aq"]["dmd"])
                     target_size = data.shape
-                    tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati, (target_size[1]*2, target_size[0]*2)).astype(np.uint16)
-                    ds = downscale_local_mean(tf, (2, 2)).astype(np.uint16)
+                    tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati, (target_size[1]*binning, target_size[0]*binning)).astype(np.uint16)
+                    ds = downscale_local_mean(tf, (binning, binning)).astype(np.uint16)
                     patterned_stack.append(ds)
 
                 else:
@@ -109,14 +109,14 @@ def make_tif(fp, at=None, chan="channel_638"):
                 patterned.append(np.stack(patterned_stack).astype(np.uint16))
 
 
-    outpath = fp[:-5] + chan + ".tif"
+    outpath = fp[:-5] + f"_{chan}.tif"
     tifffile.imwrite(outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"})
 
     if at is not None:
         # print(np.array(patterned).shape)
         tifffile.imwrite(fp[:-5] + chan + "_patterns.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tcyx"})
 
-def make_stim_tif(fp, at):
+def make_stim_tif(fp, at, binning=2):
     print(fp)
 
     ati = cv2.invertAffineTransform(at)
@@ -137,8 +137,8 @@ def make_stim_tif(fp, at):
             pattern = np.array(f[t_val]["stim_aq"]["dmd"])
             target_size = (1600, 1600)
             tf = cv2.warpAffine(np.round(pattern).astype(np.uint8), ati,
-                                (target_size[1] * 2, target_size[0] * 2)).astype(np.uint16)
-            ds = downscale_local_mean(tf, (2, 2)).astype(np.uint16)
+                                (target_size[1] * binning, target_size[0] * binning)).astype(np.uint16)
+            ds = downscale_local_mean(tf, (binning, binning)).astype(np.uint16)
             patterned.append(ds)
 
     tifffile.imwrite(str(fp)[:-5] + "patterns_only.tif", np.array(patterned).astype(np.uint16), imagej=True, metadata={"axes": "tyx"})
@@ -149,6 +149,7 @@ def process_args():
     parser.add_argument("directory", help="directory containing experiment files")
     parser.add_argument("channels", nargs='*', help="channels to extract")
     parser.add_argument("--config", type=str, help="path to pyclm_config.toml file", default=None)
+    parser.add_argument("--binning", type=int, help="binning", default=2)
     parser.add_argument("--overlay_pattern", action="store_true", help="whether to overlay the pattern on the tif")
     parser.add_argument("--just_patterns", action="store_true", help="just add the stimulation")
 
@@ -187,7 +188,7 @@ def main():
     if args.just_patterns:
         at = find_affine_transform(Path(input_dir), config_path)
         for val in tqdm(Path(input_dir).glob("*.hdf5")):
-            make_stim_tif(val, at)
+            make_stim_tif(val, at, args.binning)
 
         return 0
 
@@ -199,7 +200,7 @@ def main():
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
         for c in channels:
             if overlay_pattern:
-                make_tif(str(val), at, f"channel_{c}")
+                make_tif(str(val), at, f"channel_{c}", binning=args.binning)
 
             else:
                 extract_channels_tifs(str(val), [f"channel_{c}"])
