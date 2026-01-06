@@ -28,6 +28,9 @@ analysis = [
 
 dev = [
     "pytest>=8.4.2",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
 ]
 
 [project.scripts]
