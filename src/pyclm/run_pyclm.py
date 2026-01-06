@@ -46,6 +46,7 @@ def run_pyclm(experiment_directory, config_path=None,
     """
 
     experiment_directory = Path(experiment_directory)
+    print(f"experiment directory: {experiment_directory}")
 
     # search for config file if not provided
     if config_path is None:

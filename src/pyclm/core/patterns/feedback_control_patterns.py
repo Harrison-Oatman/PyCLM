@@ -232,20 +232,6 @@ class DensityModel(PerCellPatternMethod):
             seg = self.voronoi_rebuild(seg)
 
             seg = seg * (px_dis < 50)
-
-        def generate_density(img) -> np.ndarray:
-            labels = label(img)
-            props = regionprops(labels)
-            centroids = np.array([p.centroid for p in props])
-            
-            y, x = np.indices(img.shape)
-            coords = np.rot90(centroids)
-            
-            kde = gaussian_kde(coords)
-            
-            density = kde(np.vstack([x.ravel(), y.ravel()])).reshape(img.shape)
-
-            return density
         
         h, w = self.pattern_shape
 
@@ -259,7 +245,6 @@ class DensityModel(PerCellPatternMethod):
             dy, dx = np.negative(np.gradient(density))
 
         grad_direction = np.arctan2(dy, dx)
-        # vectors = [grad_direction[x,y] for x,y in np.round(centroids_down).astype(int)]
 
         for prop in regionprops(seg):
             prop_centroid = np.round(prop.centroid).astype(int)
@@ -268,9 +253,6 @@ class DensityModel(PerCellPatternMethod):
             vec = (np.sin(vec), np.cos(vec))
 
             cell_stim = self.prop_vector(prop, vec)
-            
-            # cell_stim = self.process_prop(prop, grad_direction)
-            # print(cell_stim)
             
             new_img[prop.bbox[0]:prop.bbox[2], prop.bbox[1]:prop.bbox[3]] += cell_stim
 
