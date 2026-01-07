@@ -1,5 +1,7 @@
 import logging
 
+from threading import Event
+
 from ..queues import AllQueues
 from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
 from ..experiments import Experiment
@@ -32,27 +34,6 @@ class PatternProcess:
         "centered_image": CenteredImageModel,
     }
 
-from threading import Event
-
-class PatternProcess:
-
-    known_models = {
-        "circle": CirclePattern,
-        "bar": BarPatternBase,
-        "pattern_review": PatternReview,
-        "bar_bounce": BouncingBarPattern,
-        "full_on": FullOnPattern,
-        "rotate_ccw": RotateCcwModel,
-        "sawtooth": SawToothMethod,
-        "move_out": MoveOutModel,
-        "move_in": MoveInModel,
-        "move_down": MoveDownModel,
-        "fb_bounce": BounceModel,
-        "binary_nucleus_clamp": BinaryNucleusClampModel,
-        "global_cycle": GlobalCycleModel,
-        "centered_image": CenteredImageModel,
-    }
-
     def __init__(self, aq: AllQueues, stop_event: Event = None):
         self.stop_event = stop_event
         self.inbox = aq.manager_to_pattern
@@ -61,6 +42,8 @@ class PatternProcess:
 
         self.from_seg = aq.seg_to_pattern
         self.from_raw = aq.outbox_to_pattern
+        
+        self.stream_count = 0 
 
         self.camera_properties = None
         self.initialized = False
@@ -140,7 +123,18 @@ class PatternProcess:
         match message.message:
 
             case "close":
-                return True
+                return False 
+                
+            case "stream_close":
+                self.stream_count += 1
+                if self.stream_count >= 2:
+                    # Signal SLMBuffer that we are done
+                    from ..messages import Message
+                    out_msg = Message()
+                    out_msg.message = "stream_close"
+                    self.slm.put(out_msg)
+                    return True
+                return False
 
             case "request_pattern":
 
@@ -169,6 +163,7 @@ class PatternProcess:
         while True:
             if self.stop_event and self.stop_event.is_set():
                 break
+            
             if not self.inbox.empty():
                 msg = self.inbox.get()
 
@@ -177,31 +172,37 @@ class PatternProcess:
 
             if not self.from_raw.empty():
                 data = self.from_raw.get()
+                
+                if isinstance(data, Message):
+                    if self.handle_message(data): return
+                else:
+                    assert isinstance(data, AcquisitionData)
+                    name = data.event.experiment_name
+                    t_index = data.event.t_index
 
-                assert isinstance(data, AcquisitionData)
-                name = data.event.experiment_name
-                t_index = data.event.t_index
+                    dockname = self.dock_string(name, t_index)
 
-                dockname = self.dock_string(name, t_index)
+                    self.docks[dockname].add_raw(data)
 
-                self.docks[dockname].add_raw(data)
-
-                self.check(name, dockname)
+                    self.check(name, dockname)
 
             if not self.from_seg.empty():
                 data = self.from_seg.get()
-
-                assert isinstance(data, SegmentationData)
-                name = data.event.experiment_name
-                t_index = data.event.t_index
-
-                dockname = self.dock_string(name, t_index)
-
-                print(f"seg found {dockname}")
-
-                self.docks[dockname].add_seg(data)
-
-                self.check(name, dockname)
+                
+                if isinstance(data, Message):
+                    if self.handle_message(data): return
+                else:
+                    assert isinstance(data, SegmentationData)
+                    name = data.event.experiment_name
+                    t_index = data.event.t_index
+    
+                    dockname = self.dock_string(name, t_index)
+    
+                    print(f"seg found {dockname}")
+    
+                    self.docks[dockname].add_seg(data)
+    
+                    self.check(name, dockname)
 
 
 class RequestPattern(Message):

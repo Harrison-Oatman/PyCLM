@@ -7,13 +7,6 @@ from ..messages import Message
 from ..segmentation import SegmentationMethod
 from .cellpose_segmentation import CellposeSegmentationMethod
 
-
-class SegmentationProcess:
-
-    known_models = {
-        "cellpose": CellposeSegmentationMethod
-    }
-
 from threading import Event
 
 class SegmentationProcess:
@@ -138,10 +131,18 @@ class SegmentationProcess:
 
 
     def handle_message(self, message: Message):
-
+        
+        # Check source/type if possible or just handle both
         match message.message:
-
+            
             case "close":
+                # Manager config close
+                return False 
+                
+            case "stream_close":
+                # Outbox data stream close
+                self.to_pattern.put(message)
+                self.to_outbox.put(message)
                 return True
 
             case _:
@@ -162,5 +163,9 @@ class SegmentationProcess:
             if not self.from_raw.empty():
                 data = self.from_raw.get()
 
-                assert isinstance(data, AcquisitionData)
-                self.handle_segment_data(data)
+                if isinstance(data, Message):
+                     if self.handle_message(data):
+                         return True
+                else:
+                    assert isinstance(data, AcquisitionData)
+                    self.handle_segment_data(data)

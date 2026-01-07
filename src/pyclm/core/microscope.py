@@ -7,11 +7,10 @@ from .experiments import PositionWithAutoFocus, DeviceProperty, ConfigGroup
 from .datatypes import EventSLMPattern, AcquisitionData, StimulationData
 from .messages import UpdateZPositionMessage
 import logging
+from threading import Event
 
 logger = logging.getLogger(__name__)
 
-
-from threading import Event
 
 class MicroscopeProcess:
 
@@ -88,6 +87,11 @@ class MicroscopeProcess:
                     self.handle_update_position_event(msg.event)
 
                 case "close":
+                    # Send stream close to outbox
+                    from .messages import Message
+                    msg = Message()
+                    msg.message = "stream_close"
+                    self.outbox.put(msg)
                     return 0
 
                 case _:

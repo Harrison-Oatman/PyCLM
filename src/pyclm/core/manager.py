@@ -98,6 +98,9 @@ class MicroscopeOutbox(DataPassingProcess):
                         aq.seg_to_outbox]
 
         self.manager = aq.outbox_to_manager
+        
+        self.manager_done = False
+        self.stream_count = 0
 
         self.seg_queue = aq.outbox_to_seg
         self.pattern_queue = aq.outbox_to_pattern
@@ -129,11 +132,28 @@ class MicroscopeOutbox(DataPassingProcess):
         match msg.message:
 
             case "close":
-                return True
-
+                self.manager_done = True
+            
+            case "stream_close":
+                self.stream_count += 1
+                
+                # First stream close (Microscope)
+                if self.stream_count == 1:
+                    logger.info("Outbox received stream_close from Microscope. Propagating to seg/pattern.")
+                    close_msg = Message()
+                    close_msg.message = "stream_close"
+                    self.seg_queue.put(close_msg)
+                    self.pattern_queue.put(close_msg)
+                
+                elif self.stream_count == 2:
+                    logger.info("Outbox received stream_close from Segmentation.")
+                    
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
+        if self.manager_done and self.stream_count >= 2:
+            return True
+            
         return False
 
     def write_data(self, data: AcquisitionData):
@@ -191,7 +211,13 @@ class SLMBuffer(DataPassingProcess):
         self.slm_shape = None
         self.affine_transform = None
 
+        self.slm_shape = None
+        self.affine_transform = None
+
         self.initialized = False
+        
+        self.manager_done = False
+        self.pattern_done = False
 
     def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32],
                    experiment_names: list[str]):
@@ -263,8 +289,11 @@ class SLMBuffer(DataPassingProcess):
         match msg.message:
 
             case "close":
-                return True
-
+                self.manager_done = True
+                
+            case "stream_close":
+                self.pattern_done = True
+                
             case "initialize_slm_queue":
                 # Initialize the SLM buffer with provided parameters
                 shape = msg.shape
@@ -287,6 +316,9 @@ class SLMBuffer(DataPassingProcess):
 
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
+
+        if self.manager_done and self.pattern_done:
+            return True
 
         return False
 
@@ -542,3 +574,8 @@ class Manager:
                         self.msgout["microscope"].put(aqmsg)
 
         print("DONE")
+
+        for box in self.msgout:
+            msg = Message()
+            msg.message = "close"
+            self.msgout[box].put(msg)
