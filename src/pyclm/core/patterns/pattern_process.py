@@ -32,7 +32,29 @@ class PatternProcess:
         "centered_image": CenteredImageModel,
     }
 
-    def __init__(self, aq: AllQueues):
+from threading import Event
+
+class PatternProcess:
+
+    known_models = {
+        "circle": CirclePattern,
+        "bar": BarPatternBase,
+        "pattern_review": PatternReview,
+        "bar_bounce": BouncingBarPattern,
+        "full_on": FullOnPattern,
+        "rotate_ccw": RotateCcwModel,
+        "sawtooth": SawToothMethod,
+        "move_out": MoveOutModel,
+        "move_in": MoveInModel,
+        "move_down": MoveDownModel,
+        "fb_bounce": BounceModel,
+        "binary_nucleus_clamp": BinaryNucleusClampModel,
+        "global_cycle": GlobalCycleModel,
+        "centered_image": CenteredImageModel,
+    }
+
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        self.stop_event = stop_event
         self.inbox = aq.manager_to_pattern
         self.manager = aq.pattern_to_manager
         self.slm = aq.pattern_to_slm
@@ -145,6 +167,8 @@ class PatternProcess:
 
     def process(self):
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                break
             if not self.inbox.empty():
                 msg = self.inbox.get()
 

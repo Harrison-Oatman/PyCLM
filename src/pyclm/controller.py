@@ -1,7 +1,9 @@
 import logging
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from time import sleep
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from pathlib import Path
+from threading import Event
 
 from pymmcore_plus import CMMCorePlus
 
@@ -16,16 +18,17 @@ logger = logging.getLogger(__name__)
 class Controller:
 
     def __init__(self, config="MMConfig_demo.cfg"):
+        self.stop_event = Event()
         self.core = CMMCorePlus()
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
 
-        self.microscope = MicroscopeProcess(core=self.core, aq=self.all_queues)
-        self.manager = Manager(aq=self.all_queues)
-        self.outbox = MicroscopeOutbox(aq=self.all_queues, save_type="hdf5")
-        self.slm_buffer = SLMBuffer(aq=self.all_queues)
-        self.segmentation = SegmentationProcess(aq=self.all_queues)
-        self.pattern = PatternProcess(aq=self.all_queues)
+        self.microscope = MicroscopeProcess(core=self.core, aq=self.all_queues, stop_event=self.stop_event)
+        self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
+        self.outbox = MicroscopeOutbox(aq=self.all_queues, save_type="hdf5", stop_event=self.stop_event)
+        self.slm_buffer = SLMBuffer(aq=self.all_queues, stop_event=self.stop_event)
+        self.segmentation = SegmentationProcess(aq=self.all_queues, stop_event=self.stop_event)
+        self.pattern = PatternProcess(aq=self.all_queues, stop_event=self.stop_event)
 
         self.processes = [
             self.microscope,
@@ -88,12 +91,67 @@ class Controller:
         self.outbox.base_path = out_path
 
     def run(self):
+
         with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process.process) for process in self.processes]
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logging.error(f"Exception occurred: {e}")
-                    logging.error(traceback.format_exc())
-                # future.result()
+            # Map processes to futures
+            future_to_process = {
+                executor.submit(process.process): process 
+                for process in self.processes
+            }
+            
+            # Identify the manager future specifically
+            manager_future = None
+            for f, p in future_to_process.items():
+                if p == self.manager:
+                    manager_future = f
+                    break
+            
+            try:
+                # Loop to monitor processes
+                while True:
+                    # check if any process has exited (e.g., manager finishes, or crash)
+                    done, not_done = wait(future_to_process.keys(), return_when=FIRST_COMPLETED)
+
+                    # If manager finished happily
+                    if manager_future in done:
+                        # Check if it raised an exception
+                        exc = manager_future.exception()
+                        if exc:
+                            raise exc
+                        
+                        logger.info("Manager finished successfully. Initiating graceful shutdown.")
+                        self.stop_event.set()
+                        break
+                    
+                    # If something else finished, it might be a crash
+                    for f in done:
+                        exc = f.exception()
+                        if exc:
+                            logger.error(f"Process {future_to_process[f]} crashed with exception: {exc}")
+                            raise exc
+                        
+                        # if it finished without exception but wasn't the manager, that's odd but okay?
+                        # usually other processes loop forever until stopped.
+                        logger.warning(f"Process {future_to_process[f]} exited unexpectedly (no exception).")
+
+            except KeyboardInterrupt:
+                logger.warning("KeyboardInterrupt caught in controller. Stopping all processes.")
+                self.stop_event.set()
+            
+            except Exception as e:
+                logger.error(f"Exception during run: {e}")
+                logger.error(traceback.format_exc())
+                self.stop_event.set()
+            
+            finally:
+                logger.info("Waiting for all processes to exit...")
+                # self.stop_event is already set above
+                
+                # Give them a moment to see the event
+                sleep(0.5)
+
+                # Ensure remaining tasks are cancelled or joined
+                for f in future_to_process:
+                    f.cancel()
+                
+                logger.info("Controller run finished.")

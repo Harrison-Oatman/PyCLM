@@ -14,7 +14,16 @@ class SegmentationProcess:
         "cellpose": CellposeSegmentationMethod
     }
 
-    def __init__(self, aq: AllQueues):
+from threading import Event
+
+class SegmentationProcess:
+
+    known_models = {
+        "cellpose": CellposeSegmentationMethod
+    }
+
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        self.stop_event = stop_event
         self.inbox = aq.manager_to_seg
         self.manager = aq.seg_to_manager
 
@@ -141,6 +150,8 @@ class SegmentationProcess:
     def process(self):
 
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                break
 
             if not self.inbox.empty():
                 msg = self.inbox.get()

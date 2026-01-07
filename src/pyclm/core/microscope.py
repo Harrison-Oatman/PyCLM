@@ -11,10 +11,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+from threading import Event
+
 class MicroscopeProcess:
 
-    def __init__(self, core: CMMCorePlus, aq: AllQueues):
+    def __init__(self, core: CMMCorePlus, aq: AllQueues, stop_event: Event = None):
         self.core = core
+        self.stop_event = stop_event
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
         self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
@@ -61,6 +64,8 @@ class MicroscopeProcess:
         event_await_start = time()
 
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                break
 
             if self.inbox.empty():
 

@@ -28,9 +28,12 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+from threading import Event
+
 class DataPassingProcess(metaclass=ABCMeta):
-    def __init__(self, aq: AllQueues):
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
         self.all_queues = aq
+        self.stop_event = stop_event
 
         self.message_history = []
 
@@ -40,6 +43,8 @@ class DataPassingProcess(metaclass=ABCMeta):
     def process(self):
 
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                break
 
             if not self.from_manager.empty():
                 msg = self.from_manager.get()
@@ -85,8 +90,8 @@ class MicroscopeOutbox(DataPassingProcess):
     # grabs data from microscope, writes data to disk
 
     def __init__(self, aq: AllQueues, base_path: Path = Path().cwd(),
-                 save_type="hdf5"):
-        super().__init__(aq)
+                 save_type="hdf5", stop_event: Event = None):
+        super().__init__(aq, stop_event)
 
         self.from_manager = aq.manager_to_outbox
         self.data_in = [aq.acquisition_outbox,
@@ -171,8 +176,8 @@ class MicroscopeOutbox(DataPassingProcess):
 
 class SLMBuffer(DataPassingProcess):
 
-    def __init__(self, aq: AllQueues):
-        super().__init__(aq)
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        super().__init__(aq, stop_event)
 
         self.from_manager = aq.manager_to_slm_buffer
         self.data_in = [aq.pattern_to_slm]
@@ -288,7 +293,8 @@ class SLMBuffer(DataPassingProcess):
 
 class Manager:
 
-    def __init__(self, aq: AllQueues):
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        self.stop_event = stop_event
         self.msgout = {
             "microscope": aq.manager_to_microscope,
             "outbox": aq.manager_to_outbox,
@@ -451,6 +457,9 @@ class Manager:
                         msg = inbox.get()
                         self.handle_message(msg)
 
+                if self.stop_event and self.stop_event.is_set():
+                    return
+
             # iterate through each experiment
             for i, (name, experiment) in enumerate(self.experiments.items()):
 
@@ -533,8 +542,3 @@ class Manager:
                         self.msgout["microscope"].put(aqmsg)
 
         print("DONE")
-
-        for box in self.msgout:
-            msg = Message()
-            msg.message = "close"
-            self.msgout[box].put(msg)
