@@ -1,7 +1,7 @@
 import logging
 import traceback
 from time import sleep
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED, ALL_COMPLETED
 from pathlib import Path
 from threading import Event
 
@@ -99,7 +99,7 @@ class Controller:
                 for process in self.processes
             }
             
-            # Identify the manager future specifically
+            # manager should be first to finish in a successful run
             manager_future = None
             for f, p in future_to_process.items():
                 if p == self.manager:
@@ -107,31 +107,31 @@ class Controller:
                     break
             
             try:
-                # Loop to monitor processes
+                # main process loop, checks for process exits
                 while True:
                     # check if any process has exited (e.g., manager finishes, or crash)
                     done, not_done = wait(future_to_process.keys(), return_when=FIRST_COMPLETED)
 
-                    # If manager finished happily
+                    """
+                    Case 1: Manager first to finish
+                    """
                     if manager_future in done:
-                        # Check if it raised an exception
                         exc = manager_future.exception()
                         if exc:
                             raise exc
                         
                         logger.info("Manager finished successfully. Initiating graceful shutdown.")
-                        self.stop_event.set()
                         break
                     
-                    # If something else finished, it might be a crash
+                    """
+                    Case 2: Something else finished first
+                    """
                     for f in done:
                         exc = f.exception()
                         if exc:
                             logger.error(f"Process {future_to_process[f]} crashed with exception: {exc}")
                             raise exc
                         
-                        # if it finished without exception but wasn't the manager, that's odd but okay?
-                        # usually other processes loop forever until stopped.
                         logger.warning(f"Process {future_to_process[f]} exited unexpectedly (no exception).")
 
             except KeyboardInterrupt:
@@ -145,13 +145,13 @@ class Controller:
             
             finally:
                 logger.info("Waiting for all processes to exit...")
-                # self.stop_event is already set above
                 
-                # Give them a moment to see the event
-                sleep(0.5)
-
-                # Ensure remaining tasks are cancelled or joined
-                for f in future_to_process:
-                    f.cancel()
+                try:
+                    wait(future_to_process.keys(), return_when=ALL_COMPLETED)
+                
+                except KeyboardInterrupt:               
+                    logger.warning("Overriding stop_event handling, cancelling futures.")
+                    for f in future_to_process:
+                        f.cancel()
                 
                 logger.info("Controller run finished.")
