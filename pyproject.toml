@@ -19,21 +19,24 @@ dependencies = [
     "toml>=0.10.2",
 ]
 
-[dependency-groups]
+[optional-dependencies]
 cellpose = [
     "cellpose>=4.0.6",
     "torch",
     "torchvision",
 ]
 
+calibration = [
+    "pycromanager>=1.0.2",
+]
+
+[dependency-groups]
+
 analysis = [
     "laptrack>=0.17.0",
     "matplotlib>=3.10.6",
     "pandas>=2.3.2",
     "tqdm>=4.67.1",
-]
-calibration = [
-    "pycromanager>=1.0.2",
 ]
 
 docs = [
@@ -44,10 +47,8 @@ docs = [
 ]
 
 dev = [
-    { group = "cellpose" },
-    { group = "analysis" },
-    { group = "calibration" },
-    { group = "docs" },
+    { include-group = "analysis" },
+    { include-group = "docs" },
 ]
 
 [tool.uv.sources]
