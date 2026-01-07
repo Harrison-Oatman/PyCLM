@@ -1,5 +1,3 @@
-from cellpose import models
-from cellpose.transforms import convert_image
 from .segmentation import *
 
 class CellposeResource(SharedSegmentationResource):
@@ -12,10 +10,12 @@ class CellposeResource(SharedSegmentationResource):
 
         print(f"requesting cellpose model: {pretrained_model}")
 
+        from cellpose import models
         self.model = models.CellposeModel(gpu=gpu, pretrained_model=pretrained_model)
 
     def eval(self, data, **cellpose_kwargs):
 
+        from cellpose.transforms import convert_image
         transformed_data = convert_image(data)
         cellpose_out = self.model.eval(transformed_data, **cellpose_kwargs)
 

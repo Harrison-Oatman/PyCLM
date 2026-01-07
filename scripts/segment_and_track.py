@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from cellpose import models, io
-from cellpose.io import imread
+
 from skimage.measure import regionprops_table
 from argparse import ArgumentParser
 import pandas as pd
@@ -17,6 +16,9 @@ logging.basicConfig(level="INFO")
 
 
 def run_cellpose(infile, args):
+
+    from cellpose import models
+    from cellpose.io import imread
 
     model = models.CellposeModel(gpu=True, pretrained_model=args.model)
 

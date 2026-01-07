@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "cellpose>=4.0.6",
     "h5py>=3.14.0",
     "natsort>=8.4.0",
     "notebook>=7.5.1",
@@ -18,11 +17,15 @@ dependencies = [
     "scikit-image>=0.25.2",
     "tifffile>=2025.9.20",
     "toml>=0.10.2",
+]
+
+[dependency-groups]
+cellpose = [
+    "cellpose>=4.0.6",
     "torch",
     "torchvision",
 ]
 
-[dependency-groups]
 analysis = [
     "laptrack>=0.17.0",
     "matplotlib>=3.10.6",
@@ -33,14 +36,19 @@ calibration = [
     "pycromanager>=1.0.2",
 ]
 
-dev = [
+docs = [
     "pytest>=8.4.2",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
 ]
 
-#[tool.uv]
-#required-environments = [
-#    "sys_platform == 'x86_64'",
-#]
+dev = [
+    { group = "cellpose" },
+    { group = "analysis" },
+    { group = "calibration" },
+    { group = "docs" },
+]
 
 [tool.uv.sources]
 torch = [

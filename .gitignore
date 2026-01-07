@@ -12,3 +12,7 @@ log.txt
 /other/*
 *.pdf
 /example_scripts/
+# Documentation
+documentation/_build/
+documentation/_static/
+
