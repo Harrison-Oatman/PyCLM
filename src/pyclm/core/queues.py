@@ -1,4 +1,6 @@
 from multiprocessing import Queue
+import multiprocessing
+from tqdm import tqdm
 
 
 class AllQueues:
@@ -34,3 +36,19 @@ class AllQueues:
         # pattern to slm buffer queue
         self.pattern_to_slm = Queue()
         self.slm_to_microscope = Queue()
+
+        self.all_queues = []
+
+        for k, v in vars(self).items():
+
+            if isinstance(v, multiprocessing.queues.Queue):
+                self.all_queues.append(v)
+
+    def close(self):
+        print("closing all queues:")
+        for queue in self.all_queues:
+            assert isinstance(queue, multiprocessing.queues.Queue)
+
+            queue.cancel_join_thread()
+            queue.close()
+            queue.join_thread()

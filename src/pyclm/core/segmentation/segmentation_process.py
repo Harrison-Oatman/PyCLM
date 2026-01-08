@@ -7,6 +7,7 @@ from ..messages import Message
 from ..segmentation import SegmentationMethod
 from .cellpose_segmentation import CellposeSegmentationMethod
 
+from threading import Event
 
 class SegmentationProcess:
 
@@ -14,7 +15,8 @@ class SegmentationProcess:
         "cellpose": CellposeSegmentationMethod
     }
 
-    def __init__(self, aq: AllQueues):
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        self.stop_event = stop_event
         self.inbox = aq.manager_to_seg
         self.manager = aq.seg_to_manager
 
@@ -129,10 +131,23 @@ class SegmentationProcess:
 
 
     def handle_message(self, message: Message):
-
+        
+        # Check source/type if possible or just handle both
         match message.message:
-
+            
             case "close":
+                # Manager config close
+                return False 
+                
+            case "stream_close":
+                logging.info("segmentation process received stream close from outbox. Sending to outbox and pattern")
+                from ..messages import StreamCloseMessage
+
+                close_msg = StreamCloseMessage()
+                self.to_pattern.put(close_msg)
+
+                close_msg = StreamCloseMessage()
+                self.to_outbox.put(close_msg)
                 return True
 
             case _:
@@ -141,6 +156,9 @@ class SegmentationProcess:
     def process(self):
 
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                print("force closing segmentation process")
+                break
 
             if not self.inbox.empty():
                 msg = self.inbox.get()
@@ -151,5 +169,10 @@ class SegmentationProcess:
             if not self.from_raw.empty():
                 data = self.from_raw.get()
 
-                assert isinstance(data, AcquisitionData)
-                self.handle_segment_data(data)
+                if isinstance(data, Message):
+                     if self.handle_message(data):
+                         print("segmentation process closing")
+                         return True
+                else:
+                    assert isinstance(data, AcquisitionData)
+                    self.handle_segment_data(data)

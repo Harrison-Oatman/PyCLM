@@ -14,7 +14,7 @@ from .experiments import (PositionWithAutoFocus, ExperimentSchedule, TimeCourse,
                           Experiment, ImagingConfig)
 from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData, SegmentationData
 from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
-                       UpdateZPositionMessage)
+                       UpdateZPositionMessage, StreamCloseMessage)
 from .patterns.pattern_process import RequestPattern
 from .patterns import AcquiredImageRequest
 from h5py import File
@@ -28,18 +28,26 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+from threading import Event
+
 class DataPassingProcess(metaclass=ABCMeta):
-    def __init__(self, aq: AllQueues):
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
         self.all_queues = aq
+        self.stop_event = stop_event
 
         self.message_history = []
 
         self.from_manager = None
         self.data_in = None
 
+        self.class_name = "data passing process"
+
     def process(self):
 
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                print(f"{self.class_name} force closing")
+                break
 
             if not self.from_manager.empty():
                 msg = self.from_manager.get()
@@ -50,14 +58,18 @@ class DataPassingProcess(metaclass=ABCMeta):
                     break
 
             for data_channel in self.data_in:
+                # print(self.class_name, data_channel)
                 if not data_channel.empty():
                     data = data_channel.get()
 
                     if isinstance(data, Message):
+                        print(self.class_name, data.message)
                         must_break = self.handle_message(data)
 
                         if must_break:
-                            break
+
+                            print(f"{self.class_name} exiting from message")
+                            return True
 
                     assert isinstance(data, GenericData), \
                         f"Unexpected data type: {type(data)}, expected subtype of GenericData"
@@ -85,20 +97,25 @@ class MicroscopeOutbox(DataPassingProcess):
     # grabs data from microscope, writes data to disk
 
     def __init__(self, aq: AllQueues, base_path: Path = Path().cwd(),
-                 save_type="hdf5"):
-        super().__init__(aq)
+                 save_type="hdf5", stop_event: Event = None):
+        super().__init__(aq, stop_event)
 
         self.from_manager = aq.manager_to_outbox
         self.data_in = [aq.acquisition_outbox,
                         aq.seg_to_outbox]
 
         self.manager = aq.outbox_to_manager
+        
+        self.manager_done = False
+        self.stream_count = 0
 
         self.seg_queue = aq.outbox_to_seg
         self.pattern_queue = aq.outbox_to_pattern
 
         self.base_path = base_path
         self.save_type = save_type
+
+        self.class_name = "microscope outbox"
 
     def handle_data(self, data):
         aq_event = data.event
@@ -124,11 +141,31 @@ class MicroscopeOutbox(DataPassingProcess):
         match msg.message:
 
             case "close":
-                return True
+                self.manager_done = True
+            
+            case "stream_close":
+                self.stream_count += 1
 
+                print("outbox received stream_close")
+                
+                # First stream close (Microscope)
+                if self.stream_count == 1:
+                    logger.info("Outbox received stream_close from Microscope. Propagating to seg/pattern.")
+                    close_msg = StreamCloseMessage()
+                    self.seg_queue.put(close_msg)
+
+                    close_msg = StreamCloseMessage()
+                    self.pattern_queue.put(close_msg)
+                
+                elif self.stream_count == 2:
+                    logger.info("Outbox received stream_close from Segmentation.")
+                    
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
+        if self.manager_done and self.stream_count >= 2:
+            return True
+            
         return False
 
     def write_data(self, data: AcquisitionData):
@@ -171,8 +208,8 @@ class MicroscopeOutbox(DataPassingProcess):
 
 class SLMBuffer(DataPassingProcess):
 
-    def __init__(self, aq: AllQueues):
-        super().__init__(aq)
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        super().__init__(aq, stop_event)
 
         self.from_manager = aq.manager_to_slm_buffer
         self.data_in = [aq.pattern_to_slm]
@@ -186,7 +223,15 @@ class SLMBuffer(DataPassingProcess):
         self.slm_shape = None
         self.affine_transform = None
 
+        self.slm_shape = None
+        self.affine_transform = None
+
         self.initialized = False
+        
+        self.manager_done = False
+        self.pattern_done = False
+
+        self.class_name = "slm buffer"
 
     def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32],
                    experiment_names: list[str]):
@@ -258,8 +303,11 @@ class SLMBuffer(DataPassingProcess):
         match msg.message:
 
             case "close":
-                return True
-
+                self.manager_done = True
+                
+            case "stream_close":
+                self.pattern_done = True
+                
             case "initialize_slm_queue":
                 # Initialize the SLM buffer with provided parameters
                 shape = msg.shape
@@ -283,12 +331,16 @@ class SLMBuffer(DataPassingProcess):
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
+        if self.manager_done and self.pattern_done:
+            return True
+
         return False
 
 
 class Manager:
 
-    def __init__(self, aq: AllQueues):
+    def __init__(self, aq: AllQueues, stop_event: Event = None):
+        self.stop_event = stop_event
         self.msgout = {
             "microscope": aq.manager_to_microscope,
             "outbox": aq.manager_to_outbox,
@@ -450,6 +502,10 @@ class Manager:
                     while not inbox.empty():
                         msg = inbox.get()
                         self.handle_message(msg)
+
+                if self.stop_event and self.stop_event.is_set():
+                    print("force stopping manager process")
+                    return
 
             # iterate through each experiment
             for i, (name, experiment) in enumerate(self.experiments.items()):
