@@ -5,12 +5,20 @@ from xml.etree import ElementTree
 from toml import load
 
 from .core import ExperimentSchedule
-from .core.experiments import get_config_groups, get_device_properties, ImagingConfig, ConfigGroup, \
-    SegmentationConfig, PatternConfig, Experiment, PositionWithAutoFocus
+from .core.experiments import (
+    ConfigGroup,
+    Experiment,
+    ImagingConfig,
+    PatternConfig,
+    PositionWithAutoFocus,
+    SegmentationConfig,
+    get_config_groups,
+    get_device_properties,
+)
 
 
 def experiment_from_toml(toml_path, name="SampleExperiment"):
-    with open(toml_path, "r") as f:
+    with open(toml_path) as f:
         toml_data = load(f)
 
     base_config_groups = get_config_groups(toml_data, "config_groups")
@@ -27,7 +35,9 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     imaging_save = toml_data["imaging"].get("save", True)
     imaging_binning = toml_data["imaging"].get("binning", 1)
     imaging_config_groups = get_config_groups(toml_data["imaging"], "config_groups")
-    imaging_device_props = get_device_properties(toml_data["imaging"], "device_properties")
+    imaging_device_props = get_device_properties(
+        toml_data["imaging"], "device_properties"
+    )
 
     # copy base imaging config and update
     imaging_config = deepcopy(base_config)
@@ -64,7 +74,9 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
 
         # get channel-specific config groups and device properties
         device_properties = channel_toml.get("device_properties", {})
-        device_properties = get_device_properties(device_properties, "device_properties")
+        device_properties = get_device_properties(
+            device_properties, "device_properties"
+        )
         cfg.update_device_properties(device_properties)
 
         config_groups = channel_toml.get("config_groups", {})
@@ -80,10 +92,16 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     stimulation_config.exposure = toml_data["stimulation"]["exposure"]
     stimulation_config.every_t = toml_data["stimulation"].get("every_t", 1)
     stimulation_config.save = toml_data["stimulation"].get("save", True)
-    stimulation_config.binning = toml_data["stimulation"].get("binning", imaging_binning)
+    stimulation_config.binning = toml_data["stimulation"].get(
+        "binning", imaging_binning
+    )
 
-    stimulation_config.update_config_groups(get_config_groups(toml_data["stimulation"], "config_groups"))
-    stimulation_config.update_device_properties(get_device_properties(toml_data["stimulation"], "device_properties"))
+    stimulation_config.update_config_groups(
+        get_config_groups(toml_data["stimulation"], "config_groups")
+    )
+    stimulation_config.update_device_properties(
+        get_device_properties(toml_data["stimulation"], "device_properties")
+    )
 
     # make segmentation config
     segmentation = toml_data.get("segmentation", None)
@@ -104,7 +122,6 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     if no_seg:
         segmentation_config = SegmentationConfig("none")
 
-
     # make pattern config
     pattern = toml_data["pattern"]
     method = pattern.pop("method")
@@ -118,14 +135,14 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         imaging_configs=imaging_configs,
         stimulation_config=stimulation_config,
         segmentation=segmentation_config,
-        t_stop = t_stop,
+        t_stop=t_stop,
         pattern=pattern_config,
         t_delay=t_delay,
     )
 
-def read_schedule(toml_path):
 
-    with open(toml_path, "r") as f:
+def read_schedule(toml_path):
+    with open(toml_path) as f:
         toml_data = load(f)
 
     toml_data = toml_data["timing"]
@@ -139,8 +156,8 @@ def read_schedule(toml_path):
 
     return out
 
-def positions_from_xml(fp):
 
+def positions_from_xml(fp):
     tree = ElementTree.parse(fp)
     root = tree.getroot()
 
@@ -150,7 +167,11 @@ def positions_from_xml(fp):
         if node.attrib["runtype"] != "NDSetupMultipointListItem":
             continue
 
-        nv = {n.tag: n.attrib["value"] for n in node if n.attrib.get("value", None) is not None}
+        nv = {
+            n.tag: n.attrib["value"]
+            for n in node
+            if n.attrib.get("value", None) is not None
+        }
 
         for tag in ["dXPosition", "dYPosition", "dZPosition", "dPFSOffset"]:
             val = nv.get(tag)
@@ -162,15 +183,18 @@ def positions_from_xml(fp):
         if (nv["dPFSOffset"] is not None) and (nv["dPFSOffset"] < 0):
             nv["dPFSOffset"] = None
 
-        positions.append(PositionWithAutoFocus(
-            x=nv["dXPosition"],
-            y=nv["dYPosition"],
-            z=nv["dZPosition"],
-            autofocus_offset=nv["dPFSOffset"],
-            label=nv["strName"]
-        ))
+        positions.append(
+            PositionWithAutoFocus(
+                x=nv["dXPosition"],
+                y=nv["dYPosition"],
+                z=nv["dZPosition"],
+                autofocus_offset=nv["dPFSOffset"],
+                label=nv["strName"],
+            )
+        )
 
     return positions
+
 
 def schedule_from_directory(experiment_dir: Path):
     tomls = experiment_dir.glob("*.toml")
@@ -184,7 +208,6 @@ def schedule_from_directory(experiment_dir: Path):
     experiments = {}
 
     for position in pos_list:
-
         name: str = position.label
 
         exp_stem = name.split(".")[0]
