@@ -1,15 +1,24 @@
-from uuid import uuid4, UUID
-from .experiments import ConfigGroup, PositionWithAutoFocus, DeviceProperty, PositionBase
-from typing import Optional
-from h5py import Dataset
 import datetime
+from typing import Optional
+from uuid import UUID, uuid4
 
+from h5py import Dataset
+
+from .experiments import (
+    ConfigGroup,
+    DeviceProperty,
+    PositionBase,
+    PositionWithAutoFocus,
+)
 
 
 class UpdatePatternEvent:
-
-    def __init__(self, experiment, config_groups: Optional[list[ConfigGroup]] = None,
-                 devices: Optional[list[DeviceProperty]] = None, ):
+    def __init__(
+        self,
+        experiment,
+        config_groups: list[ConfigGroup] | None = None,
+        devices: list[DeviceProperty] | None = None,
+    ):
         self.id = uuid4()
 
         self.experiment_name = experiment
@@ -29,16 +38,22 @@ class UpdateStagePositionEvent:
 
 
 class UpdatePositionWithAutoFocusEvent(UpdateStagePositionEvent):
-
     def __init__(self, position: PositionWithAutoFocus, experiment_name):
         super().__init__(position, experiment_name)
 
 
 class GeneratePatternEvent:
-
-    def __init__(self, experiment, model, uses_acquisition=False, acquisition_event_id=None,
-                 uses_segmentation=False, segmentation_event_id=None,
-                 save_output=True, **kwargs):
+    def __init__(
+        self,
+        experiment,
+        model,
+        uses_acquisition=False,
+        acquisition_event_id=None,
+        uses_segmentation=False,
+        segmentation_event_id=None,
+        save_output=True,
+        **kwargs,
+    ):
         self.id = uuid4()
 
         self.experiment_name = experiment
@@ -50,19 +65,31 @@ class GeneratePatternEvent:
 
 
 class AcquisitionEvent:
-
-    def __init__(self, experiment, position: PositionWithAutoFocus, channel_id: UUID,
-                 scheduled_time=0, scheduled_time_since_start=0, exposure_time_ms=10, needs_slm=False,
-                 super_axes=None, sub_axes=None, t_index=0,
-                 config_groups: Optional[list[ConfigGroup]] = None,
-                 devices: Optional[list[DeviceProperty]] = None,
-                 save_output=True, save_stim=True,
-                 do_segmentation=False, segmentation_method=None, save_segmentation=False,
-                 raw_goes_to_pattern=False, pattern_method=None, save_pattern=False,
-                 segmentation_goes_to_pattern=False,
-                 binning: int = 1,
-                 ):
-
+    def __init__(
+        self,
+        experiment,
+        position: PositionWithAutoFocus,
+        channel_id: UUID,
+        scheduled_time=0,
+        scheduled_time_since_start=0,
+        exposure_time_ms=10,
+        needs_slm=False,
+        super_axes=None,
+        sub_axes=None,
+        t_index=0,
+        config_groups: list[ConfigGroup] | None = None,
+        devices: list[DeviceProperty] | None = None,
+        save_output=True,
+        save_stim=True,
+        do_segmentation=False,
+        segmentation_method=None,
+        save_segmentation=False,
+        raw_goes_to_pattern=False,
+        pattern_method=None,
+        save_pattern=False,
+        segmentation_goes_to_pattern=False,
+        binning: int = 1,
+    ):
         self.id = uuid4()
 
         # experiment (determines h5 filename)
@@ -116,8 +143,7 @@ class AcquisitionEvent:
         fstring = ""
 
         if self.super_axes is not None:
-            for ax, val in enumerate(self.super_axes):
-
+            for _ax, val in enumerate(self.super_axes):
                 if val is int:
                     val = str(val).zfill(leading)
 
@@ -128,8 +154,7 @@ class AcquisitionEvent:
         dset = ""
 
         if self.sub_axes is not None:
-            for ax, val in enumerate(self.sub_axes):
-
+            for _ax, val in enumerate(self.sub_axes):
                 if val is int:
                     val = str(val).zfill(leading)
 
@@ -144,14 +169,20 @@ class AcquisitionEvent:
 
     def write_attrs(self, dset: Dataset):
         dset.attrs["id"] = str(self.id)
-        dset.attrs["position"] = [(k, str(v)) for k, v in self.position.as_dict().items()]
+        dset.attrs["position"] = [
+            (k, str(v)) for k, v in self.position.as_dict().items()
+        ]
 
         dset.attrs["experiment_name"] = self.experiment_name
 
         value = datetime.datetime.fromtimestamp(self.scheduled_time)
-        dset.attrs["time_scheduled"] = value.strftime('%Y-%m-%d %H:%M:%S')
-        dset.attrs["time_since_start"] = str(datetime.timedelta(seconds=self.time_since_start))
-        dset.attrs["time_completed"] = datetime.datetime.fromtimestamp(self.completed_time).strftime('%Y-%m-%d %H:%M:%S')
+        dset.attrs["time_scheduled"] = value.strftime("%Y-%m-%d %H:%M:%S")
+        dset.attrs["time_since_start"] = str(
+            datetime.timedelta(seconds=self.time_since_start)
+        )
+        dset.attrs["time_completed"] = datetime.datetime.fromtimestamp(
+            self.completed_time
+        ).strftime("%Y-%m-%d %H:%M:%S")
         dset.attrs["complete"] = self.complete
 
         dset.attrs["exposure_time_ms"] = self.exposure_time_ms
@@ -162,7 +193,7 @@ class AcquisitionEvent:
             dset.attrs["super_axes"] = [str(a) for a in self.super_axes]
 
         if self.sub_axes is not None:
-             dset.attrs["sub_axes"] = [str(a) for a in self.sub_axes]
+            dset.attrs["sub_axes"] = [str(a) for a in self.sub_axes]
 
         if self.config_groups is not None:
             for cg in self.config_groups:
@@ -195,10 +226,13 @@ class AcquisitionEvent:
         repr_out["experiment_name"] = self.experiment_name
 
         value = datetime.datetime.fromtimestamp(self.scheduled_time)
-        repr_out["time_scheduled"] = value.strftime('%Y-%m-%d %H:%M:%S')
-        repr_out["time_since_start"] = str(datetime.timedelta(seconds=self.time_since_start))
-        repr_out["time_completed"] = datetime.datetime.fromtimestamp(self.completed_time).strftime(
-            '%Y-%m-%d %H:%M:%S')
+        repr_out["time_scheduled"] = value.strftime("%Y-%m-%d %H:%M:%S")
+        repr_out["time_since_start"] = str(
+            datetime.timedelta(seconds=self.time_since_start)
+        )
+        repr_out["time_completed"] = datetime.datetime.fromtimestamp(
+            self.completed_time
+        ).strftime("%Y-%m-%d %H:%M:%S")
         repr_out["complete"] = self.complete
 
         repr_out["exposure_time_ms"] = self.exposure_time_ms

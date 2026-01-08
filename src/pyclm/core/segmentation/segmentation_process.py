@@ -1,21 +1,19 @@
 import logging
+from threading import Event
+from typing import ClassVar
 
-from ..queues import AllQueues
 from ..datatypes import AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
+from ..queues import AllQueues
 from ..segmentation import SegmentationMethod
 from .cellpose_segmentation import CellposeSegmentationMethod
 
-from threading import Event
 
 class SegmentationProcess:
+    known_models: ClassVar = {"cellpose": CellposeSegmentationMethod}
 
-    known_models = {
-        "cellpose": CellposeSegmentationMethod
-    }
-
-    def __init__(self, aq: AllQueues, stop_event: Event = None):
+    def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         self.stop_event = stop_event
         self.inbox = aq.manager_to_seg
         self.manager = aq.seg_to_manager
@@ -35,9 +33,10 @@ class SegmentationProcess:
     def initialize(self):
         self.initialized = True
 
-    def register_method(self, method: type, name: str = None):
-
-        assert issubclass(method, SegmentationMethod), "model must be a subclass of PatternModel"
+    def register_method(self, method: type, name: str | None = None):
+        assert issubclass(method, SegmentationMethod), (
+            "model must be a subclass of PatternModel"
+        )
 
         model_name = method.name
         if name is not None:
@@ -49,13 +48,16 @@ class SegmentationProcess:
         self.known_models[model_name] = method
 
     def request_method(self, experiment: Experiment):
-
         method_name = experiment.segmentation.method_name
 
         model_class: type = self.known_models.get(method_name)
 
-        assert model_class is not None, f"method {method_name} is not a registered model"
-        assert issubclass(model_class, SegmentationMethod), f"{method_name} is not a SegmentationModel"
+        assert model_class is not None, (
+            f"method {method_name} is not a registered model"
+        )
+        assert issubclass(model_class, SegmentationMethod), (
+            f"{method_name} is not a SegmentationModel"
+        )
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.segmentation.kwargs
@@ -98,13 +100,14 @@ class SegmentationProcess:
             model.provide_resource(resource)
 
     def run_model(self, experiment_name, aq_data: AcquisitionData) -> SegmentationData:
-
         model = self.models.get(experiment_name, None)
 
         # print(self.models)
         # print(self.models[experiment_name])
 
-        assert isinstance(model, SegmentationMethod), f"self.models[{experiment_name}] is not a SegmentationModel"
+        assert isinstance(model, SegmentationMethod), (
+            f"self.models[{experiment_name}] is not a SegmentationModel"
+        )
 
         data_to_seg = aq_data.data
         segmented = model.segment(data_to_seg)
@@ -115,7 +118,6 @@ class SegmentationProcess:
         return seg_data
 
     def handle_segment_data(self, aq_data: AcquisitionData):
-
         event = aq_data.event
         name = event.experiment_name
 
@@ -129,18 +131,17 @@ class SegmentationProcess:
         if event.save_seg:
             self.to_outbox.put(seg_data)
 
-
     def handle_message(self, message: Message):
-        
         # Check source/type if possible or just handle both
         match message.message:
-            
             case "close":
                 # Manager config close
-                return False 
-                
+                return False
+
             case "stream_close":
-                logging.info("segmentation process received stream close from outbox. Sending to outbox and pattern")
+                logging.info(
+                    "segmentation process received stream close from outbox. Sending to outbox and pattern"
+                )
                 from ..messages import StreamCloseMessage
 
                 close_msg = StreamCloseMessage()
@@ -154,7 +155,6 @@ class SegmentationProcess:
                 raise NotImplementedError
 
     def process(self):
-
         while True:
             if self.stop_event and self.stop_event.is_set():
                 print("force closing segmentation process")
@@ -170,9 +170,9 @@ class SegmentationProcess:
                 data = self.from_raw.get()
 
                 if isinstance(data, Message):
-                     if self.handle_message(data):
-                         print("segmentation process closing")
-                         return True
+                    if self.handle_message(data):
+                        print("segmentation process closing")
+                        return True
                 else:
                     assert isinstance(data, AcquisitionData)
                     self.handle_segment_data(data)

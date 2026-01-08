@@ -1,12 +1,11 @@
-from multiprocessing import Queue
 import multiprocessing
+from multiprocessing import Queue
+
 from tqdm import tqdm
 
 
 class AllQueues:
-
     def __init__(self):
-
         # messages from manager
         self.manager_to_microscope = Queue()
         self.manager_to_outbox = Queue()
@@ -39,8 +38,7 @@ class AllQueues:
 
         self.all_queues = []
 
-        for k, v in vars(self).items():
-
+        for _k, v in vars(self).items():
             if isinstance(v, multiprocessing.queues.Queue):
                 self.all_queues.append(v)
 
