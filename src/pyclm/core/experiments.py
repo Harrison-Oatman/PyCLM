@@ -10,18 +10,26 @@ ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
 
 
-def make_configgroup_dict(config_groups: Optional[list[ConfigGroup]]):
+def make_configgroup_dict(config_groups: list[ConfigGroup] | None):
     if config_groups is None:
         return {}
 
-    return {config: cfg for (config, _), cfg in zip(config_groups, config_groups)}
+    return {
+        config: cfg
+        for (config, _), cfg in zip(config_groups, config_groups, strict=False)
+    }
 
 
-def make_deviceproperty_dict(device_properties: Optional[list[DeviceProperty]]):
+def make_deviceproperty_dict(device_properties: list[DeviceProperty] | None):
     if device_properties is None:
         return {}
 
-    return {f"{dev}-{prop}": devprop for (dev, prop, _, _), devprop in zip(device_properties, device_properties)}
+    return {
+        f"{dev}-{prop}": devprop
+        for (dev, prop, _, _), devprop in zip(
+            device_properties, device_properties, strict=False
+        )
+    }
 
 
 class ImagingConfig:
@@ -29,11 +37,16 @@ class ImagingConfig:
     Contains device properties and config groups which can be updated during experiment initialization or runtime
     """
 
-    def __init__(self, experiment_name: str, exposure_ms: float = 10, every_t: int = 1,
-                 binning: int = 1,
-                 config_groups: Optional[list[ConfigGroup]] = None,
-                 device_properties: Optional[list[DeviceProperty]] = None,
-                 save=True):
+    def __init__(
+        self,
+        experiment_name: str,
+        exposure_ms: float = 10,
+        every_t: int = 1,
+        binning: int = 1,
+        config_groups: list[ConfigGroup] | None = None,
+        device_properties: list[DeviceProperty] | None = None,
+        save=True,
+    ):
         self.channel_id = uuid4()
         self.experiment_name = experiment_name
         self.exposure = exposure_ms
@@ -62,13 +75,14 @@ class ImagingConfig:
         self.channel_id = uuid4()
 
     def __repr__(self):
-        return (f"ImagingConfig({self.channel_id}: exposure={self.exposure}ms, image_every={self.every_t}, "
-                f"configs={self._config_groups}, device_props={self._device_properties})")
+        return (
+            f"ImagingConfig({self.channel_id}: exposure={self.exposure}ms, image_every={self.every_t}, "
+            f"configs={self._config_groups}, device_props={self._device_properties})"
+        )
 
 
 class MethodBasedConfig:
-
-    def __init__(self, method_name: str, save_output: bool = True, every_t = 1, **kwargs):
+    def __init__(self, method_name: str, save_output: bool = True, every_t=1, **kwargs):
         self.method_name = method_name
         self.save = save_output
         self.every_t = every_t
@@ -86,9 +100,16 @@ PatternConfig = MethodBasedConfig
 
 
 class Experiment:
-
-    def __init__(self, experiment_name, imaging_configs: dict[str, ImagingConfig], stimulation_config: ImagingConfig,
-                 segmentation: SegmentationConfig, pattern: PatternConfig, t_delay: int = 0, t_stop: int = 0):
+    def __init__(
+        self,
+        experiment_name,
+        imaging_configs: dict[str, ImagingConfig],
+        stimulation_config: ImagingConfig,
+        segmentation: SegmentationConfig,
+        pattern: PatternConfig,
+        t_delay: int = 0,
+        t_stop: int = 0,
+    ):
         self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
@@ -100,8 +121,10 @@ class Experiment:
         self.t_stop = t_stop
 
     def __repr__(self):
-        return (f"Experiment('{self.experiment_name}': Channels={self.channels}, Stimulation={self.stimulation}, "
-                f"Segmentation method={self.segmentation}, Pattern method={self.pattern})")
+        return (
+            f"Experiment('{self.experiment_name}': Channels={self.channels}, Stimulation={self.stimulation}, "
+            f"Segmentation method={self.segmentation}, Pattern method={self.pattern})"
+        )
 
 
 class PositionBase:
@@ -109,7 +132,6 @@ class PositionBase:
 
 
 class PositionWithAutoFocus(PositionBase):
-
     def __init__(self, x=None, y=None, z=None, autofocus_offset=None, label=None):
         self.label = label
         self.x = x
@@ -135,12 +157,11 @@ class PositionWithAutoFocus(PositionBase):
             "x": self.x,
             "y": self.y,
             "z": self.z,
-            "autofocus_offset": self.autofocus_offset
+            "autofocus_offset": self.autofocus_offset,
         }
 
 
 class TimeCourse:
-
     def __init__(self, count, interval, setup, between):
         self.count = count
         self.interval = interval
@@ -149,11 +170,16 @@ class TimeCourse:
 
 
 class ExperimentSchedule:
-
-    def __init__(self, experiments: dict[str: Experiment], positions: dict[str, PositionBase],
-                 t_count: int = 1, t_interval: float = 30.0, t_setup=2., t_between=1.,
-                 timecourse: Optional[TimeCourse] = None):
-
+    def __init__(
+        self,
+        experiments: dict[str:Experiment],
+        positions: dict[str, PositionBase],
+        t_count: int = 1,
+        t_interval: float = 30.0,
+        t_setup=2.0,
+        t_between=1.0,
+        timecourse: TimeCourse | None = None,
+    ):
         self.experiment_names = [exp for exp in experiments]
         self.experiments = experiments
         self.positions = positions
@@ -211,13 +237,16 @@ def get_device_properties(toml_dict, key):
     for k, v in toml_dict[key].items():
         try:
             dev, prop = k.split("-")[0], k.split("-")[1]
-        except IndexError:
-            raise IndexError(f"error in device property {k}; should be formatted as device-property")
+        except IndexError as e:
+            raise IndexError(
+                f"error in device property {k}; should be formatted as device-property"
+            ) from e
 
         t = check_type(v)
         device_properties.append(DeviceProperty(dev, prop, v, t))
 
     return device_properties
+
 
 # todo: generate positions from micromanager output
 # todo: make grid-based acquisition

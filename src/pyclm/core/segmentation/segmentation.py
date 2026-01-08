@@ -1,16 +1,15 @@
-import numpy as np
 from typing import Optional
 from uuid import uuid4
 
+import numpy as np
+
 
 class SharedSegmentationResource:
-
     def __init__(self, **kwargs):
         pass
 
 
 class SharedSegmentationResourceRequest:
-
     """
     Used to avoid loading duplicates of large models.
     """
@@ -27,7 +26,6 @@ class SharedSegmentationResourceRequest:
         self.request_id = uuid4()
 
     def __eq__(self, other):
-
         same_resource_type = self.resource == other.resource
         same_kwargs = self.init_kwargs == other.init_kwargs
 
@@ -40,16 +38,11 @@ class SegmentationMethod:
     def __init__(self, experiment_name, **kwargs):
         self.experiment_name = experiment_name
 
-    def request_resource(self) -> Optional[SharedSegmentationResourceRequest]:
+    def request_resource(self) -> SharedSegmentationResourceRequest | None:
         pass
 
     def provide_resource(self, resource: SharedSegmentationResource):
         pass
 
     def segment(self, data: np.ndarray) -> np.ndarray:
-
         raise NotImplementedError("base_model does not implement segment")
-
-
-
-

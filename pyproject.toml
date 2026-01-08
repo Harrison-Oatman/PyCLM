@@ -71,7 +71,6 @@ explicit = true
 select = [
   "B",
   "I",
-  "PD",
   "RUF",
   "PT",
   "UP",
