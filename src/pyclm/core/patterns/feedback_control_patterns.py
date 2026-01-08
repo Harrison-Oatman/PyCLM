@@ -9,34 +9,31 @@ from scipy.ndimage import distance_transform_edt
 import tifffile
 
 class PerCellPatternMethod(PatternMethod):
+    """
+    Base class for the per-cell pattern methods. This class provides the basic structure for generating patterns
+    based on the properties of segmented cells. Subclasses should implement the `process_prop` method to define
+    how each cell's properties are used to generate the pattern, and include any additional parameters needed for the
+    specific pattern in their `__init__` method.
+    """
 
     name = "per_cell_base"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, voronoi=False, gradient=False, direction = 1, **kwargs):
-        super().__init__(experiment_name, camera_properties, **kwargs)
+    def __init__(self, channel=None, voronoi=False, gradient=False, direction = 1, **kwargs):
+        super().__init__(**kwargs)
 
         if channel is None:
-            raise AttributeError(f"{experiment_name}: PerCellPatternModels must be provided a "
-                                 f"segmentation channel in the .toml: e.g. channel = \"638\"")
-
-        self.channel = channel
-        self.seg_channel_id = None
+            raise AttributeError("PerCellPatternModels must be provided a "
+                                 "segmentation channel in the .toml: e.g. channel = \"638\"")
 
         self.gradient = gradient
         self.voronoi = voronoi
         self.direction = direction
 
-    def initialize(self, experiment):
-        super().initialize(experiment)
+        self.channel = channel
 
-        channel = experiment.channels.get(self.channel, None)
-
-        assert channel is not None, f"provided channel {self.channel} is not in experiment"
-
-        self.seg_channel_id = channel.channel_id
-        cell_seg_air = AcquiredImageRequest(channel.channel_id, False, True)
-
-        return [cell_seg_air]
+        # request the segmentation of the provided channel, to be used by self.generate.
+        # This will ensure that the data is available when generate is called.
+        self.add_requirement(channel_name=channel, seg=True)
 
     def prop_vector(self, prop, vec):
         """
@@ -86,9 +83,9 @@ class PerCellPatternMethod(PatternMethod):
 
         return out
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
 
-        seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
+        seg = context.segmentation(self.channel)
 
         if self.voronoi:
             px_dis = distance_transform_edt(seg == 0)
@@ -114,9 +111,9 @@ class RotateCcwModel(PerCellPatternMethod):
 
     name = "rotate_ccw"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+    def __init__(self, channel=None, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
     def process_prop(self, prop) -> np.ndarray:
 
@@ -132,9 +129,9 @@ class MoveOutModel(PerCellPatternMethod):
 
     name = "move_out"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+    def __init__(self, channel=None, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
     def process_prop(self, prop) -> np.ndarray:
 
@@ -150,9 +147,9 @@ class MoveInModel(PerCellPatternMethod):
 
     name = "move_in"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+    def __init__(self, channel=None, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
     def process_prop(self, prop) -> np.ndarray:
 
@@ -168,9 +165,9 @@ class MoveDownModel(PerCellPatternMethod):
 
     name = "move_down"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+    def __init__(self, channel=None, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
     def process_prop(self, prop) -> np.ndarray:
 
@@ -186,12 +183,12 @@ class BounceModel(PerCellPatternMethod):
 
     name = "fb_bounce"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, t_loop=60, **kwargs):
+    def __init__(self, channel=None, t_loop=60, **kwargs):
 
         self.t_loop_s = t_loop * 60
         self.down = True
 
-        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
     def process_prop(self, prop) -> np.ndarray:
 
@@ -202,9 +199,9 @@ class BounceModel(PerCellPatternMethod):
 
         return self.prop_vector(prop, vec)
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
 
-        t = data_dock.time_seconds
+        t = context.time
         t = t % self.t_loop_s
 
         halfway = self.t_loop_s / 2
@@ -212,20 +209,20 @@ class BounceModel(PerCellPatternMethod):
         if t > halfway:
             self.down = False
 
-        return super().generate(data_dock)
+        return super().generate(context)
 
 
 class DensityModel(PerCellPatternMethod):
 
     name = "density_gradient"
 
-    def __init__(self, experiment_name, camera_properties, channel=None, **kwargs):
+    def __init__(self, channel=None, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
 
-        seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
+        seg = context.segmentation(self.channel)
 
         if self.voronoi:
             px_dis = distance_transform_edt(seg == 0)

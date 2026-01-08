@@ -1,6 +1,6 @@
 import numpy as np
 
-from .pattern import DataDock, PatternMethod
+from .pattern import PatternMethod
 
 
 class WavePatternBase(PatternMethod):
@@ -16,7 +16,6 @@ class WavePatternBase(PatternMethod):
         return super().__new__(cls)
 
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
         print(f"Initializing {self.__class__.__name__}")
 
@@ -27,26 +26,21 @@ class StationaryWavePattern(WavePatternBase):
 
     name = "wave (stationary)"
 
-    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2, wave_speed=0, period=30, **kwargs):
+    def __init__(self, duty_cycle=0.2, wave_speed=0, period=30, **kwargs):
         """
         :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
                            vertical axis containing "on" pixels
         :param wave_speed: speed in um/min
         :param period: period in um
         """
-        super().__init__(experiment_name, camera_properties)
+        super().__init__(**kwargs)
 
         self.duty_cycle = duty_cycle
         self.wave_speed = 0
         self.period_space = period    # in um
         self.period_time = 0    # in minutes
 
-    def initialize(self, experiment):
-        super().initialize(experiment)
-
-        return []
-
-    def generate(self, data_dock: DataDock):
+    def generate(self, context):
 
         xx, yy = self.get_meshgrid()
         center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
@@ -64,7 +58,7 @@ class WavePattern(WavePatternBase):
 
     name = "wave"
 
-    def __init__(self, experiment_name, camera_properties, duty_cycle=0.2, wave_speed=1, period=30, direction = 1, **kwargs):
+    def __init__(self, duty_cycle=0.2, wave_speed=1, period=30, direction = 1, **kwargs):
         """
         :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
                            radial axis containing "on" pixels
@@ -72,7 +66,7 @@ class WavePattern(WavePatternBase):
         :param period: period in um
         :param direction: movement in/out relative to the center. 1 is out; -1 is in 
         """
-        super().__init__(experiment_name, camera_properties)
+        super().__init__(**kwargs)
 
         self.duty_cycle = duty_cycle
         self.wave_speed = wave_speed
@@ -80,14 +74,9 @@ class WavePattern(WavePatternBase):
         self.period_time = period / wave_speed    # in minutes
         self.direction = direction
 
-    def initialize(self, experiment):
-        super().initialize(experiment)
+    def generate(self, context):
 
-        return []
-
-    def generate(self, data_dock: DataDock):
-
-        t = data_dock.time_seconds / 60
+        t = context.time / 60
 
         xx, yy = self.get_meshgrid()
         center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2

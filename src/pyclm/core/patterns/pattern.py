@@ -1,7 +1,7 @@
 from ..experiments import Experiment
 from ..datatypes import AcquisitionData, SegmentationData
 import logging
-from typing import NamedTuple, Union
+from typing import NamedTuple, Union, Any
 from uuid import uuid4, UUID
 from collections import defaultdict
 from pathlib import Path
@@ -75,24 +75,85 @@ class DataDock:
         return len(self.get_awaiting()) == 0
 
 
+class PatternContext:
+    def __init__(self, data_dock: DataDock, experiment: Experiment):
+        self._dock = data_dock
+        self._experiment = experiment
+        self._channel_map = {name: ch.channel_id for name, ch in experiment.channels.items()}
+
+    @property
+    def time(self) -> float:
+        return self._dock.time_seconds
+
+    def _get_channel_id(self, channel_name: str) -> UUID:
+        if channel_name not in self._channel_map:
+            raise ValueError(f"Channel '{channel_name}' not found in experiment.")
+        return self._channel_map[channel_name]
+
+    def raw(self, channel_name: str) -> np.ndarray:
+        """Get raw image for a channel."""
+        cid = self._get_channel_id(channel_name)
+        if cid not in self._dock.data or "raw" not in self._dock.data[cid]:
+             raise ValueError(f"Raw data for channel '{channel_name}' was not requested.")
+        data = self._dock.data[cid]["raw"]
+        return data.data if data else None
+
+    def segmentation(self, channel_name: str) -> np.ndarray:
+        """Get segmentation mask for a channel."""
+        cid = self._get_channel_id(channel_name)
+        if cid not in self._dock.data or "seg" not in self._dock.data[cid]:
+             raise ValueError(f"Segmentation data for channel '{channel_name}' was not requested.")
+        data = self._dock.data[cid]["seg"]
+        return data.data if data else None
+
+
+
 class PatternMethod:
 
     name = "base"
 
-    def __init__(self, experiment_name, camera_properties: CameraProperties, **kwargs):
-        self.experiment = experiment_name
+    def __init__(self, experiment_name=None, camera_properties: CameraProperties=None, **kwargs):
+        # Support legacy init where these are passed
+        self.experiment_name = experiment_name
+        self.camera_properties = camera_properties
+        if camera_properties:
+            self.pixel_size_um = camera_properties.pixel_size_um
+            self.pattern_shape = (camera_properties.roi.height, camera_properties.roi.width)
+        else:
+            self.pixel_size_um = 1.0
+            self.pattern_shape = (100, 100) # Default placeholders
+        
+        self.binning = 1
+        self._requirements_list = [] # List of (channel_name, raw, seg)
+        self._experiment_ref = None
+
+    def configure_system(self, experiment_name: str, camera_properties: CameraProperties, experiment: Experiment):
+        """Called by the system to inject dependencies."""
+        self.experiment_name = experiment_name
         self.camera_properties = camera_properties
         self.pixel_size_um = camera_properties.pixel_size_um
         self.pattern_shape = (camera_properties.roi.height, camera_properties.roi.width)
-        self.binning = 1
+        self._experiment_ref = experiment
+
+    def add_requirement(self, channel_name: str, raw: bool = False, seg: bool = False):
+        """Declarative way to add requirements."""
+        self._requirements_list.append((channel_name, raw, seg))
 
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
+        
+        # If user used add_requirement, process them
+        reqs = []
+        for name, needs_raw, needs_seg in self._requirements_list:
+            ch = experiment.channels.get(name)
+            if ch:
+                reqs.append(AcquiredImageRequest(ch.channel_id, needs_raw, needs_seg))
+            else:
+                logger.warning(f"Pattern {self.name} requested unknown channel {name}")
 
         binning = experiment.stimulation.binning
-
         self.update_binning(binning)
-
-        return []
+        
+        return reqs
 
     def get_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
         h, w = self.pattern_shape
@@ -104,7 +165,10 @@ class PatternMethod:
 
         return xx, yy
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, data_dock: Union[DataDock, PatternContext]) -> np.ndarray:
+        # If passed PatternContext, user is using new API.
+        # But if user implemented old generate(self, data_dock: DataDock), we need to support that.
+        # This method is called by the system.
         raise NotImplementedError
 
     def update_binning(self, binning: int):

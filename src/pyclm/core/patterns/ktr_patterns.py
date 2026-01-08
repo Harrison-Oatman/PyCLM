@@ -9,35 +9,23 @@ class NucleusControlMethod(PatternMethod):
 
     name = "nucleus_control_base"
 
-    def __init__(self, experiment_name, camera_properties, nuc_channel=None, **kwargs):
-        super().__init__(experiment_name, camera_properties, **kwargs)
+    def __init__(self, channel=None, **kwargs):
+        super().__init__(**kwargs)
 
-        if nuc_channel is None:
-            raise AttributeError(f"{experiment_name}: PerCellPatternModels must be provided a "
-                                 f"segmentation channel in the .toml: e.g. nuc_channel = \"545\"")
+        if channel is None:
+            raise AttributeError("NucleusControlMethod must be provided a "
+                                 "segmentation channel in the .toml: e.g. nuc_channel = \"545\"")
 
-        self.nuc_channel = nuc_channel
-        self.seg_channel_id = None
-
-    def initialize(self, experiment):
-        super().initialize(experiment)
-
-        channel = experiment.channels.get(self.nuc_channel, None)
-
-        assert channel is not None, f"provided channel {self.nuc_channel} is not in experiment"
-
-        self.seg_channel_id = channel.channel_id
-        cell_seg_air = AcquiredImageRequest(channel.channel_id, True, True)
-
-        return [cell_seg_air]
+        self.channel = channel
+        self.add_requirement(channel, raw=True, seg=True)
 
     def process_prop(self, prop):
         return prop.image
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
 
-        seg: np.ndarray = data_dock.data[self.seg_channel_id]["seg"].data
-        raw: np.ndarray = data_dock.data[self.seg_channel_id]["raw"].data
+        seg = context.segmentation(self.channel)
+        raw = context.raw(self.channel)
 
         h, w = self.pattern_shape
 
@@ -57,9 +45,9 @@ class BinaryNucleusClampModel(NucleusControlMethod):
 
     name = "binary_nucleus_clamp"
 
-    def __init__(self, experiment_name, camera_properties, nuc_channel, clamp_target, **kwargs):
+    def __init__(self, channel, clamp_target, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, nuc_channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
         self.clamp_target = clamp_target
 
@@ -74,10 +62,10 @@ class CenteredImageModel(NucleusControlMethod):
 
     name = "centered_image"
 
-    def __init__(self, experiment_name, camera_properties, nuc_channel="545", tif_path=None,
+    def __init__(self, channel="545", tif_path=None,
                  min_intensity=2000, max_intensity=5000, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, nuc_channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
         self.img = tifffile.imread(tif_path)
         self.min_intensity = min_intensity
@@ -135,27 +123,27 @@ class CenteredImageModel(NucleusControlMethod):
 
         return prop.image
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
 
         if self.target_image is None:
             self.make_target_image()
 
-        return super().generate(data_dock)
+        return super().generate(context)
 
 
 class GlobalCycleModel(NucleusControlMethod):
 
     name = "global_cycle"
 
-    def __init__(self, experiment_name, camera_properties, nuc_channel, period_m=10, **kwargs):
+    def __init__(self, channel, period_m=10, **kwargs):
 
-        super().__init__(experiment_name, camera_properties, nuc_channel, **kwargs)
+        super().__init__(channel=channel, **kwargs)
 
         self.period_s = period_m * 60
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
 
-        t = data_dock.time_seconds
+        t = context.time
 
         is_on = ((t // self.period_s) % 2) == 0
 

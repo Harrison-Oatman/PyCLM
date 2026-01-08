@@ -6,7 +6,7 @@ from ..queues import AllQueues
 from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
-from .pattern import PatternReview, PatternMethod, PatternMethodReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
+from .pattern import PatternReview, PatternMethod, PatternMethodReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties, PatternContext
 from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothMethod
 from .static_patterns import CirclePattern, FullOnPattern
 from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel
@@ -97,15 +97,21 @@ class PatternProcess:
 
         assert isinstance(model, PatternMethod), f"self.models[{'experiment_name'}] is not a PatternMethod"
 
-        if isinstance(model, PatternMethodReturnsSLM):
-            slm_pattern = model.generate(data_dock)
+        # Create context wrapper
 
+        # We assume _experiment_ref is available. If not, we might crash, which is acceptable for alpha breakage.
+        # Ideally, we ensure configure_system is called.
+        if model._experiment_ref is None:
+             raise RuntimeError(f"Model {model.name} for {experiment_name} was not properly configured with an experiment reference.")
+        
+        context = PatternContext(data_dock, model._experiment_ref)
+
+        if isinstance(model, PatternMethodReturnsSLM):
+            slm_pattern = model.generate(context)
             self.slm.put(CameraPattern(experiment_name, slm_pattern, slm_coords=True))
 
         else:
-
-            pattern = model.generate(data_dock)
-
+            pattern = model.generate(context)
             self.slm.put(CameraPattern(experiment_name, pattern, slm_coords=False, binning=model.binning))
 
     def dock_string(self, experiment_name, t):
