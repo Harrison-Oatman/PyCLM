@@ -1,25 +1,39 @@
-from ..experiments import Experiment
-from ..datatypes import AcquisitionData, SegmentationData
 import logging
-from typing import NamedTuple, Union, Any
-from uuid import uuid4, UUID
 from collections import defaultdict
 from pathlib import Path
-from h5py import File
+from typing import Any, NamedTuple, Union
+from uuid import UUID, uuid4
+
 import numpy as np
+from h5py import File
 from natsort import natsorted
+
+from ..datatypes import AcquisitionData, SegmentationData
+from ..experiments import Experiment
 
 logger = logging.getLogger(__name__)
 
-ROI = NamedTuple("ROI", [("x_offset", int), ("y_offset", int), ("width", int), ("height", int)])
-CameraProperties = NamedTuple("CameraProperties", [("roi", ROI), ("pixel_size_um", float)])
-AcquiredImageRequest = NamedTuple("AcquiredImageRequest", [("id", UUID), ("needs_raw", bool), ("needs_seg", bool)])
+
+class ROI(NamedTuple):
+    x_offset: int
+    y_offset: int
+    width: int
+    height: int
+
+
+class CameraProperties(NamedTuple):
+    roi: ROI
+    pixel_size_um: float
+
+
+class AcquiredImageRequest(NamedTuple):
+    id: UUID
+    needs_raw: bool
+    needs_seg: bool
 
 
 class DataDock:
-
     def __init__(self, time_seconds, requirements: list[AcquiredImageRequest]):
-
         self.time_seconds = time_seconds
         self.requirements = requirements
         self.data = defaultdict(dict)
@@ -34,31 +48,32 @@ class DataDock:
         self.complete = self.check_complete()
 
     def add_raw(self, data: AcquisitionData):
-
         channel_id = data.channel_id
         # ensure channel id was expected
         assert channel_id in self.data, "unexpected data passed to pattern module"
 
         # ensure raw data was expected and not already passed
         assert "raw" in self.data[channel_id], "raw data being passed, but not expected"
-        assert self.data[channel_id]["raw"] is None, f"expected none, found {self.data[channel_id]['raw']}"
+        assert self.data[channel_id]["raw"] is None, (
+            f"expected none, found {self.data[channel_id]['raw']}"
+        )
 
         self.data[channel_id]["raw"] = data
 
     def add_seg(self, data: SegmentationData):
-
         channel_id = data.channel_id
         # ensure channel id was expected
         assert channel_id in self.data, "unexpected data passed to pattern module"
 
         # ensure raw data was expected and not already passed
         assert "seg" in self.data[channel_id], "seg data being passed, but not expected"
-        assert self.data[channel_id]["seg"] is None, f"expected none, found {self.data[channel_id]['seg']}"
+        assert self.data[channel_id]["seg"] is None, (
+            f"expected none, found {self.data[channel_id]['seg']}"
+        )
 
         self.data[channel_id]["seg"] = data
 
     def get_awaiting(self):
-
         awaiting = []
 
         for channel in self.data:
@@ -71,7 +86,6 @@ class DataDock:
         return awaiting
 
     def check_complete(self):
-
         return len(self.get_awaiting()) == 0
 
 
@@ -79,7 +93,9 @@ class PatternContext:
     def __init__(self, data_dock: DataDock, experiment: Experiment):
         self._dock = data_dock
         self._experiment = experiment
-        self._channel_map = {name: ch.channel_id for name, ch in experiment.channels.items()}
+        self._channel_map = {
+            name: ch.channel_id for name, ch in experiment.channels.items()
+        }
 
     @property
     def time(self) -> float:
@@ -94,7 +110,9 @@ class PatternContext:
         """Get raw image for a channel."""
         cid = self._get_channel_id(channel_name)
         if cid not in self._dock.data or "raw" not in self._dock.data[cid]:
-             raise ValueError(f"Raw data for channel '{channel_name}' was not requested.")
+            raise ValueError(
+                f"Raw data for channel '{channel_name}' was not requested."
+            )
         data = self._dock.data[cid]["raw"]
         return data.data if data else None
 
@@ -102,32 +120,42 @@ class PatternContext:
         """Get segmentation mask for a channel."""
         cid = self._get_channel_id(channel_name)
         if cid not in self._dock.data or "seg" not in self._dock.data[cid]:
-             raise ValueError(f"Segmentation data for channel '{channel_name}' was not requested.")
+            raise ValueError(
+                f"Segmentation data for channel '{channel_name}' was not requested."
+            )
         data = self._dock.data[cid]["seg"]
         return data.data if data else None
 
 
-
 class PatternMethod:
-
     name = "base"
 
-    def __init__(self, experiment_name=None, camera_properties: CameraProperties=None, **kwargs):
+    def __init__(
+        self, experiment_name=None, camera_properties: CameraProperties = None, **kwargs
+    ):
         # Support legacy init where these are passed
         self.experiment_name = experiment_name
         self.camera_properties = camera_properties
         if camera_properties:
             self.pixel_size_um = camera_properties.pixel_size_um
-            self.pattern_shape = (camera_properties.roi.height, camera_properties.roi.width)
+            self.pattern_shape = (
+                camera_properties.roi.height,
+                camera_properties.roi.width,
+            )
         else:
             self.pixel_size_um = 1.0
-            self.pattern_shape = (100, 100) # Default placeholders
-        
+            self.pattern_shape = (100, 100)  # Default placeholders
+
         self.binning = 1
-        self._requirements_list = [] # List of (channel_name, raw, seg)
+        self._requirements_list = []  # List of (channel_name, raw, seg)
         self._experiment_ref = None
 
-    def configure_system(self, experiment_name: str, camera_properties: CameraProperties, experiment: Experiment):
+    def configure_system(
+        self,
+        experiment_name: str,
+        camera_properties: CameraProperties,
+        experiment: Experiment,
+    ):
         """Called by the system to inject dependencies."""
         self.experiment_name = experiment_name
         self.camera_properties = camera_properties
@@ -140,7 +168,6 @@ class PatternMethod:
         self._requirements_list.append((channel_name, raw, seg))
 
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-        
         # If user used add_requirement, process them
         reqs = []
         for name, needs_raw, needs_seg in self._requirements_list:
@@ -152,7 +179,7 @@ class PatternMethod:
 
         binning = experiment.stimulation.binning
         self.update_binning(binning)
-        
+
         return reqs
 
     def get_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
@@ -165,45 +192,55 @@ class PatternMethod:
 
         return xx, yy
 
-    def generate(self, data_dock: Union[DataDock, PatternContext]) -> np.ndarray:
+    def generate(self, data_dock: DataDock | PatternContext) -> np.ndarray:
         # If passed PatternContext, user is using new API.
         # But if user implemented old generate(self, data_dock: DataDock), we need to support that.
         # This method is called by the system.
         raise NotImplementedError
 
     def update_binning(self, binning: int):
-
         binning_rescale = binning / self.binning
 
         self.pixel_size_um = self.pixel_size_um * binning_rescale
-        self.pattern_shape = (self.pattern_shape[0] // binning_rescale, self.pattern_shape[1] // binning_rescale)
+        self.pattern_shape = (
+            self.pattern_shape[0] // binning_rescale,
+            self.pattern_shape[1] // binning_rescale,
+        )
 
-        logger.info(f"model {self.name} updated pixel size (um) to {self.pixel_size_um}")
+        logger.info(
+            f"model {self.name} updated pixel size (um) to {self.pixel_size_um}"
+        )
         logger.info(f"model {self.name} updated pattern_shape to {self.pattern_shape}")
 
         self.binning = binning
 
 
 class PatternMethodReturnsSLM(PatternMethod):
-
     pass
 
 
 class PatternReview(PatternMethodReturnsSLM):
-
     name = "pattern_review"
 
-    def __init__(self, experiment_name, camera_properties, h5fp: Union[str, Path] = None, channel="545", **kwargs):
+    def __init__(
+        self,
+        experiment_name,
+        camera_properties,
+        h5fp: str | Path | None = None,
+        channel="545",
+        **kwargs,
+    ):
         super().__init__(experiment_name, camera_properties)
 
         if h5fp is None:
-            raise ValueError("pattern_review model requires specifying h5fp (h5 filepath)")
+            raise ValueError(
+                "pattern_review model requires specifying h5fp (h5 filepath)"
+            )
 
         self.fp = Path(h5fp)
         self.channel_name = f"channel_{channel}"
 
         with File(str(self.fp), "r") as f:
-
             keys = list(f.keys())
 
         self.keys = natsorted(keys)
@@ -212,19 +249,14 @@ class PatternReview(PatternMethodReturnsSLM):
         return []
 
     def generate(self, data_dock: DataDock) -> np.ndarray:
-
         with File(str(self.fp), "r") as f:
-
             while len(self.keys) > 0:
-
                 key = self.keys.pop(0)
 
                 if self.channel_name in f[key]:
-
                     return np.array(f[key]["stim_aq"]["dmd"])
 
         return np.array([])
-
 
 
 if __name__ == "__main__":
