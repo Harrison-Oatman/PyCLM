@@ -50,6 +50,9 @@ dev = [
     { include-group = "analysis" },
     { include-group = "docs" },
 ]
+test = [
+    "pytest>=8.4.2",
+]
 
 [tool.uv.sources]
 torch = [
@@ -63,6 +66,16 @@ torchvision = [
 name = "pytorch-cu121"
 url = "https://download.pytorch.org/whl/cu121"
 explicit = true
+
+[tool.ruff.lint]
+select = [
+  "B",
+  "I",
+  "PD",
+  "RUF",
+  "PT",
+  "UP",
+]
 
 [project.scripts]
 pyclm = "pyclm.__main__:main"
