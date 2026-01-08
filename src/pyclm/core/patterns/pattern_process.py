@@ -1,23 +1,36 @@
 import logging
-
 from threading import Event
+from typing import ClassVar
 
-from ..queues import AllQueues
-from ..datatypes import CameraPattern, AcquisitionData, SegmentationData
+from ..datatypes import AcquisitionData, CameraPattern, SegmentationData
 from ..experiments import Experiment
 from ..messages import Message
-from .pattern import PatternReview, PatternMethod, PatternMethodReturnsSLM, DataDock, AcquiredImageRequest, CameraProperties
-from .bar_patterns import BouncingBarPattern, BarPatternBase, SawToothMethod
+from ..queues import AllQueues
+from .bar_patterns import BarPatternBase, BouncingBarPattern, SawToothMethod
+from .feedback_control_patterns import (
+    BounceModel,
+    MoveDownModel,
+    MoveInModel,
+    MoveOutModel,
+    RotateCcwModel,
+)
+from .ktr_patterns import BinaryNucleusClampModel, CenteredImageModel, GlobalCycleModel
+from .pattern import (
+    AcquiredImageRequest,
+    CameraProperties,
+    DataDock,
+    PatternContext,
+    PatternMethod,
+    PatternMethodReturnsSLM,
+    PatternReview,
+)
 from .static_patterns import CirclePattern, FullOnPattern
-from .feedback_control_patterns import RotateCcwModel, MoveInModel, MoveDownModel, MoveOutModel, BounceModel
-from .ktr_patterns import BinaryNucleusClampModel, GlobalCycleModel, CenteredImageModel
 
 logger = logging.getLogger(__name__)
 
 
 class PatternProcess:
-
-    known_models = {
+    known_models: ClassVar = {
         "circle": CirclePattern,
         "bar": BarPatternBase,
         "pattern_review": PatternReview,
@@ -34,7 +47,7 @@ class PatternProcess:
         "centered_image": CenteredImageModel,
     }
 
-    def __init__(self, aq: AllQueues, stop_event: Event = None):
+    def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         self.stop_event = stop_event
         self.inbox = aq.manager_to_pattern
         self.manager = aq.pattern_to_manager
@@ -42,8 +55,8 @@ class PatternProcess:
 
         self.from_seg = aq.seg_to_pattern
         self.from_raw = aq.outbox_to_pattern
-        
-        self.stream_count = 0 
+
+        self.stream_count = 0
 
         self.camera_properties = None
         self.initialized = False
@@ -57,13 +70,16 @@ class PatternProcess:
         self.initialized = True
 
     def request_method(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-
         method_name = experiment.pattern.method_name
 
         model_class: type = self.known_models.get(method_name)
 
-        assert model_class is not None, f"method {method_name} is not a registered method"
-        assert issubclass(model_class, PatternMethod), f"{method_name} is not a PatternMethod"
+        assert model_class is not None, (
+            f"method {method_name} is not a registered method"
+        )
+        assert issubclass(model_class, PatternMethod), (
+            f"{method_name} is not a PatternMethod"
+        )
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.pattern.kwargs
@@ -72,13 +88,14 @@ class PatternProcess:
 
         self.models[experiment_name] = model
 
-        logger.info(f"initializing pattern model \"{method_name}\"")
+        logger.info(f'initializing pattern model "{method_name}"')
 
         return model.initialize(experiment)
 
-    def register_method(self, model: type, name: str = None):
-
-        assert issubclass(model, PatternMethod), "model must be a subclass of PatternMethod"
+    def register_method(self, model: type, name: str | None = None):
+        assert issubclass(model, PatternMethod), (
+            "model must be a subclass of PatternMethod"
+        )
 
         model_name = model.name
         if name is not None:
@@ -90,41 +107,51 @@ class PatternProcess:
         self.known_models[model_name] = model
 
     def run_model(self, experiment_name, dockname):
-
         data_dock = self.docks.pop(dockname)
 
         model = self.models.get(experiment_name, None)
 
-        assert isinstance(model, PatternMethod), f"self.models[{'experiment_name'}] is not a PatternMethod"
+        assert isinstance(model, PatternMethod), (
+            f"self.models[{'experiment_name'}] is not a PatternMethod"
+        )
+
+        # Create context wrapper
+
+        # We assume _experiment_ref is available. If not, we might crash, which is acceptable for alpha breakage.
+        # Ideally, we ensure configure_system is called.
+        if model._experiment_ref is None:
+            raise RuntimeError(
+                f"Model {model.name} for {experiment_name} was not properly configured with an experiment reference."
+            )
+
+        context = PatternContext(data_dock, model._experiment_ref)
 
         if isinstance(model, PatternMethodReturnsSLM):
-            slm_pattern = model.generate(data_dock)
-
+            slm_pattern = model.generate(context)
             self.slm.put(CameraPattern(experiment_name, slm_pattern, slm_coords=True))
 
         else:
-
-            pattern = model.generate(data_dock)
-
-            self.slm.put(CameraPattern(experiment_name, pattern, slm_coords=False, binning=model.binning))
+            pattern = model.generate(context)
+            self.slm.put(
+                CameraPattern(
+                    experiment_name, pattern, slm_coords=False, binning=model.binning
+                )
+            )
 
     def dock_string(self, experiment_name, t):
         return f"{experiment_name}_{t:05d}"
 
     def check(self, experiment_name, dockname):
-
         dock: DataDock = self.docks.get(dockname)
 
         if dock.check_complete():
             self.run_model(experiment_name, dockname)
 
     def handle_message(self, message: Message):
-
         match message.message:
-
             case "close":
-                return False 
-                
+                return False
+
             case "stream_close":
                 print("pattern received stream close")
 
@@ -132,13 +159,13 @@ class PatternProcess:
                 if self.stream_count >= 2:
                     # Signal SLMBuffer that we are done
                     from ..messages import StreamCloseMessage
+
                     out_msg = StreamCloseMessage()
                     self.slm.put(out_msg)
                     return True
                 return False
 
             case "request_pattern":
-
                 assert isinstance(message, RequestPattern)
 
                 req = message.requirements
@@ -165,7 +192,7 @@ class PatternProcess:
             if self.stop_event and self.stop_event.is_set():
                 print("force stopping pattern process")
                 break
-            
+
             if not self.inbox.empty():
                 msg = self.inbox.get()
 
@@ -174,9 +201,10 @@ class PatternProcess:
 
             if not self.from_raw.empty():
                 data = self.from_raw.get()
-                
+
                 if isinstance(data, Message):
-                    if self.handle_message(data): return
+                    if self.handle_message(data):
+                        return
                 else:
                     assert isinstance(data, AcquisitionData)
                     name = data.event.experiment_name
@@ -190,20 +218,21 @@ class PatternProcess:
 
             if not self.from_seg.empty():
                 data = self.from_seg.get()
-                
+
                 if isinstance(data, Message):
-                    if self.handle_message(data): return
+                    if self.handle_message(data):
+                        return
                 else:
                     assert isinstance(data, SegmentationData)
                     name = data.event.experiment_name
                     t_index = data.event.t_index
-    
+
                     dockname = self.dock_string(name, t_index)
-    
+
                     print(f"seg found {dockname}")
-    
+
                     self.docks[dockname].add_seg(data)
-    
+
                     self.check(name, dockname)
 
 
@@ -216,11 +245,14 @@ class RequestPattern(Message):
 
     message = "request_pattern"
 
-    def __init__(self, t_index, time_sec, experiment_name: str, requirements: list[AcquiredImageRequest]):
-
+    def __init__(
+        self,
+        t_index,
+        time_sec,
+        experiment_name: str,
+        requirements: list[AcquiredImageRequest],
+    ):
         self.t_index = t_index
         self.time_sec = time_sec
         self.experiment_name = experiment_name
         self.requirements = requirements
-
-

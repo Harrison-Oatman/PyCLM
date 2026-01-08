@@ -1,6 +1,6 @@
 import numpy as np
 
-from .pattern import PatternMethod, DataDock
+from .pattern import PatternMethod
 
 
 class CirclePattern(PatternMethod):
@@ -10,31 +10,24 @@ class CirclePattern(PatternMethod):
 
     name = "circle"
 
-    def __init__(self, experiment_name, camera_properties, rad=1, **kwargs):
-        super().__init__(experiment_name, camera_properties)
+    def __init__(self, rad=1, **kwargs):
+        super().__init__(**kwargs)
 
         self.rad = rad
 
-    def initialize(self, experiment):
-
-        super().initialize(experiment)
-
-        return []
-
-    def generate(self, data_dock: DataDock):
-
+    def generate(self, context):
         h, w = self.pattern_shape
 
-        center_x = self.pixel_size_um * w / 2.
-        center_y = self.pixel_size_um * h / 2.
+        center_x = self.pixel_size_um * w / 2.0
+        center_y = self.pixel_size_um * h / 2.0
 
         xx, yy = self.get_meshgrid()
 
         print(h, w)
 
-        # pattern = np.ones((int(h), int(w)), dtype=np.float16)
-
-        return (((xx - center_x)**2 + (yy - center_y)**2) < (self.rad**2)).astype(np.float16)
+        return (((xx - center_x) ** 2 + (yy - center_y) ** 2) < (self.rad**2)).astype(
+            np.float16
+        )
 
 
 class FullOnPattern(PatternMethod):
@@ -44,15 +37,10 @@ class FullOnPattern(PatternMethod):
 
     name = "full_on"
 
-    def __init__(self, experiment_name, camera_properties, **kwargs):
-        super().__init__(experiment_name, camera_properties)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    def initialize(self, experiment):
-        super().initialize(experiment)
-        return []
-
-    def generate(self, data_dock: DataDock):
-
+    def generate(self, context):
         h, w = self.pattern_shape
         pattern = np.ones((int(h), int(w)), dtype=np.float16)
 
