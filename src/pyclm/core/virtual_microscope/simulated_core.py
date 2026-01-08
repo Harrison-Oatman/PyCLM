@@ -99,10 +99,6 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         return str(self._properties.get(label, {}).get(name, ""))
     
     def describe(self) -> str:
-        """
-        Simulated equivalent of mmcore.describe().
-        Returns a human-readable description and also prints it (like MM does).
-        """
         cam = self._camera_name
         roi = self._roi
         binning = self._properties.get(cam, {}).get("Binning", "1x1")
