@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 class Controller:
 
-    def __init__(self, config="MMConfig_demo.cfg"):
-        if (True):
+    def __init__(self, config="MMConfig_demo.cfg", dry=False):
+        if (not dry):
             # Applies if config specifies that a real microscope is in use
             self.core = RealMicroscopeCore()
         else:
             # image_source = TimeSeriesImageSource.from_tiff_stack(Path("path/to/stack.tif"), loop=True)
-            image_source = TimeSeriesImageSource.from_folder(Path("path/to/folder"), pattern="*.tif", loop=True)
+            image_source = TimeSeriesImageSource.from_folder(Path("tif-source"), pattern="*.tif", loop=True)
             self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()

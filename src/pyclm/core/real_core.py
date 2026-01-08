@@ -42,6 +42,18 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
 
     def getAllowedPropertyValues(self, device: str, prop_name: str) -> Sequence[str]:
         return self._core.getAllowedPropertyValues(device, prop_name)
+    
+    def describe(self) -> str:
+        return self._core.describe()
+    
+    def setFocusDevice(self, label: str) -> None:
+        self._core.setFocusDevice(label)
+
+    def getAvailableConfigGroups(self) -> Sequence[str]:
+        return self._core.getAvailableConfigGroups()
+
+    def getConfigGroupObject(self, group: str, include_read_only: bool = False):
+        return self._core.getConfigGroupObject(group, include_read_only)
 
     # Camera-related
     def getCameraDevice(self) -> str:

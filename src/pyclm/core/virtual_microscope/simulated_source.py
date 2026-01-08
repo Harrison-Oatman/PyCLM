@@ -9,7 +9,7 @@ class TimeSeriesImageSource:
     def __init__(self, frames: List[np.ndarray], loop: bool = True):
         if not frames:
             raise ValueError("TimeSeriesImageSource requires at least one frame.")
-        self._frames = frames
+        self._frames = [self._normalize_frame(f) for f in frames]
         self._loop = loop
         self._idx = 0
 
@@ -18,14 +18,28 @@ class TimeSeriesImageSource:
         data = tiff.imread(str(path))
         if data.ndim == 2:
             frames = [data]
+        elif data.ndim == 3:
+            if data.shape[0] <= 4:
+                frames = [data[i] for i in range(data.shape[0])]
+            else:
+                frames = [data]
+
         else:
-            frames = [data[i] for i in range(data.shape[0])]
+            raise ValueError(f"Unsupported TIFF shape: {data.shape}")
         return cls(frames, loop=loop)
 
     @classmethod
     def from_folder(cls, folder: Path, pattern: str = "*.tif", loop: bool = True) -> "TimeSeriesImageSource":
         paths = sorted(folder.glob(pattern))
-        frames = [tiff.imread(str(p)) for p in paths]
+        frames = []
+        for p in paths:
+            data = tiff.imread(str(p))
+            if data.ndim == 2:
+                frames.append(data)
+            elif data.ndim == 3 and data.shape[0] <= 4:
+                frames.append(data[0])
+            else:
+                frames.append(data)
         return cls(frames, loop=loop)
 
     @property
@@ -40,4 +54,10 @@ class TimeSeriesImageSource:
                 self._idx = 0
             else:
                 self._idx = len(self._frames) - 1
+        return frame
+    
+    def _normalize_frame(self, frame: np.ndarray) -> np.ndarray:
+        if frame.ndim == 3:
+            if frame.shape[0] <= 4:
+                frame = frame[0]
         return frame

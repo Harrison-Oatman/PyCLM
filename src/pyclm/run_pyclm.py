@@ -32,7 +32,7 @@ def set_logging(experiment_directory: Path):
 
 def run_pyclm(experiment_directory, config_path=None,
               segmentation_methods: Optional[dict[str, type[SegmentationMethod]]]= None,
-              pattern_methods: Optional[dict[str, type[PatternMethod]]]= None):
+              pattern_methods: Optional[dict[str, type[PatternMethod]]]= None, dry: bool = False,):
     """
     Run a pyclm experiment from a given directory and configuration file.
     :param experiment_directory: directory containing experiment files, including schedule.toml. [experiment].toml files,
@@ -69,7 +69,7 @@ def run_pyclm(experiment_directory, config_path=None,
 
     base_path = experiment_directory
 
-    c = Controller(config["config_path"])
+    c = Controller(config["config_path"], dry)
 
     # register any custom methods
     if segmentation_methods is not None:
