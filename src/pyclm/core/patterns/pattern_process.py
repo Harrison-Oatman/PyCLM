@@ -126,12 +126,13 @@ class PatternProcess:
                 return False 
                 
             case "stream_close":
+                print("pattern received stream close")
+
                 self.stream_count += 1
                 if self.stream_count >= 2:
                     # Signal SLMBuffer that we are done
-                    from ..messages import Message
-                    out_msg = Message()
-                    out_msg.message = "stream_close"
+                    from ..messages import StreamCloseMessage
+                    out_msg = StreamCloseMessage()
                     self.slm.put(out_msg)
                     return True
                 return False
@@ -162,6 +163,7 @@ class PatternProcess:
     def process(self):
         while True:
             if self.stop_event and self.stop_event.is_set():
+                print("force stopping pattern process")
                 break
             
             if not self.inbox.empty():

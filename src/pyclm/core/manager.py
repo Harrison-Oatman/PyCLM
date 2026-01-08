@@ -14,7 +14,7 @@ from .experiments import (PositionWithAutoFocus, ExperimentSchedule, TimeCourse,
                           Experiment, ImagingConfig)
 from .datatypes import AcquisitionData, CameraPattern, EventSLMPattern, GenericData, StimulationData, SegmentationData
 from .messages import (Message, UpdatePatternEventMessage, AcquisitionEventMessage, UpdatePositionEventMessage,
-                       UpdateZPositionMessage)
+                       UpdateZPositionMessage, StreamCloseMessage)
 from .patterns.pattern_process import RequestPattern
 from .patterns import AcquiredImageRequest
 from h5py import File
@@ -40,10 +40,13 @@ class DataPassingProcess(metaclass=ABCMeta):
         self.from_manager = None
         self.data_in = None
 
+        self.class_name = "data passing process"
+
     def process(self):
 
         while True:
             if self.stop_event and self.stop_event.is_set():
+                print(f"{self.class_name} force closing")
                 break
 
             if not self.from_manager.empty():
@@ -55,14 +58,18 @@ class DataPassingProcess(metaclass=ABCMeta):
                     break
 
             for data_channel in self.data_in:
+                # print(self.class_name, data_channel)
                 if not data_channel.empty():
                     data = data_channel.get()
 
                     if isinstance(data, Message):
+                        print(self.class_name, data.message)
                         must_break = self.handle_message(data)
 
                         if must_break:
-                            break
+
+                            print(f"{self.class_name} exiting from message")
+                            return True
 
                     assert isinstance(data, GenericData), \
                         f"Unexpected data type: {type(data)}, expected subtype of GenericData"
@@ -108,6 +115,8 @@ class MicroscopeOutbox(DataPassingProcess):
         self.base_path = base_path
         self.save_type = save_type
 
+        self.class_name = "microscope outbox"
+
     def handle_data(self, data):
         aq_event = data.event
 
@@ -136,13 +145,16 @@ class MicroscopeOutbox(DataPassingProcess):
             
             case "stream_close":
                 self.stream_count += 1
+
+                print("outbox received stream_close")
                 
                 # First stream close (Microscope)
                 if self.stream_count == 1:
                     logger.info("Outbox received stream_close from Microscope. Propagating to seg/pattern.")
-                    close_msg = Message()
-                    close_msg.message = "stream_close"
+                    close_msg = StreamCloseMessage()
                     self.seg_queue.put(close_msg)
+
+                    close_msg = StreamCloseMessage()
                     self.pattern_queue.put(close_msg)
                 
                 elif self.stream_count == 2:
@@ -218,6 +230,8 @@ class SLMBuffer(DataPassingProcess):
         
         self.manager_done = False
         self.pattern_done = False
+
+        self.class_name = "slm buffer"
 
     def initialize(self, shape: tuple[int, int], affine_transform: np.ndarray[Any, np.float32],
                    experiment_names: list[str]):
@@ -490,6 +504,7 @@ class Manager:
                         self.handle_message(msg)
 
                 if self.stop_event and self.stop_event.is_set():
+                    print("force stopping manager process")
                     return
 
             # iterate through each experiment

@@ -140,9 +140,14 @@ class SegmentationProcess:
                 return False 
                 
             case "stream_close":
-                # Outbox data stream close
-                self.to_pattern.put(message)
-                self.to_outbox.put(message)
+                logging.info("segmentation process received stream close from outbox. Sending to outbox and pattern")
+                from ..messages import StreamCloseMessage
+
+                close_msg = StreamCloseMessage()
+                self.to_pattern.put(close_msg)
+
+                close_msg = StreamCloseMessage()
+                self.to_outbox.put(close_msg)
                 return True
 
             case _:
@@ -152,6 +157,7 @@ class SegmentationProcess:
 
         while True:
             if self.stop_event and self.stop_event.is_set():
+                print("force closing segmentation process")
                 break
 
             if not self.inbox.empty():
@@ -165,6 +171,7 @@ class SegmentationProcess:
 
                 if isinstance(data, Message):
                      if self.handle_message(data):
+                         print("segmentation process closing")
                          return True
                 else:
                     assert isinstance(data, AcquisitionData)

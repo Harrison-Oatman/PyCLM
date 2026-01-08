@@ -64,6 +64,7 @@ class MicroscopeProcess:
 
         while True:
             if self.stop_event and self.stop_event.is_set():
+                print("force stopping microscope process")
                 break
 
             if self.inbox.empty():
@@ -88,9 +89,8 @@ class MicroscopeProcess:
 
                 case "close":
                     # Send stream close to outbox
-                    from .messages import Message
-                    msg = Message()
-                    msg.message = "stream_close"
+                    from .messages import StreamCloseMessage
+                    msg = StreamCloseMessage()
                     self.outbox.put(msg)
                     return 0
 

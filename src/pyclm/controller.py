@@ -3,7 +3,7 @@ import traceback
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED, ALL_COMPLETED
 from pathlib import Path
-from threading import Event
+from threading import Event, active_count
 
 from pymmcore_plus import CMMCorePlus
 
@@ -98,7 +98,7 @@ class Controller:
                 executor.submit(process.process): process 
                 for process in self.processes
             }
-            
+
             # manager should be first to finish in a successful run
             manager_future = None
             for f, p in future_to_process.items():
@@ -153,5 +153,8 @@ class Controller:
                     logger.warning("Overriding stop_event handling, cancelling futures.")
                     for f in future_to_process:
                         f.cancel()
-                
+
+                self.core.unloadAllDevices()
+                self.all_queues.close()
+
                 logger.info("Controller run finished.")

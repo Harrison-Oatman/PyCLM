@@ -41,6 +41,10 @@ class UpdatePositionEventMessage(Message):
     def __init__(self, event: UpdateStagePositionEvent):
         self.event = event
 
+class StreamCloseMessage(Message):
+
+     message = "stream_close"
+
 
 class UpdateZPositionMessage(Message):
     message = "update_z_position"
