@@ -41,15 +41,6 @@ class MicroscopeProcess(BaseProcess):
 
         self.warned_binning = False
 
-        # We handle msg manually in process override due to complex logic,
-        # or we could register it and use member vars for await/timeouts.
-        # Given the complexity of `process` (handling timeouts etc), we will OVERRIDE BaseProcess.process
-        # but replicate the "sleep if idle" behavior if we were polling multiple queues.
-        # But here only one inbox... actually `slm_queue` is read inside `handle_update_pattern_event`.
-
-        # For now, let's keep `process` mostly as is but add the sleep from BaseProcess if empty to be "nice"
-        # AND respect the BaseProcess structure.
-
     def declare_slm(self):
         core = self.core
         dev = core.getSLMDevice()
@@ -299,16 +290,12 @@ class MicroscopeProcess(BaseProcess):
 
         sleep(1.0)
 
-        # print(aq_event.position.get_z(), self.core.getPosition())
-
         logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
         image = self.snap()
         aq_event.completed_time = time()
         logger.info(f"{self.t(): .3f}| image acquired")
 
         aq_event.pixel_width_um = self.core.getPixelSizeUm()
-
-        # info(f"{self.t(): .3f}| unloading")
 
         if aq_event.needs_slm:
             data_out = StimulationData(
@@ -318,7 +305,6 @@ class MicroscopeProcess(BaseProcess):
             data_out = AcquisitionData(aq_event, image)
 
         self.outbox.put(data_out)
-        # info(f"{self.t(): .3f}| unloaded")
 
     def snap(self):
         core = self.core
@@ -330,11 +316,3 @@ class MicroscopeProcess(BaseProcess):
 
     def t(self):
         return time() - self.start
-
-        # tagged_image = core.getTaggedImage()
-        # pixels = np.reshape(tagged_image.pix,
-        #                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
-        #
-        # tags = tagged_image.tags
-        #
-        # return pixels, tags
