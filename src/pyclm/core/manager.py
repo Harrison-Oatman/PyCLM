@@ -18,6 +18,8 @@ import tifffile
 from cv2 import warpAffine
 from h5py import File
 
+from pyclm.core.pattern_process import RequestPattern
+
 from .datatypes import (
     AcquisitionData,
     CameraPattern,
@@ -35,7 +37,6 @@ from .experiments import (
     Experiment,
     ExperimentSchedule,
     ImagingConfig,
-    PositionWithAutoFocus,
     TimeCourse,
 )
 from .messages import (
@@ -47,7 +48,6 @@ from .messages import (
     UpdateZPositionMessage,
 )
 from .patterns import AcquiredImageRequest
-from .patterns.pattern_process import RequestPattern
 from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
@@ -55,51 +55,47 @@ logger = logging.getLogger(__name__)
 
 from threading import Event
 
+from .base_process import BaseProcess
 
-class DataPassingProcess(metaclass=ABCMeta):
+
+class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
+        super().__init__(stop_event, name="data passing process")
         self.all_queues = aq
-        self.stop_event = stop_event
 
         self.message_history = []
 
+        # Subclasses should set these or register queues manually
         self.from_manager = None
         self.data_in = None
 
-        self.class_name = "data passing process"
+    def initialize_queues(self):
+        # Helper to register standard queues if subclasses set attributes
+        if self.from_manager:
+            self.register_queue(self.from_manager, self.handle_message_wrapper)
 
-    def process(self):
-        while True:
-            if self.stop_event and self.stop_event.is_set():
-                print(f"{self.class_name} force closing")
-                break
+        if self.data_in:
+            for q in self.data_in:
+                self.register_queue(q, self.handle_data_wrapper)
 
-            if not self.from_manager.empty():
-                msg = self.from_manager.get()
+    def handle_message_wrapper(self, msg):
+        """Wrapper to handle return value logic expected by BaseProcess"""
+        if isinstance(msg, Message):
+            # BaseProcess expects True to stop
+            return self.handle_message(msg)
+        return False
 
-                must_break = self.handle_message(msg)
+    def handle_data_wrapper(self, data):
+        """Wrapper to handle data or message in data channel"""
+        if isinstance(data, Message):
+            print(self.name, data.message)
+            return self.handle_message(data)
 
-                if must_break:
-                    break
-
-            for data_channel in self.data_in:
-                # print(self.class_name, data_channel)
-                if not data_channel.empty():
-                    data = data_channel.get()
-
-                    if isinstance(data, Message):
-                        print(self.class_name, data.message)
-                        must_break = self.handle_message(data)
-
-                        if must_break:
-                            print(f"{self.class_name} exiting from message")
-                            return True
-
-                    assert isinstance(data, GenericData), (
-                        f"Unexpected data type: {type(data)}, expected subtype of GenericData"
-                    )
-
-                    self.handle_data(data)
+        assert isinstance(data, GenericData), (
+            f"Unexpected data type: {type(data)}, expected subtype of GenericData"
+        )
+        self.handle_data(data)
+        return False
 
     @abstractmethod
     def handle_data(self, data):
@@ -127,6 +123,7 @@ class MicroscopeOutbox(DataPassingProcess):
         stop_event: Event | None = None,
     ):
         super().__init__(aq, stop_event)
+        self.name = "microscope outbox"
 
         if base_path is None:
             base_path = Path().cwd()
@@ -145,7 +142,7 @@ class MicroscopeOutbox(DataPassingProcess):
         self.base_path = base_path
         self.save_type = save_type
 
-        self.class_name = "microscope outbox"
+        self.initialize_queues()
 
     def handle_data(self, data):
         aq_event = data.event
@@ -155,7 +152,7 @@ class MicroscopeOutbox(DataPassingProcess):
         if isinstance(data, SegmentationData):
             return
 
-        print(aq_event)
+        # print(aq_event)
 
         if aq_event.segment:
             self.seg_queue.put(data)
@@ -208,36 +205,39 @@ class MicroscopeOutbox(DataPassingProcess):
         if isinstance(data, SegmentationData):
             dset_name = r"seg"
 
-        if self.save_type == "tif":
-            fullpath = self.base_path / file_relpath / relpath
-            fullpath.mkdir(parents=True)
+        try:
+            if self.save_type == "tif":
+                fullpath = self.base_path / file_relpath / relpath
+                fullpath.mkdir(parents=True, exist_ok=True)
 
-            tifffile.imwrite(fullpath / "data.tif", data.data)
+                tifffile.imwrite(fullpath / "data.tif", data.data)
 
-        else:
-            filepath = self.base_path / f"{file_relpath}.hdf5"
-            with File(filepath, "a") as f:
-                if aq_event.save_output:
-                    dset = f.create_dataset(relpath + dset_name, data=data.data)
-                    aq_event.write_attrs(dset)
+            else:
+                filepath = self.base_path / f"{file_relpath}.hdf5"
+                # Ensure directory exists
+                filepath.parent.mkdir(parents=True, exist_ok=True)
 
-                if isinstance(data, StimulationData):
-                    if aq_event.save_stim:
-                        dset = f.create_dataset(relpath + r"dmd", data=data.dmd_pattern)
-                        dset.attrs["pattern_id"] = str(data.pattern_id)
+                with File(filepath, "a") as f:
+                    if aq_event.save_output:
+                        dset = f.create_dataset(relpath + dset_name, data=data.data)
                         aq_event.write_attrs(dset)
 
-    # def test_write_data(self):
-    #     aq_event = AcquisitionEvent("test", Position(1, 2, 0), scheduled_time=0, exposure_time_ms=1,
-    #                                 sub_axes=[0, "test"])
-    #     data = AcquisitionData(aq_event, np.random.rand(100, 100))
-    #
-    #     self.write_data(data)
+                    if isinstance(data, StimulationData):
+                        if aq_event.save_stim:
+                            dset = f.create_dataset(
+                                relpath + r"dmd", data=data.dmd_pattern
+                            )
+                            dset.attrs["pattern_id"] = str(data.pattern_id)
+                            aq_event.write_attrs(dset)
+
+        except Exception as e:
+            logger.error(f"Failed to write data: {e}", exc_info=True)
 
 
 class SLMBuffer(DataPassingProcess):
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(aq, stop_event)
+        self.name = "slm buffer"
 
         self.from_manager = aq.manager_to_slm_buffer
         self.data_in = [aq.pattern_to_slm]
@@ -251,15 +251,12 @@ class SLMBuffer(DataPassingProcess):
         self.slm_shape = None
         self.affine_transform = None
 
-        self.slm_shape = None
-        self.affine_transform = None
-
         self.initialized = False
 
         self.manager_done = False
         self.pattern_done = False
 
-        self.class_name = "slm buffer"
+        self.initialize_queues()
 
     def initialize(
         self,

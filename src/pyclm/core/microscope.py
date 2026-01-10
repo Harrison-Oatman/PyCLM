@@ -14,12 +14,16 @@ from .queues import AllQueues
 logger = logging.getLogger(__name__)
 
 
-class MicroscopeProcess:
+from .base_process import BaseProcess
+
+
+class MicroscopeProcess(BaseProcess):
     def __init__(
         self, core: CMMCorePlus, aq: AllQueues, stop_event: Event | None = None
     ):
+        super().__init__(stop_event, name="microscope")
         self.core = core
-        self.stop_event = stop_event
+
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
         self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
@@ -36,6 +40,15 @@ class MicroscopeProcess:
         self.current_pattern_id = None
 
         self.warned_binning = False
+
+        # We handle msg manually in process override due to complex logic,
+        # or we could register it and use member vars for await/timeouts.
+        # Given the complexity of `process` (handling timeouts etc), we will OVERRIDE BaseProcess.process
+        # but replicate the "sleep if idle" behavior if we were polling multiple queues.
+        # But here only one inbox... actually `slm_queue` is read inside `handle_update_pattern_event`.
+
+        # For now, let's keep `process` mostly as is but add the sleep from BaseProcess if empty to be "nice"
+        # AND respect the BaseProcess structure.
 
     def declare_slm(self):
         core = self.core
@@ -75,6 +88,8 @@ class MicroscopeProcess:
                         f"No events in queue for {time() - event_await_start: .3f}s"
                     )
 
+                # Sleep briefly to be nice
+                sleep(self.sleep_interval)
                 continue
 
             msg = self.inbox.get()

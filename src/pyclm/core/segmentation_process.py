@@ -2,19 +2,21 @@ import logging
 from threading import Event
 from typing import ClassVar
 
-from ..datatypes import AcquisitionData, SegmentationData
-from ..experiments import Experiment
-from ..messages import Message
-from ..queues import AllQueues
-from ..segmentation import SegmentationMethod
-from .cellpose_segmentation import CellposeSegmentationMethod
+from .base_process import BaseProcess
+from .datatypes import AcquisitionData, SegmentationData
+from .experiments import Experiment
+from .messages import Message
+from .queues import AllQueues
+from .segmentation import SegmentationMethod
+from .segmentation.cellpose_segmentation import CellposeSegmentationMethod
 
 
-class SegmentationProcess:
+class SegmentationProcess(BaseProcess):
     known_models: ClassVar = {"cellpose": CellposeSegmentationMethod}
 
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
-        self.stop_event = stop_event
+        super().__init__(stop_event, name="segmentation")
+
         self.inbox = aq.manager_to_seg
         self.manager = aq.seg_to_manager
 
@@ -29,6 +31,9 @@ class SegmentationProcess:
 
         self.accommodated_requests = []
         self.shared_resources = dict()
+
+        self.register_queue(self.inbox, self.handle_message)
+        self.register_queue(self.from_raw, self.handle_from_raw)
 
     def initialize(self):
         self.initialized = True
@@ -142,7 +147,7 @@ class SegmentationProcess:
                 logging.info(
                     "segmentation process received stream close from outbox. Sending to outbox and pattern"
                 )
-                from ..messages import StreamCloseMessage
+                from .messages import StreamCloseMessage
 
                 close_msg = StreamCloseMessage()
                 self.to_pattern.put(close_msg)
@@ -154,25 +159,12 @@ class SegmentationProcess:
             case _:
                 raise NotImplementedError
 
-    def process(self):
-        while True:
-            if self.stop_event and self.stop_event.is_set():
-                print("force closing segmentation process")
-                break
-
-            if not self.inbox.empty():
-                msg = self.inbox.get()
-
-                if self.handle_message(msg):
-                    return True
-
-            if not self.from_raw.empty():
-                data = self.from_raw.get()
-
-                if isinstance(data, Message):
-                    if self.handle_message(data):
-                        print("segmentation process closing")
-                        return True
-                else:
-                    assert isinstance(data, AcquisitionData)
-                    self.handle_segment_data(data)
+    def handle_from_raw(self, data):
+        if isinstance(data, Message):
+            if self.handle_message(data):
+                print("segmentation process closing")
+                return True
+        else:
+            assert isinstance(data, AcquisitionData)
+            self.handle_segment_data(data)
+        return False

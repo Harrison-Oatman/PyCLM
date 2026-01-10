@@ -6,6 +6,8 @@ Import modules that may be used in creating custom pattern and segmentation meth
 from .experiments import ExperimentSchedule
 from .manager import Manager, MicroscopeOutbox, SLMBuffer
 from .microscope import MicroscopeProcess
-from .patterns import ROI, CameraProperties, PatternMethod, PatternProcess
+from .pattern_process import PatternProcess
+from .patterns import ROI, CameraProperties, PatternMethod
 from .queues import AllQueues
-from .segmentation import SegmentationMethod, SegmentationProcess
+from .segmentation import SegmentationMethod
+from .segmentation_process import SegmentationProcess
