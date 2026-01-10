@@ -2,31 +2,53 @@ import logging
 from threading import Event
 from typing import ClassVar
 
-from .datatypes import AcquisitionData, CameraPattern, SegmentationData
-from .experiments import Experiment
-from .messages import Message, StreamCloseMessage
-from .queues import AllQueues
-
-logger = logging.getLogger(__name__)
-
-from .base_process import BaseProcess
-from .patterns import (
+from ..datatypes import AcquisitionData, CameraPattern, SegmentationData
+from ..experiments import Experiment
+from ..messages import Message
+from ..queues import AllQueues
+from .bar_patterns import BarPatternBase, BouncingBarPattern, SawToothMethod
+from .feedback_control_patterns import (
+    BounceModel,
+    MoveDownModel,
+    MoveInModel,
+    MoveOutModel,
+    RotateCcwModel,
+)
+from .ktr_patterns import BinaryNucleusClampModel, CenteredImageModel, GlobalCycleModel
+from .pattern import (
     AcquiredImageRequest,
     CameraProperties,
     DataDock,
     PatternContext,
     PatternMethod,
     PatternMethodReturnsSLM,
-    known_models,
+    PatternReview,
 )
+from .static_patterns import CirclePattern, FullOnPattern
+
+logger = logging.getLogger(__name__)
 
 
-class PatternProcess(BaseProcess):
-    known_models: ClassVar = known_models
+class PatternProcess:
+    known_models: ClassVar = {
+        "circle": CirclePattern,
+        "bar": BarPatternBase,
+        "pattern_review": PatternReview,
+        "bar_bounce": BouncingBarPattern,
+        "full_on": FullOnPattern,
+        "rotate_ccw": RotateCcwModel,
+        "sawtooth": SawToothMethod,
+        "move_out": MoveOutModel,
+        "move_in": MoveInModel,
+        "move_down": MoveDownModel,
+        "fb_bounce": BounceModel,
+        "binary_nucleus_clamp": BinaryNucleusClampModel,
+        "global_cycle": GlobalCycleModel,
+        "centered_image": CenteredImageModel,
+    }
 
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
-        super().__init__(stop_event, name="pattern")
-
+        self.stop_event = stop_event
         self.inbox = aq.manager_to_pattern
         self.manager = aq.pattern_to_manager
         self.slm = aq.pattern_to_slm
@@ -41,10 +63,6 @@ class PatternProcess(BaseProcess):
 
         self.models = {}
         self.docks = {}
-
-        self.register_queue(self.inbox, self.handle_message_wrapper)
-        self.register_queue(self.from_raw, self.handle_from_raw)
-        self.register_queue(self.from_seg, self.handle_from_seg)
 
     def initialize(self, camera_properties: CameraProperties):
         self.camera_properties = camera_properties
@@ -139,6 +157,9 @@ class PatternProcess(BaseProcess):
 
                 self.stream_count += 1
                 if self.stream_count >= 2:
+                    # Signal SLMBuffer that we are done
+                    from ..messages import StreamCloseMessage
+
                     out_msg = StreamCloseMessage()
                     self.slm.put(out_msg)
                     return True
@@ -166,44 +187,53 @@ class PatternProcess(BaseProcess):
             case _:
                 raise NotImplementedError
 
-    def handle_message_wrapper(self, message):
-        if self.handle_message(message):
-            return True
-        return False
+    def process(self):
+        while True:
+            if self.stop_event and self.stop_event.is_set():
+                print("force stopping pattern process")
+                break
 
-    def handle_from_raw(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                return True
-        else:
-            assert isinstance(data, AcquisitionData)
-            name = data.event.experiment_name
-            t_index = data.event.t_index
+            if not self.inbox.empty():
+                msg = self.inbox.get()
 
-            dockname = self.dock_string(name, t_index)
+                if self.handle_message(msg):
+                    return
 
-            self.docks[dockname].add_raw(data)
+            if not self.from_raw.empty():
+                data = self.from_raw.get()
 
-            self.check(name, dockname)
-        return False
+                if isinstance(data, Message):
+                    if self.handle_message(data):
+                        return
+                else:
+                    assert isinstance(data, AcquisitionData)
+                    name = data.event.experiment_name
+                    t_index = data.event.t_index
 
-    def handle_from_seg(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                return True
-        else:
-            assert isinstance(data, SegmentationData)
-            name = data.event.experiment_name
-            t_index = data.event.t_index
+                    dockname = self.dock_string(name, t_index)
 
-            dockname = self.dock_string(name, t_index)
+                    self.docks[dockname].add_raw(data)
 
-            print(f"seg found {dockname}")
+                    self.check(name, dockname)
 
-            self.docks[dockname].add_seg(data)
+            if not self.from_seg.empty():
+                data = self.from_seg.get()
 
-            self.check(name, dockname)
-        return False
+                if isinstance(data, Message):
+                    if self.handle_message(data):
+                        return
+                else:
+                    assert isinstance(data, SegmentationData)
+                    name = data.event.experiment_name
+                    t_index = data.event.t_index
+
+                    dockname = self.dock_string(name, t_index)
+
+                    print(f"seg found {dockname}")
+
+                    self.docks[dockname].add_seg(data)
+
+                    self.check(name, dockname)
 
 
 class RequestPattern(Message):

@@ -14,16 +14,12 @@ from .queues import AllQueues
 logger = logging.getLogger(__name__)
 
 
-from .base_process import BaseProcess
-
-
-class MicroscopeProcess(BaseProcess):
+class MicroscopeProcess:
     def __init__(
         self, core: CMMCorePlus, aq: AllQueues, stop_event: Event | None = None
     ):
-        super().__init__(stop_event, name="microscope")
         self.core = core
-
+        self.stop_event = stop_event
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
         self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
@@ -79,8 +75,6 @@ class MicroscopeProcess(BaseProcess):
                         f"No events in queue for {time() - event_await_start: .3f}s"
                     )
 
-                # Sleep briefly to be nice
-                sleep(self.sleep_interval)
                 continue
 
             msg = self.inbox.get()
@@ -290,12 +284,16 @@ class MicroscopeProcess(BaseProcess):
 
         sleep(1.0)
 
+        # print(aq_event.position.get_z(), self.core.getPosition())
+
         logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
         image = self.snap()
         aq_event.completed_time = time()
         logger.info(f"{self.t(): .3f}| image acquired")
 
         aq_event.pixel_width_um = self.core.getPixelSizeUm()
+
+        # info(f"{self.t(): .3f}| unloading")
 
         if aq_event.needs_slm:
             data_out = StimulationData(
@@ -305,6 +303,7 @@ class MicroscopeProcess(BaseProcess):
             data_out = AcquisitionData(aq_event, image)
 
         self.outbox.put(data_out)
+        # info(f"{self.t(): .3f}| unloaded")
 
     def snap(self):
         core = self.core
@@ -316,3 +315,11 @@ class MicroscopeProcess(BaseProcess):
 
     def t(self):
         return time() - self.start
+
+        # tagged_image = core.getTaggedImage()
+        # pixels = np.reshape(tagged_image.pix,
+        #                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
+        #
+        # tags = tagged_image.tags
+        #
+        # return pixels, tags
