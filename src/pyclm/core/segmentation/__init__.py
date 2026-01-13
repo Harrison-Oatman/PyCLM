@@ -1,2 +1,2 @@
+from .cellpose_segmentation import CellposeSegmentationMethod
 from .segmentation import SegmentationMethod
-from .segmentation_process import SegmentationProcess

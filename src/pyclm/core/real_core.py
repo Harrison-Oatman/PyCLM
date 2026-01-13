@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
+
 from pymmcore_plus import CMMCorePlus
 
 from .core_interface import MicroscopeCoreInterface
@@ -42,10 +44,10 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
 
     def getAllowedPropertyValues(self, device: str, prop_name: str) -> Sequence[str]:
         return self._core.getAllowedPropertyValues(device, prop_name)
-    
+
     def describe(self) -> str:
         return self._core.describe()
-    
+
     def setFocusDevice(self, label: str) -> None:
         self._core.setFocusDevice(label)
 
@@ -70,7 +72,7 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
 
     def getPixelSizeUm(self) -> float:
         return self._core.getPixelSizeUm()
-    
+
     def getROI(self):
         return self._core.getROI()
 

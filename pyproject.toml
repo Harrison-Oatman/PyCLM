@@ -6,19 +6,33 @@ readme = "README.md"
 authors = [
     { name = "Harrison-Oatman", email = "ho6729@princeton.edu" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "cellpose>=4.0.6",
     "h5py>=3.14.0",
     "natsort>=8.4.0",
+    "notebook>=7.5.1",
+    "opencv-python>=4.12.0.88",
     "pandas-stubs==2.3.2.250827",
-    "pymmcore-plus>=0.16.0",
+    "pymmcore-plus==0.13.7",
+    "pymmcore==11.2.1.71.0",
     "scikit-image>=0.25.2",
     "tifffile>=2025.9.20",
     "toml>=0.10.2",
 ]
 
+[optional-dependencies]
+cellpose = [
+    "cellpose>=4.0.6",
+    "torch",
+    "torchvision",
+]
+
+calibration = [
+    "pycromanager>=1.0.2",
+]
+
 [dependency-groups]
+
 analysis = [
     "laptrack>=0.17.0",
     "matplotlib>=3.10.6",
@@ -26,12 +40,46 @@ analysis = [
     "tqdm>=4.67.1",
 ]
 
-dev = [
+docs = [
     "pytest>=8.4.2",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
+]
+
+dev = [
+    { include-group = "analysis" },
+    { include-group = "docs" },
+]
+test = [
+    "pytest>=8.4.2",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu121" },
+]
+torchvision = [
+    { index = "pytorch-cu121" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.ruff.lint]
+select = [
+  "B",
+  "I",
+  "RUF",
+  "PT",
+  "UP",
 ]
 
 [project.scripts]
 pyclm = "pyclm.__main__:main"
+convert_hdf5s = "pyclm.convert_hdf5s:main"
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]

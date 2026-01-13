@@ -6,11 +6,11 @@ should not pass numpy arrays (see datatypes.py)
 """
 
 from abc import ABC
+
 from .events import *
 
 
-class Message(ABC):
-
+class Message:
     # will always be a string
     message = "BASE_MESSAGE"
 
@@ -19,7 +19,6 @@ class Message(ABC):
 
 
 class AcquisitionEventMessage(Message):
-
     message = "acquisition_event"
 
     def __init__(self, event: AcquisitionEvent):
@@ -27,7 +26,6 @@ class AcquisitionEventMessage(Message):
 
 
 class UpdatePatternEventMessage(Message):
-
     message = "update_pattern_event"
 
     def __init__(self, event: UpdatePatternEvent):
@@ -35,11 +33,14 @@ class UpdatePatternEventMessage(Message):
 
 
 class UpdatePositionEventMessage(Message):
-
     message = "update_position_event"
 
     def __init__(self, event: UpdateStagePositionEvent):
         self.event = event
+
+
+class StreamCloseMessage(Message):
+    message = "stream_close"
 
 
 class UpdateZPositionMessage(Message):

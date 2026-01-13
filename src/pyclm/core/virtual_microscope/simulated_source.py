@@ -1,12 +1,11 @@
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
 import tifffile as tiff
 
 
 class TimeSeriesImageSource:
-    def __init__(self, frames: List[np.ndarray], loop: bool = True):
+    def __init__(self, frames: list[np.ndarray], loop: bool = True):
         if not frames:
             raise ValueError("TimeSeriesImageSource requires at least one frame.")
         self._frames = [self._normalize_frame(f) for f in frames]
@@ -29,7 +28,9 @@ class TimeSeriesImageSource:
         return cls(frames, loop=loop)
 
     @classmethod
-    def from_folder(cls, folder: Path, pattern: str = "*.tif", loop: bool = True) -> "TimeSeriesImageSource":
+    def from_folder(
+        cls, folder: Path, pattern: str = "*.tif", loop: bool = True
+    ) -> "TimeSeriesImageSource":
         paths = sorted(folder.glob(pattern))
         frames = []
         for p in paths:
@@ -55,7 +56,7 @@ class TimeSeriesImageSource:
             else:
                 self._idx = len(self._frames) - 1
         return frame
-    
+
     def _normalize_frame(self, frame: np.ndarray) -> np.ndarray:
         if frame.ndim == 3:
             if frame.shape[0] <= 4:

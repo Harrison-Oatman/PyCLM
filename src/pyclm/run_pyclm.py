@@ -1,28 +1,31 @@
-from typing import Optional
 import logging
-from toml import load
-import numpy as np
 from pathlib import Path
+from typing import Optional
+
+import numpy as np
+from toml import load
 
 logger = logging.getLogger(__name__)
 
-from .core import PatternMethod, SegmentationMethod
 from .controller import Controller
+from .core import PatternMethod, SegmentationMethod
 from .directories import schedule_from_directory
 
 
 def set_logging(experiment_directory: Path):
     console_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(experiment_directory / 'log.log')
+    file_handler = logging.FileHandler(experiment_directory / "log.log")
 
     # Set levels for handlers
     console_handler.setLevel(logging.WARNING)
     file_handler.setLevel(logging.INFO)
 
     # Create formatters and add them to handlers
-    console_format = logging.Formatter('%(levelname)s - %(message)s')
-    file_format = logging.Formatter('%(asctime)s - %(filename)-12s \t - %(levelname)-8s - %(message)s',
-                                    datefmt='%H:%M:%S')
+    console_format = logging.Formatter("%(levelname)s - %(message)s")
+    file_format = logging.Formatter(
+        "%(asctime)s - %(filename)-12s \t - %(levelname)-8s - %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     console_handler.setFormatter(console_format)
     file_handler.setFormatter(file_format)
@@ -30,9 +33,13 @@ def set_logging(experiment_directory: Path):
     logging.basicConfig(handlers=[console_handler, file_handler])
 
 
-def run_pyclm(experiment_directory, config_path=None,
-              segmentation_methods: Optional[dict[str, type[SegmentationMethod]]]= None,
-              pattern_methods: Optional[dict[str, type[PatternMethod]]]= None, dry: bool = False,):
+def run_pyclm(
+    experiment_directory,
+    config_path=None,
+    segmentation_methods: dict[str, type[SegmentationMethod]] | None = None,
+    pattern_methods: dict[str, type[PatternMethod]] | None = None,
+    dry: bool = False,
+):
     """
     Run a pyclm experiment from a given directory and configuration file.
     :param experiment_directory: directory containing experiment files, including schedule.toml. [experiment].toml files,
@@ -46,6 +53,7 @@ def run_pyclm(experiment_directory, config_path=None,
     """
 
     experiment_directory = Path(experiment_directory)
+    print(f"experiment directory: {experiment_directory}")
 
     # search for config file if not provided
     if config_path is None:
@@ -58,9 +66,13 @@ def run_pyclm(experiment_directory, config_path=None,
 
     config_path = Path(config_path)
 
-    assert experiment_directory.exists(), f"experiment directory {experiment_directory} does not exist"
-    assert config_path.exists(), (f"config file {config_path} does not exist: pyclm_config.toml must be specified or be "
-                                  f"present in the experiment directory")
+    assert experiment_directory.exists(), (
+        f"experiment directory {experiment_directory} does not exist"
+    )
+    assert config_path.exists(), (
+        f"config file {config_path} does not exist: pyclm_config.toml must be specified or be "
+        f"present in the experiment directory"
+    )
 
     set_logging(experiment_directory)
 

@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, Tuple, Dict
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
+from typing import Any
+
 import numpy as np
 
 from ..core_interface import MicroscopeCoreInterface
 
-from dataclasses import dataclass
-from typing import Iterable, Iterator, Tuple, Dict
 
 @dataclass
 class SimulatedConfigGroup:
     name: str
-    _items: Dict[str, str]
+    _items: dict[str, str]
 
-    def items(self) -> Iterable[Tuple[str, str]]:
+    def items(self) -> Iterable[tuple[str, str]]:
         return self._items.items()
+
 
 class SimulatedMicroscopeCore(MicroscopeCoreInterface):
     PFS_STATUS_LOCKED = "0000001100001010"
@@ -25,8 +27,8 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         pixel_size_um: float = 0.108,
         camera_name: str = "SimulatedCamera",
         slm_device: str = "SimulatedSLM",
-        slm_shape: Tuple[int, int] = (1140, 900),
-        initial_xy: Tuple[float, float] = (0.0, 0.0),
+        slm_shape: tuple[int, int] = (1140, 900),
+        initial_xy: tuple[float, float] = (0.0, 0.0),
         initial_z: float = 0.0,
     ):
         self._image_source = image_source
@@ -36,11 +38,11 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         h, w = image_source.shape[:2]
         self._roi = (0, 0, int(w), int(h))
 
-        self._last_image: Optional[np.ndarray] = None
+        self._last_image: np.ndarray | None = None
         self._exposure_ms: float = 0.0
 
-        self._properties: Dict[str, Dict[str, Any]] = {camera_name: {"Binning": "1x1"}}
-        self._config_groups: Dict[str, str] = {}
+        self._properties: dict[str, dict[str, Any]] = {camera_name: {"Binning": "1x1"}}
+        self._config_groups: dict[str, str] = {}
 
         self._x, self._y = float(initial_xy[0]), float(initial_xy[1])
         self._z = float(initial_z)
@@ -52,19 +54,18 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
         self._slm_device = slm_device  # set None to simulate no SLM device
         self._slm_h, self._slm_w = int(slm_shape[0]), int(slm_shape[1])
-        self._slm_image: Optional[np.ndarray] = None
+        self._slm_image: np.ndarray | None = None
 
         self._focus_device: str | None = None
-        self._config_group_definitions: Dict[str, Dict[str, str]] = {
+        self._config_group_definitions: dict[str, dict[str, str]] = {
             "Channel": {"DAPI": "DAPI", "GFP": "GFP"},
             "Illumination": {"On": "On", "Off": "Off"},
         }
 
-
     def loadSystemConfiguration(self, configuration) -> None:
         cfg = str(configuration)
         self._loaded_configuration = cfg
-    
+
     # SLM-related
     def getSLMDevice(self) -> str:
         return "" if self._slm_device is None else str(self._slm_device)
@@ -97,7 +98,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
     def getProperty(self, label: str, name: str) -> str:
         return str(self._properties.get(label, {}).get(name, ""))
-    
+
     def describe(self) -> str:
         cam = self._camera_name
         roi = self._roi
@@ -136,7 +137,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         desc = "\n".join(lines)
         print(desc)
         return desc
-    
+
     def setFocusDevice(self, label: str) -> None:
         self._focus_device = str(label)
 
@@ -147,7 +148,6 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         name = str(group)
         items = self._config_group_definitions.get(name, {})
         return SimulatedConfigGroup(name=name, _items=dict(items))
-
 
     # Camera-related
     def getCameraDevice(self) -> str:
@@ -179,7 +179,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
     def getPixelSizeUm(self) -> float:
         return self._pixel_size_um
-    
+
     def getROI(self):
         return self._roi
 
@@ -210,10 +210,14 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
             h, w = frame.shape
             h2, w2 = (h // b) * b, (w // b) * b
             f = frame[:h2, :w2].reshape(h2 // b, b, w2 // b, b).mean(axis=(1, 3))
-            return f.astype(frame.dtype) if np.issubdtype(frame.dtype, np.integer) else f
+            return (
+                f.astype(frame.dtype) if np.issubdtype(frame.dtype, np.integer) else f
+            )
         if frame.ndim == 3:
             h, w, c = frame.shape
             h2, w2 = (h // b) * b, (w // b) * b
             f = frame[:h2, :w2, :].reshape(h2 // b, b, w2 // b, b, c).mean(axis=(1, 3))
-            return f.astype(frame.dtype) if np.issubdtype(frame.dtype, np.integer) else f
+            return (
+                f.astype(frame.dtype) if np.issubdtype(frame.dtype, np.integer) else f
+            )
         return frame

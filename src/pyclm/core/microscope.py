@@ -1,21 +1,33 @@
-from pymmcore_plus import CMMCorePlus
-from .queues import AllQueues
-from time import time, sleep
-import numpy as np
-from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
-from .experiments import PositionWithAutoFocus, DeviceProperty, ConfigGroup
-from .datatypes import EventSLMPattern, AcquisitionData, StimulationData
-from .messages import UpdateZPositionMessage
-from .core_interface import MicroscopeCoreInterface
 import logging
+from threading import Event
+from time import sleep, time
+
+import numpy as np
+from pymmcore_plus import CMMCorePlus
+
+from .core_interface import MicroscopeCoreInterface
+from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
+from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
+from .experiments import ConfigGroup, DeviceProperty, PositionWithAutoFocus
+from .messages import UpdateZPositionMessage
+from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
 
 
-class MicroscopeProcess:
+from .base_process import BaseProcess
 
-    def __init__(self, core: MicroscopeCoreInterface, aq: AllQueues):
+
+class MicroscopeProcess(BaseProcess):
+    def __init__(
+        self,
+        core: MicroscopeCoreInterface,
+        aq: AllQueues,
+        stop_event: Event | None = None,
+    ):
+        super().__init__(stop_event, name="microscope")
         self.core = core
+
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
         self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
@@ -38,8 +50,7 @@ class MicroscopeProcess:
         dev = core.getSLMDevice()
 
         if dev == "":
-            logger.warning("SLM Device not initialized,"
-                           " using dummy slm")
+            logger.warning("SLM Device not initialized, using dummy slm")
 
             self.slm_device = "dummy"
             self.slm_h = 1140
@@ -55,20 +66,25 @@ class MicroscopeProcess:
         self.slm_initialized = True
 
     def process(self, event_await_s=0, slm_await_s=5):
-
         logger.debug(f"started MicroscopeProcess on {self.core}")
         self.start = time()
 
         event_await_start = time()
 
         while True:
+            if self.stop_event and self.stop_event.is_set():
+                print("force stopping microscope process")
+                break
 
             if self.inbox.empty():
-
                 # check for timeout
                 if (event_await_s != 0) & (time() - event_await_start > event_await_s):
-                    raise TimeoutError(f"No events in queue for {time() - event_await_start: .3f}s")
+                    raise TimeoutError(
+                        f"No events in queue for {time() - event_await_start: .3f}s"
+                    )
 
+                # Sleep briefly to be nice
+                sleep(self.sleep_interval)
                 continue
 
             msg = self.inbox.get()
@@ -84,6 +100,11 @@ class MicroscopeProcess:
                     self.handle_update_position_event(msg.event)
 
                 case "close":
+                    # Send stream close to outbox
+                    from .messages import StreamCloseMessage
+
+                    msg = StreamCloseMessage()
+                    self.outbox.put(msg)
                     return 0
 
                 case _:
@@ -105,7 +126,6 @@ class MicroscopeProcess:
         return 0
 
     def handle_device_update(self, devices: list[DeviceProperty]):
-
         if devices is None:
             return 0
 
@@ -143,11 +163,12 @@ class MicroscopeProcess:
             if self.warned_binning:
                 return None
 
-            logger.warning(f"attempted set binning {binning_str}, allowed binnings {allowed}")
+            logger.warning(
+                f"attempted set binning {binning_str}, allowed binnings {allowed}"
+            )
             self.warned_binning = True
 
     def move_to_position(self, position: PositionWithAutoFocus) -> tuple[bool, float]:
-
         start_time = time()
 
         core = self.core
@@ -200,22 +221,20 @@ class MicroscopeProcess:
         return True, core.getZPosition()
 
     def handle_update_position_event(self, up_event: UpdateStagePositionEvent):
-
         if isinstance(up_event.position, PositionWithAutoFocus):
-
             z_moved, z_new_position = self.move_to_position(up_event.position)
 
             if z_moved:
                 old_z = up_event.position.get_z()
 
                 if np.abs(old_z - z_new_position) > 5:
-                    logger.warning( f"Major Z position change: {old_z}, {z_new_position}")
+                    logger.warning(
+                        f"Major Z position change: {old_z}, {z_new_position}"
+                    )
 
                 if abs(z_new_position - old_z) > 1.0:
                     self.manager.put(
-                        UpdateZPositionMessage(
-                            z_new_position, up_event.experiment_name
-                        )
+                        UpdateZPositionMessage(z_new_position, up_event.experiment_name)
                     )
 
         else:
@@ -225,11 +244,15 @@ class MicroscopeProcess:
         event_id = up_event.id
         logger.debug(f"handling update pattern event {event_id}")
 
-        assert self.slm_initialized, "slm not declared to microscope process, run declare_slm first"
+        assert self.slm_initialized, (
+            "slm not declared to microscope process, run declare_slm first"
+        )
 
         pattern_data = self.slm_queue.get(True, slm_await_s)
 
-        assert isinstance(pattern_data, EventSLMPattern), f"received pattern data of unknown type: {type(pattern_data)}"
+        assert isinstance(pattern_data, EventSLMPattern), (
+            f"received pattern data of unknown type: {type(pattern_data)}"
+        )
         assert pattern_data.event_id == event_id, f"event mismatch"
 
         pattern = pattern_data.pattern
@@ -259,7 +282,9 @@ class MicroscopeProcess:
         t_delta = target_time - time() - 0.1
 
         if t_delta > 0:
-            logger.info(f"{self.t(): .3f}| waiting {t_delta: .3f}s until next acquisition")
+            logger.info(
+                f"{self.t(): .3f}| waiting {t_delta: .3f}s until next acquisition"
+            )
             sleep(t_delta)
 
         logger.debug("wait for system")
@@ -269,8 +294,6 @@ class MicroscopeProcess:
 
         sleep(1.0)
 
-        # print(aq_event.position.get_z(), self.core.getPosition())
-
         logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
         image = self.snap()
         aq_event.completed_time = time()
@@ -278,15 +301,14 @@ class MicroscopeProcess:
 
         aq_event.pixel_width_um = self.core.getPixelSizeUm()
 
-        # info(f"{self.t(): .3f}| unloading")
-
         if aq_event.needs_slm:
-            data_out = StimulationData(aq_event, image, self.current_pattern, self.current_pattern_id)
+            data_out = StimulationData(
+                aq_event, image, self.current_pattern, self.current_pattern_id
+            )
         else:
             data_out = AcquisitionData(aq_event, image)
 
         self.outbox.put(data_out)
-        # info(f"{self.t(): .3f}| unloaded")
 
     def snap(self):
         core = self.core
@@ -298,11 +320,3 @@ class MicroscopeProcess:
 
     def t(self):
         return time() - self.start
-
-        # tagged_image = core.getTaggedImage()
-        # pixels = np.reshape(tagged_image.pix,
-        #                     newshape=[tagged_image.tags['Height'], tagged_image.tags['Width']])
-        #
-        # tags = tagged_image.tags
-        #
-        # return pixels, tags
