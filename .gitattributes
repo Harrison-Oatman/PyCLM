@@ -2,3 +2,4 @@
 * text=auto
 *.ipynb text eol=lf
 *.ipynb filter=nbstripout
+*.ipynb linguist-vendored
