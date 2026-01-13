@@ -5,3 +5,7 @@ repos:
       - id: ruff-format
       - id: ruff-check
         args: [ "--fix", "--show-fixes", "--unsafe-fixes"]
+  - repo: https://github.com/kynan/nbstripout
+    rev: "0.8.1"
+    hooks:
+      - id: nbstripout
