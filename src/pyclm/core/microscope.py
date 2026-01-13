@@ -5,6 +5,7 @@ from time import sleep, time
 import numpy as np
 from pymmcore_plus import CMMCorePlus
 
+from .core_interface import MicroscopeCoreInterface
 from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
 from .experiments import ConfigGroup, DeviceProperty, PositionWithAutoFocus
@@ -19,7 +20,10 @@ from .base_process import BaseProcess
 
 class MicroscopeProcess(BaseProcess):
     def __init__(
-        self, core: CMMCorePlus, aq: AllQueues, stop_event: Event | None = None
+        self,
+        core: MicroscopeCoreInterface,
+        aq: AllQueues,
+        stop_event: Event | None = None,
     ):
         super().__init__(stop_event, name="microscope")
         self.core = core

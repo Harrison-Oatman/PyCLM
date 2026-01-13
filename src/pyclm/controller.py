@@ -26,16 +26,28 @@ from .core import (
     SegmentationProcess,
     SLMBuffer,
 )
+from .core.real_core import RealMicroscopeCore
+from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
+from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
 
 logger = logging.getLogger(__name__)
 
 
 class Controller:
-    def __init__(self, config="MMConfig_demo.cfg"):
-        self.stop_event = Event()
-        self.core = CMMCorePlus()
+    def __init__(self, config="MMConfig_demo.cfg", dry=False):
+        if not dry:
+            # Applies if config specifies that a real microscope is in use
+            self.core = RealMicroscopeCore()
+        else:
+            # image_source = TimeSeriesImageSource.from_tiff_stack(Path("path/to/stack.tif"), loop=True)
+            image_source = TimeSeriesImageSource.from_folder(
+                Path("tif-source"), pattern="*.tif", loop=True
+            )
+            self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
+
+        self.stop_event = Event()
 
         self.microscope = MicroscopeProcess(
             core=self.core, aq=self.all_queues, stop_event=self.stop_event
@@ -192,7 +204,6 @@ class Controller:
                     for f in future_to_process:
                         f.cancel()
 
-                self.core.unloadAllDevices()
                 self.all_queues.close()
 
                 logger.info("Controller run finished.")

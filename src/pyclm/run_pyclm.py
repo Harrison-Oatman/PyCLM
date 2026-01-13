@@ -38,6 +38,7 @@ def run_pyclm(
     config_path=None,
     segmentation_methods: dict[str, type[SegmentationMethod]] | None = None,
     pattern_methods: dict[str, type[PatternMethod]] | None = None,
+    dry: bool = False,
 ):
     """
     Run a pyclm experiment from a given directory and configuration file.
@@ -80,7 +81,7 @@ def run_pyclm(
 
     base_path = experiment_directory
 
-    c = Controller(config["config_path"])
+    c = Controller(config["config_path"], dry)
 
     # register any custom methods
     if segmentation_methods is not None:
