@@ -150,6 +150,24 @@ class PatternMethod:
         self._requirements_list = []  # List of (channel_name, raw, seg)
         self._experiment_ref = None
 
+    def add_requirement(self, channel_name: str, raw: bool = False, seg: bool = False):
+        """Declarative way to add requirements."""
+        self._requirements_list.append((channel_name, raw, seg))
+
+    # initialize happens shortly after init
+    def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
+        # If user used add_requirement, process them
+        reqs = []
+        for name, needs_raw, needs_seg in self._requirements_list:
+            ch = experiment.channels.get(name)
+            if ch:
+                reqs.append(AcquiredImageRequest(ch.channel_id, needs_raw, needs_seg))
+            else:
+                logger.warning(f"Pattern {self.name} requested unknown channel {name}")
+
+        return reqs
+
+    # configure system is run after all pattern methods are initialized
     def configure_system(
         self,
         experiment_name: str,
@@ -163,24 +181,9 @@ class PatternMethod:
         self.pattern_shape = (camera_properties.roi.height, camera_properties.roi.width)
         self._experiment_ref = experiment
 
-    def add_requirement(self, channel_name: str, raw: bool = False, seg: bool = False):
-        """Declarative way to add requirements."""
-        self._requirements_list.append((channel_name, raw, seg))
-
-    def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-        # If user used add_requirement, process them
-        reqs = []
-        for name, needs_raw, needs_seg in self._requirements_list:
-            ch = experiment.channels.get(name)
-            if ch:
-                reqs.append(AcquiredImageRequest(ch.channel_id, needs_raw, needs_seg))
-            else:
-                logger.warning(f"Pattern {self.name} requested unknown channel {name}")
-
+        # this binning should actually take effect
         binning = experiment.stimulation.binning
         self.update_binning(binning)
-
-        return reqs
 
     def get_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
         h, w = self.pattern_shape
@@ -191,6 +194,10 @@ class PatternMethod:
         xx, yy = np.meshgrid(x_range, y_range)
 
         return xx, yy
+
+    def center_um(self) -> tuple[float, float]:
+        h, w = self.pattern_shape
+        return (h * self.pixel_size_um / 2., w*self.pixel_size_um / 2.)
 
     def generate(self, data_dock: DataDock | PatternContext) -> np.ndarray:
         # If passed PatternContext, user is using new API.
