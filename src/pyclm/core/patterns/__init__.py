@@ -1,4 +1,4 @@
-from .bar_patterns import BarPatternBase, BouncingBarPattern, SawToothMethod
+from .bar_patterns import BarPatternBase, BouncingBarPattern, SawToothMethod, RotatingBarPattern
 from .feedback_control_patterns import (
     BounceModel,
     MoveDownModel,
@@ -34,4 +34,5 @@ known_models = {
     "binary_nucleus_clamp": BinaryNucleusClampModel,
     "global_cycle": GlobalCycleModel,
     "centered_image": CenteredImageModel,
+    "rotate_bar": RotatingBarPattern
 }
