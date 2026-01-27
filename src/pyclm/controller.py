@@ -123,6 +123,8 @@ class Controller:
             if any([req.needs_seg for req in pattern_requirements[name]]):
                 self.segmentation.request_method(experiment)
 
+        self.pattern.initialize_models()
+
         self.manager.initialize(schedule, pattern_requirements)
         self.slm_buffer.initialize(
             slm_shape, affine_transform, schedule.experiment_names
