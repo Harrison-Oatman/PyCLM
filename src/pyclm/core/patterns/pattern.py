@@ -197,7 +197,7 @@ class PatternMethod:
 
     def center_um(self) -> tuple[float, float]:
         h, w = self.pattern_shape
-        return (h * self.pixel_size_um / 2., w*self.pixel_size_um / 2.)
+        return (h * self.pixel_size_um / 2.0, w * self.pixel_size_um / 2.0)
 
     def generate(self, data_dock: DataDock | PatternContext) -> np.ndarray:
         # If passed PatternContext, user is using new API.
