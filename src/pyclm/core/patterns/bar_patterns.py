@@ -71,15 +71,14 @@ class BarPattern(BarPatternBase):
         self.period_space = period  # in um
         self.period_time = period / bar_speed  # in minutes
 
-    def _get_pattern_at_time(self, t_minutes):
+    def generate(self, context):
+        t_minutes = context.time / 60
+
         _xx, yy = self.get_meshgrid()
         is_on = (
             (t_minutes - (yy / self.bar_speed)) % self.period_time
         ) < self.duty_cycle * self.period_time
         return is_on.astype(np.float16)
-
-    def generate(self, context):
-        return self._get_pattern_at_time(context.time / 60)
 
 
 class SawToothMethod(PatternMethod):
