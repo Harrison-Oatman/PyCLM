@@ -41,6 +41,7 @@ class PatternProcess(BaseProcess):
 
         self.models = {}
         self.docks = {}
+        self.experiments = {}
 
         self.register_queue(self.inbox, self.handle_message_wrapper)
         self.register_queue(self.from_raw, self.handle_from_raw)
@@ -65,14 +66,22 @@ class PatternProcess(BaseProcess):
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.pattern.kwargs
+        print(method_kwargs)
 
-        model = model_class(experiment_name, self.camera_properties, **method_kwargs)
+        model = model_class(**method_kwargs)
 
         self.models[experiment_name] = model
+        self.experiments[experiment_name] = experiment
 
         logger.info(f'initializing pattern model "{method_name}"')
 
         return model.initialize(experiment)
+
+    def initialize_models(self):
+        for experiment_name in self.models:
+            model: PatternMethod = self.models[experiment_name]
+            experiment: Experiment = self.experiments[experiment_name]
+            model.configure_system(experiment_name, self.camera_properties, experiment)
 
     def register_method(self, model: type, name: str | None = None):
         assert issubclass(model, PatternMethod), (
