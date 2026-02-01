@@ -1,3 +1,4 @@
+import json
 import re
 from argparse import ArgumentParser
 from pathlib import Path
@@ -66,43 +67,52 @@ def get_mapping(projector_api):
     return at
 
 
-def extract_channels_tifs(fp, chans):
-    for chan in chans:
-        collected_frames = []
-        channel_key = f"{chan}"
+def get_binning_from_metadata(f: File, chan_key: str):
+    """
+    Extract binning from file attributes or return default 1.
+    """
+    if "experiment_metadata" in f.attrs:
+        try:
+            meta = json.loads(f.attrs["experiment_metadata"])
+            # chan_key is typically "channel_NAME"
+            # channel keys in metadata are "NAME"
+            if chan_key.startswith("channel_"):
+                short_name = chan_key.replace("channel_", "", 1)
+                if short_name in meta.get("channels", {}):
+                    return meta["channels"][short_name].get("binning", 1)
+        except Exception as e:
+            print(f"Error reading binning from metadata: {e}")
 
-        with File(fp, mode="r", libver='latest', swmr=True) as f:
-            indices = []
-
-            for t_val, data in f.items():
-                if channel_key not in data:
-                    continue
-
-                indices.append(t_val)
-
-            for t_val in natsorted(indices):
-                data = np.array(f[t_val][channel_key]["data"])
-                collected_frames.append(data)
-
-        outpath = f"{fp[:-5]}_{chan}.tif"
-        tifffile.imwrite(
-            outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"}
-        )
+    return 1
 
 
-def make_tif(fp, at=None, chan="channel_638", binning=2):
-    if at is not None:
-        ati = cv2.invertAffineTransform(at)
-        patterned = []
+def make_tif(fp, at, chan="channel_638"):
+    ati = cv2.invertAffineTransform(at)
+    patterned = []
 
     collected_frames = []
     channel_key = f"{chan}"
 
-    with File(fp, mode="r", libver='latest', swmr=True) as f:
+    # Open with SWMR support
+    try:
+        f = File(fp, mode="r", libver="latest", swmr=True)
+    except OSError:
+        # Fallback if file not accessible or not HDF5
+        print(f"Could not open {fp}")
+        return
+
+    # Attempt to read binning from metadata
+    binning = get_binning_from_metadata(f, channel_key)
+
+    try:
         indices = []
 
-        for t_val, data in f.items():
-            if channel_key not in data:
+        keys = list(f.keys())
+        for t_val in keys:
+            if t_val not in f:
+                continue
+            data_group = f[t_val]
+            if channel_key not in data_group:
                 continue
 
             indices.append(t_val)
@@ -110,88 +120,74 @@ def make_tif(fp, at=None, chan="channel_638", binning=2):
         seg_seen = False
 
         for t_val in natsorted(indices):
-            data = np.array(f[t_val][channel_key]["data"])
+            # Check if dataset exists / is complete
+            try:
+                if channel_key not in f[t_val] or "data" not in f[t_val][channel_key]:
+                    continue
+
+                data_dset = f[t_val][channel_key]["data"]
+                # Ensure data is accessible (SWMR safety)
+                data_dset.refresh()
+                data = np.array(data_dset)
+
+            except Exception as e:
+                # might happen if writing is in progress for this specific frame
+                continue
+
             collected_frames.append(data)
 
             patterned_stack = [data]
 
-            if at is not None:
-                if "seg" in f[t_val][channel_key].keys():
-                    patterned_stack.append(f[t_val][channel_key]["seg"])
+            if "seg" in f[t_val][channel_key].keys():
+                patterned_stack.append(f[t_val][channel_key]["seg"])
+                seg_seen = True
 
-                    seg_seen = True
+            elif seg_seen:
+                continue
 
-                elif seg_seen:
-                    continue
+            if "stim_aq" in f[t_val].keys() and "dmd" in f[t_val]["stim_aq"]:
+                pattern = np.array(f[t_val]["stim_aq"]["dmd"])
+                target_size = data.shape
 
-                if "stim_aq" in f[t_val].keys():
-                    pattern = np.array(f[t_val]["stim_aq"]["dmd"])
-                    target_size = data.shape
-                    tf = cv2.warpAffine(
-                        np.round(pattern).astype(np.uint8),
-                        ati,
-                        (target_size[1] * binning, target_size[0] * binning),
-                    ).astype(np.uint16)
-                    ds = downscale_local_mean(tf, (binning, binning)).astype(np.uint16)
-                    patterned_stack.append(ds)
+                # Ensure binning is valid integer
+                b = int(binning)
 
-                else:
-                    patterned_stack.append(np.zeros(data.shape))
+                tf = cv2.warpAffine(
+                    np.round(pattern).astype(np.uint8),
+                    ati,
+                    (target_size[1] * b, target_size[0] * b),
+                ).astype(np.uint16)
+                ds = downscale_local_mean(tf, (b, b)).astype(np.uint16)
+                patterned_stack.append(ds)
 
-                patterned.append(np.stack(patterned_stack).astype(np.uint16))
+            else:
+                patterned_stack.append(np.zeros(data.shape))
 
-    # outpath = fp[:-5] + f"_{chan}.tif"
-    # tifffile.imwrite(
-    #     outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"}
-    # )
+            patterned.append(np.stack(patterned_stack).astype(np.uint16))
 
-    if at is not None:
-        metadata = {"axes": "tcyx"}
-        if np.array(patterned).shape[1] > 2:
-            metadata.update(seg_imagej_metadata)
-        else:
-            metadata.update(pattern_imagej_metadata)
+    finally:
+        f.close()
 
+    if not collected_frames:
+        return
+
+    metadata = {"axes": "tcyx"}
+    if np.array(patterned).shape[1] > 2:
+        metadata.update(seg_imagej_metadata)
+    else:
+        metadata.update(pattern_imagej_metadata)
+
+    # Save patterned output
+    if patterned:
+        # Construct output filename
+        outpath_pattern = str(fp)[:-5] + f"_{chan}_patterns.tif"
         tifffile.imwrite(
-            fp[:-5] + "_" +  chan + "_patterns.tif",
+            outpath_pattern,
             np.array(patterned).astype(np.uint16),
             imagej=True,
             metadata=metadata,
         )
-
-
-def make_stim_tif(fp, at, binning=2):
-    print(fp)
-
-    ati = cv2.invertAffineTransform(at)
-    patterned = []
-
-    with File(fp, mode="r", libver='latest', swmr=True) as f:
-        indices = []
-
-        for t_val, data in f.items():
-            if "stim_aq" not in data:
-                continue
-
-            indices.append(t_val)
-
-        for t_val in natsorted(indices):
-            pattern = np.array(f[t_val]["stim_aq"]["dmd"])
-            target_size = (1600, 1600)
-            tf = cv2.warpAffine(
-                np.round(pattern).astype(np.uint8),
-                ati,
-                (target_size[1] * binning, target_size[0] * binning),
-            ).astype(np.uint16)
-            ds = downscale_local_mean(tf, (binning, binning)).astype(np.uint16)
-            patterned.append(ds)
-
-    tifffile.imwrite(
-        str(fp)[:-5] + "patterns_only.tif",
-        np.array(patterned).astype(np.uint16),
-        imagej=True,
-        metadata={"axes": "tyx"},
-    )
+        print(f"Saved {outpath_pattern}")
 
 
 def process_args():
@@ -201,15 +197,7 @@ def process_args():
     parser.add_argument(
         "--config", type=str, help="path to pyclm_config.toml file", default=None
     )
-    parser.add_argument("--binning", type=int, help="binning", default=2)
-    parser.add_argument(
-        "--overlay_pattern",
-        action="store_true",
-        help="whether to overlay the pattern on the tif",
-    )
-    parser.add_argument(
-        "--just_patterns", action="store_true", help="just add the stimulation"
-    )
+    # Removed binning, overlay_pattern, just_patterns args
 
     return parser.parse_args()
 
@@ -227,11 +215,10 @@ def find_affine_transform(input_dir, config_path):
 
     config_path = Path(config_path)
 
-    assert input_dir.exists(), f"experiment directory {input_dir} does not exist"
-    assert config_path.exists(), (
-        f"config file {config_path} does not exist: pyclm_config.toml must be specified or be "
-        f"present in the experiment directory"
-    )
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Config file not found at {config_path}. Affine transform is required."
+        )
 
     config = load(config_path)
     return np.array(config["affine_transform"], dtype=np.float32)
@@ -242,30 +229,16 @@ def main():
     input_dir = args.directory
     config_path = args.config
     channels = args.channels
-    overlay_pattern = args.overlay_pattern
 
-    if args.just_patterns:
-        at = find_affine_transform(Path(input_dir), config_path)
-        for val in tqdm(Path(input_dir).glob("*.hdf5")):
-            make_stim_tif(val, at, args.binning)
+    # We require overlay pattern approach, so we need affine transform
+    at = find_affine_transform(Path(input_dir), config_path)
 
-        return 0
-
-    if overlay_pattern:
-        at = find_affine_transform(Path(input_dir), config_path)
-    else:
-        at = None
-
-    for val in tqdm(Path(input_dir).glob("*.hdf5")):
+    for val in tqdm(list(Path(input_dir).glob("*.hdf5"))):
         for c in channels:
-            if overlay_pattern:
-                if c == "stim":
-                    make_tif(str(val), at, f"stim_aq", binning=args.binning)
-                else:
-                    make_tif(str(val), at, f"channel_{c}", binning=args.binning)
-
+            if c == "stim":
+                make_tif(str(val), at, f"stim_aq")
             else:
-                extract_channels_tifs(str(val), [f"channel_{c}"])
+                make_tif(str(val), at, f"channel_{c}")
 
 
 if __name__ == "__main__":
