@@ -53,9 +53,7 @@ class Controller:
             core=self.core, aq=self.all_queues, stop_event=self.stop_event
         )
         self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
-        self.outbox = MicroscopeOutbox(
-            aq=self.all_queues, save_type="hdf5", stop_event=self.stop_event
-        )
+        self.outbox = MicroscopeOutbox(aq=self.all_queues, stop_event=self.stop_event)
         self.slm_buffer = SLMBuffer(aq=self.all_queues, stop_event=self.stop_event)
         self.segmentation = SegmentationProcess(
             aq=self.all_queues, stop_event=self.stop_event
@@ -131,6 +129,7 @@ class Controller:
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
+        self.outbox.initialize(schedule)
 
     def run(self):
         with ThreadPoolExecutor() as executor:
