@@ -11,6 +11,42 @@ from skimage.transform import downscale_local_mean
 from toml import load
 from tqdm import tqdm
 
+import numpy as np
+import tifffile
+
+def grayscale_lut():
+    ramp = np.arange(256, dtype=np.uint8)
+    return np.stack([ramp, ramp, ramp])
+
+def cyan_lut():
+    zero = np.zeros(256, dtype=np.uint8)
+    ramp = np.arange(256, dtype=np.uint8)
+    return np.stack([zero, ramp, ramp])
+
+def yellow_lut():
+    zero = np.zeros(256, dtype=np.uint8)
+    ramp = np.arange(256, dtype=np.uint8)
+    return np.stack([ramp, ramp, zero])
+
+pattern_imagej_metadata = {
+    "mode": "composite",
+    "LUTs": [
+        grayscale_lut(),
+        cyan_lut(),
+    ],
+    "Ranges": [0, 5000, 0, 1000],
+}
+
+seg_imagej_metadata = {
+    "mode": "composite",
+    "LUTs": [
+        grayscale_lut(),
+        yellow_lut(),
+        cyan_lut(),
+    ],
+    "Ranges": [0, 5000, 0, 1, 0, 1000],
+}
+
 
 def get_mapping(projector_api):
     mapping = projector_api.load_mapping(projector_api.get_projection_device())
@@ -35,7 +71,7 @@ def extract_channels_tifs(fp, chans):
         collected_frames = []
         channel_key = f"{chan}"
 
-        with File(fp, mode="r") as f:
+        with File(fp, mode="r", libver='latest', swmr=True) as f:
             indices = []
 
             for t_val, data in f.items():
@@ -62,7 +98,7 @@ def make_tif(fp, at=None, chan="channel_638", binning=2):
     collected_frames = []
     channel_key = f"{chan}"
 
-    with File(fp, mode="r") as f:
+    with File(fp, mode="r", libver='latest', swmr=True) as f:
         indices = []
 
         for t_val, data in f.items():
@@ -104,18 +140,23 @@ def make_tif(fp, at=None, chan="channel_638", binning=2):
 
                 patterned.append(np.stack(patterned_stack).astype(np.uint16))
 
-    outpath = fp[:-5] + f"_{chan}.tif"
-    tifffile.imwrite(
-        outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"}
-    )
+    # outpath = fp[:-5] + f"_{chan}.tif"
+    # tifffile.imwrite(
+    #     outpath, np.array(collected_frames), imagej=True, metadata={"axes": "tyx"}
+    # )
 
     if at is not None:
-        # print(np.array(patterned).shape)
+        metadata = {"axes": "tcyx"}
+        if np.array(patterned).shape[1] > 2:
+            metadata.update(seg_imagej_metadata)
+        else:
+            metadata.update(pattern_imagej_metadata)
+
         tifffile.imwrite(
-            fp[:-5] + chan + "_patterns.tif",
+            fp[:-5] + "_" +  chan + "_patterns.tif",
             np.array(patterned).astype(np.uint16),
             imagej=True,
-            metadata={"axes": "tcyx"},
+            metadata=metadata,
         )
 
 
@@ -125,7 +166,7 @@ def make_stim_tif(fp, at, binning=2):
     ati = cv2.invertAffineTransform(at)
     patterned = []
 
-    with File(fp, mode="r") as f:
+    with File(fp, mode="r", libver='latest', swmr=True) as f:
         indices = []
 
         for t_val, data in f.items():
@@ -218,7 +259,10 @@ def main():
     for val in tqdm(Path(input_dir).glob("*.hdf5")):
         for c in channels:
             if overlay_pattern:
-                make_tif(str(val), at, f"channel_{c}", binning=args.binning)
+                if c == "stim":
+                    make_tif(str(val), at, f"stim_aq", binning=args.binning)
+                else:
+                    make_tif(str(val), at, f"channel_{c}", binning=args.binning)
 
             else:
                 extract_channels_tifs(str(val), [f"channel_{c}"])

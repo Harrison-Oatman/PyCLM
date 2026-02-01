@@ -21,7 +21,7 @@ class CirclePattern(PatternMethod):
         center_x = self.pixel_size_um * w / 2.0
         center_y = self.pixel_size_um * h / 2.0
 
-        xx, yy = self.get_meshgrid()
+        xx, yy = self.get_um_meshgrid()
 
         print(h, w)
 

@@ -43,7 +43,7 @@ class StationaryBarPattern(BarPatternBase):
         self.period_time = 0  # in minutes
 
     def generate(self, context):
-        _xx, yy = self.get_meshgrid()
+        _xx, yy = self.get_um_meshgrid()
 
         is_on = ((yy / self.period_space) % 1.0) < self.duty_cycle
 
@@ -72,7 +72,7 @@ class BarPattern(BarPatternBase):
         self.period_time = period / bar_speed  # in minutes
 
     def _get_pattern_at_time(self, t_minutes):
-        _xx, yy = self.get_meshgrid()
+        _xx, yy = self.get_um_meshgrid()
         is_on = (
             (t_minutes - (yy / self.bar_speed)) % self.period_time
         ) < self.duty_cycle * self.period_time
@@ -103,7 +103,7 @@ class SawToothMethod(PatternMethod):
     def generate(self, context):
         t = context.time / 60
 
-        _xx, yy = self.get_meshgrid()
+        _xx, yy = self.get_um_meshgrid()
 
         is_on = (
             (t - (yy / self.bar_speed)) % self.period_time
@@ -188,7 +188,7 @@ class RotatingBarPattern(PatternMethod):
     def generate(self, context) -> np.ndarray:
         t = context.time / 60.0
 
-        xx, yy = self.get_meshgrid()
+        xx, yy = self.get_um_meshgrid()
         center_x, center_y = self.center_um()
 
         xx = xx - center_x
