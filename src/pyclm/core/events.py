@@ -74,7 +74,6 @@ class AcquisitionEvent:
         scheduled_time_since_start=0,
         exposure_time_ms=10,
         needs_slm=False,
-        super_axes=None,
         sub_axes=None,
         t_index=0,
         config_groups: list[ConfigGroup] | None = None,
@@ -110,9 +109,6 @@ class AcquisitionEvent:
         self.binning = binning
 
         # axis-name, axis-value pairs
-        # super-axes (determines folder structure containing experiment)
-        self.super_axes = super_axes
-
         # sub-axes (determines folder within hdf5_file)
         self.sub_axes = sub_axes
 
@@ -139,23 +135,16 @@ class AcquisitionEvent:
 
         self.pixel_width_um = None
 
-    def get_rel_path(self, leading=3) -> (str, str):
-        fstring = ""
-
-        if self.super_axes is not None:
-            for _ax, val in enumerate(self.super_axes):
-                if val is int:
-                    val = str(val).zfill(leading)
-
-                fstring += f"{val}/"
-
-        fstring += f"{self.experiment_name}"
+    def get_rel_path(self, leading=3) -> str:
+        """
+        Returns dset path within the hdf5 structure
+        """
 
         dset = ""
 
         if self.sub_axes is not None:
             for _ax, val in enumerate(self.sub_axes):
-                if val is int:
+                if isinstance(val, int):
                     val = str(val).zfill(leading)
 
                 dset += f"{val}/"
@@ -165,7 +154,7 @@ class AcquisitionEvent:
         else:
             dset = "UNNAMED_DATA"
 
-        return fstring, dset
+        return dset
 
     def write_attrs(self, dset: Dataset):
         dset.attrs["id"] = str(self.id)
@@ -188,9 +177,6 @@ class AcquisitionEvent:
         dset.attrs["exposure_time_ms"] = self.exposure_time_ms
         dset.attrs["needs_slm"] = self.needs_slm
         dset.attrs["binning"] = self.binning
-
-        if self.super_axes is not None:
-            dset.attrs["super_axes"] = [str(a) for a in self.super_axes]
 
         if self.sub_axes is not None:
             dset.attrs["sub_axes"] = [str(a) for a in self.sub_axes]
@@ -238,9 +224,6 @@ class AcquisitionEvent:
         repr_out["exposure_time_ms"] = self.exposure_time_ms
         repr_out["needs_slm"] = self.needs_slm
         repr_out["binning"] = self.binning
-
-        if self.super_axes is not None:
-            repr_out["super_axes"] = [str(a) for a in self.super_axes]
 
         if self.sub_axes is not None:
             repr_out["sub_axes"] = [str(a) for a in self.sub_axes]

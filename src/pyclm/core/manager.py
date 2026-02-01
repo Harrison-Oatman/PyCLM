@@ -7,6 +7,7 @@ It is responsible for
 - scheduling microscope events
 """
 
+import json
 import logging
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
@@ -119,7 +120,6 @@ class MicroscopeOutbox(DataPassingProcess):
         self,
         aq: AllQueues,
         base_path: Path | None = None,
-        save_type="hdf5",
         stop_event: Event | None = None,
     ):
         super().__init__(aq, stop_event)
@@ -140,9 +140,53 @@ class MicroscopeOutbox(DataPassingProcess):
         self.pattern_queue = aq.outbox_to_pattern
 
         self.base_path = base_path
-        self.save_type = save_type
+
+        self.open_files = {}  # Map experiment name to open h5py File object
 
         self.initialize_queues()
+
+    def initialize(self, schedule: ExperimentSchedule):
+        """
+        Initialize the output files for the experiment schedule.
+        Opens files in SWMR mode and writes metadata.
+        """
+
+        metadata = schedule.as_dict()
+        try:
+            for exp_name in schedule.experiment_names:
+                filepath = self.base_path / f"{exp_name}.hdf5"
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+
+                # Using SWMR mode to allow synchronous read from other processes
+                f = File(filepath, "w", libver="latest")
+                f.swmr_mode = True
+
+                # save metadata for entire schedule and experiment
+                f.attrs["schedule_metadata"] = json.dumps(metadata, default=str)
+
+                if exp_name in schedule.experiments:
+                    exp_config = schedule.experiments[exp_name]
+                    f.attrs["experiment_metadata"] = json.dumps(
+                        exp_config.as_dict(), default=str
+                    )
+
+                self.open_files[exp_name] = f
+                logger.info(f"Initialized HDF5 file for {exp_name} in SWMR mode.")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize outbox files: {e}", exc_info=True)
+            self.close_files()
+            raise e
+
+    def close_files(self):
+        """Close all open HDF5 files."""
+        for name, f in self.open_files.items():
+            try:
+                f.close()
+                logger.info(f"Closed HDF5 file for {name}")
+            except Exception as e:
+                logger.error(f"Error closing file for {name}: {e}")
+        self.open_files.clear()
 
     def handle_data(self, data):
         aq_event = data.event
@@ -167,6 +211,7 @@ class MicroscopeOutbox(DataPassingProcess):
         match msg.message:
             case "close":
                 self.manager_done = True
+                self.close_files()
 
             case "stream_close":
                 self.stream_count += 1
@@ -191,14 +236,14 @@ class MicroscopeOutbox(DataPassingProcess):
                 raise ValueError(f"Unexpected message: {msg}")
 
         if self.manager_done and self.stream_count >= 2:
+            self.close_files()
             return True
 
         return False
 
     def write_data(self, data: AcquisitionData):
         aq_event = data.event
-
-        file_relpath, relpath = aq_event.get_rel_path()
+        relpath = aq_event.get_rel_path()
 
         # acquisition is saved as "data", its segmentation is saved as "seg"
         dset_name = r"data"
@@ -206,29 +251,24 @@ class MicroscopeOutbox(DataPassingProcess):
             dset_name = r"seg"
 
         try:
-            if self.save_type == "tif":
-                fullpath = self.base_path / file_relpath / relpath
-                fullpath.mkdir(parents=True, exist_ok=True)
+            # Retrieve open file handle
+            exp_name = aq_event.experiment_name
 
-                tifffile.imwrite(fullpath / "data.tif", data.data)
+            if exp_name in self.open_files:
+                f = self.open_files[exp_name]
+                if aq_event.save_output:
+                    dset = f.create_dataset(relpath + dset_name, data=data.data)
+                    aq_event.write_attrs(dset)
+                    f.flush()
 
-            else:
-                filepath = self.base_path / f"{file_relpath}.hdf5"
-                # Ensure directory exists
-                filepath.parent.mkdir(parents=True, exist_ok=True)
-
-                with File(filepath, "a") as f:
-                    if aq_event.save_output:
-                        dset = f.create_dataset(relpath + dset_name, data=data.data)
+                if isinstance(data, StimulationData):
+                    if aq_event.save_stim:
+                        dset = f.create_dataset(relpath + r"dmd", data=data.dmd_pattern)
+                        dset.attrs["pattern_id"] = str(data.pattern_id)
                         aq_event.write_attrs(dset)
-
-                    if isinstance(data, StimulationData):
-                        if aq_event.save_stim:
-                            dset = f.create_dataset(
-                                relpath + r"dmd", data=data.dmd_pattern
-                            )
-                            dset.attrs["pattern_id"] = str(data.pattern_id)
-                            aq_event.write_attrs(dset)
+                        f.flush()
+            else:
+                logger.warning(f"No open file found for experiment: {exp_name}")
 
         except Exception as e:
             logger.error(f"Failed to write data: {e}", exc_info=True)
@@ -264,12 +304,6 @@ class SLMBuffer(DataPassingProcess):
         affine_transform: np.ndarray[Any, np.float32],
         experiment_names: list[str],
     ):
-        """
-        :param shape: Tuple of (height, width) for the SLM pattern
-        :param affine_transform: 2x3 array for affine transformation to apply to pattern
-        :param experiment_names: List of experiment names to initialize patterns for
-        """
-
         self.slm_shape = shape
         self.affine_transform = np.array(affine_transform)
 

@@ -80,6 +80,28 @@ class ImagingConfig:
             f"configs={self._config_groups}, device_props={self._device_properties})"
         )
 
+    def as_dict(self):
+        return {
+            "channel_id": str(self.channel_id),
+            "experiment_name": self.experiment_name,
+            "exposure": self.exposure,
+            "every_t": self.every_t,
+            "save": self.save,
+            "binning": self.binning,
+            "config_groups": [
+                {"group": c.group, "config": c.config} for c in self.get_config_groups()
+            ],
+            "device_properties": [
+                {
+                    "device": d.device,
+                    "property": d.property,
+                    "value": d.value,
+                    "type": d.type,
+                }
+                for d in self.get_device_properties()
+            ],
+        }
+
 
 class MethodBasedConfig:
     def __init__(self, method_name: str, save_output: bool = True, every_t=1, **kwargs):
@@ -93,6 +115,14 @@ class MethodBasedConfig:
 
     def __repr__(self):
         return f"Method({self.method_name}: {', '.join([f'{k}={v}' for k, v in self.kwargs.items()])})"
+
+    def as_dict(self):
+        return {
+            "method_name": self.method_name,
+            "save": self.save,
+            "every_t": self.every_t,
+            "kwargs": self.kwargs,
+        }
 
 
 SegmentationConfig = MethodBasedConfig
@@ -126,9 +156,21 @@ class Experiment:
             f"Segmentation method={self.segmentation}, Pattern method={self.pattern})"
         )
 
+    def as_dict(self):
+        return {
+            "experiment_name": self.experiment_name,
+            "channels": {k: v.as_dict() for k, v in self.channels.items()},
+            "stimulation": self.stimulation.as_dict(),
+            "segmentation": self.segmentation.as_dict(),
+            "pattern": self.pattern.as_dict(),
+            "t_delay": self.t_delay,
+            "t_stop": self.t_stop,
+        }
+
 
 class PositionBase:
-    pass
+    def as_dict(self):
+        return {}
 
 
 class PositionWithAutoFocus(PositionBase):
@@ -168,6 +210,14 @@ class TimeCourse:
         self.setup = setup
         self.between = between
 
+    def as_dict(self):
+        return {
+            "count": self.count,
+            "interval": self.interval,
+            "setup": self.setup,
+            "between": self.between,
+        }
+
 
 class ExperimentSchedule:
     def __init__(
@@ -189,8 +239,15 @@ class ExperimentSchedule:
         if timecourse:
             self.times = timecourse
 
-        else:
             self.times = TimeCourse(t_count, t_interval, t_setup, t_between)
+
+    def as_dict(self):
+        return {
+            "experiment_names": self.experiment_names,
+            "experiments": {k: v.as_dict() for k, v in self.experiments.items()},
+            "positions": {k: v.as_dict() for k, v in self.positions.items()},
+            "times": self.times.as_dict(),
+        }
 
 
 def check_type(obj):
