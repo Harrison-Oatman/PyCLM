@@ -147,7 +147,6 @@ class PatternContext:
         return data.data if data else None
 
 
-
 class PatternMethod:
     name = "base"
 
@@ -197,7 +196,13 @@ class PatternMethod:
                 logger.warning(f"Pattern {self.name} requested unknown channel {name}")
 
         if self._stim_requested:
-            reqs.append(AcquiredImageRequest(experiment.stimulation.channel_id, self._stim_request_raw, self._stim_request_seg))
+            reqs.append(
+                AcquiredImageRequest(
+                    experiment.stimulation.channel_id,
+                    self._stim_request_raw,
+                    self._stim_request_seg,
+                )
+            )
 
         return reqs
 

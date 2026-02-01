@@ -12,22 +12,23 @@ from skimage.transform import downscale_local_mean
 from toml import load
 from tqdm import tqdm
 
-import numpy as np
-import tifffile
 
 def grayscale_lut():
     ramp = np.arange(256, dtype=np.uint8)
     return np.stack([ramp, ramp, ramp])
+
 
 def cyan_lut():
     zero = np.zeros(256, dtype=np.uint8)
     ramp = np.arange(256, dtype=np.uint8)
     return np.stack([zero, ramp, ramp])
 
+
 def yellow_lut():
     zero = np.zeros(256, dtype=np.uint8)
     ramp = np.arange(256, dtype=np.uint8)
     return np.stack([ramp, ramp, zero])
+
 
 pattern_imagej_metadata = {
     "mode": "composite",
@@ -71,7 +72,7 @@ def get_binning_from_metadata(f: File, chan_key: str):
     """
     Extract binning from file attributes or return default 1.
     """
-    if "experiment_metadata" in f.attrs:
+    if "experiment_metadata" in list(f.attrs.keys()):
         try:
             meta = json.loads(f.attrs["experiment_metadata"])
             # chan_key is typically "channel_NAME"
@@ -80,13 +81,14 @@ def get_binning_from_metadata(f: File, chan_key: str):
                 short_name = chan_key.replace("channel_", "", 1)
                 if short_name in meta.get("channels", {}):
                     return meta["channels"][short_name].get("binning", 1)
+            else:
+                return meta["segmentation"].get("binning", 1)
         except Exception as e:
             print(f"Error reading binning from metadata: {e}")
-
     return 1
 
 
-def make_tif(fp, at, chan="channel_638"):
+def make_tif(fp, at, chan="channel_638", binning_override=None):
     ati = cv2.invertAffineTransform(at)
     patterned = []
 
@@ -103,6 +105,9 @@ def make_tif(fp, at, chan="channel_638"):
 
     # Attempt to read binning from metadata
     binning = get_binning_from_metadata(f, channel_key)
+
+    if binning_override:
+        binning = binning_override
 
     try:
         indices = []
@@ -197,6 +202,11 @@ def process_args():
     parser.add_argument(
         "--config", type=str, help="path to pyclm_config.toml file", default=None
     )
+    parser.add_argument(
+        "--binning",
+        help="binning during experiment (autodetected if not sepcified)",
+        default=None,
+    )
     # Removed binning, overlay_pattern, just_patterns args
 
     return parser.parse_args()
@@ -236,9 +246,9 @@ def main():
     for val in tqdm(list(Path(input_dir).glob("*.hdf5"))):
         for c in channels:
             if c == "stim":
-                make_tif(str(val), at, f"stim_aq")
+                make_tif(str(val), at, f"stim_aq", args.binning)
             else:
-                make_tif(str(val), at, f"channel_{c}")
+                make_tif(str(val), at, f"channel_{c}", args.binning)
 
 
 if __name__ == "__main__":

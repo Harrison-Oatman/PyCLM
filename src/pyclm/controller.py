@@ -150,7 +150,9 @@ class Controller:
                 while True:
                     # check if any process has exited (e.g., manager finishes, or crash)
                     done, _not_done = wait(
-                        future_to_process.keys(), return_when=FIRST_COMPLETED
+                        future_to_process.keys(),
+                        return_when=FIRST_COMPLETED,
+                        timeout=0.5,
                     )
 
                     """
