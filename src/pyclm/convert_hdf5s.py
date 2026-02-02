@@ -192,7 +192,6 @@ def make_tif(fp, at, chan="channel_638", binning_override=None):
             imagej=True,
             metadata=metadata,
         )
-        print(f"Saved {outpath_pattern}")
 
 
 def process_args():
