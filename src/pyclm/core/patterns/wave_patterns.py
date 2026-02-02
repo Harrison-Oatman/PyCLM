@@ -43,7 +43,7 @@ class StationaryWavePattern(WavePatternBase):
         self.period_time = 0  # in minutes
 
     def generate(self, context):
-        xx, yy = self.get_meshgrid()
+        xx, yy = self.get_um_meshgrid()
         center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
         distance = np.sqrt((xx - center_x) ** 2 + (yy - center_y) ** 2)
 
@@ -78,7 +78,7 @@ class WavePattern(WavePatternBase):
     def generate(self, context):
         t = context.time / 60
 
-        xx, yy = self.get_meshgrid()
+        xx, yy = self.get_um_meshgrid()
         center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
         distance = np.sqrt((xx - center_x) ** 2 + (yy - center_y) ** 2)
 

@@ -126,6 +126,26 @@ class PatternContext:
         data = self._dock.data[cid]["seg"]
         return data.data if data else None
 
+    def stim_raw(self):
+        cid = self._experiment.stimulation.channel_id
+        if cid not in self._dock.data or "raw" not in self._dock.data[cid]:
+            raise ValueError(
+                f"Raw data for the stimulation output was not requested."
+                "Use PatternMethod.request_sim(raw=True)"
+            )
+        data = self._dock.data[cid]["raw"]
+        return data.data if data else None
+
+    def stim_seg(self):
+        cid = self._experiment.stimulation.channel_id
+        if cid not in self._dock.data or "seg" not in self._dock.data[cid]:
+            raise ValueError(
+                f"Segmentation data for the stimulation output was not requested."
+                "Use PatternMethod.request_sim(seg=True)"
+            )
+        data = self._dock.data[cid]["seg"]
+        return data.data if data else None
+
 
 class PatternMethod:
     name = "base"
@@ -150,9 +170,19 @@ class PatternMethod:
         self._requirements_list = []  # List of (channel_name, raw, seg)
         self._experiment_ref = None
 
+        self._stim_requested = False
+        self._stim_request_raw = False
+        self._stim_request_seg = False
+
     def add_requirement(self, channel_name: str, raw: bool = False, seg: bool = False):
         """Declarative way to add requirements."""
         self._requirements_list.append((channel_name, raw, seg))
+
+    def request_stim(self, raw: bool = False, seg: bool = False):
+        """Request the imaged stimulation"""
+        self._stim_requested = True
+        self._stim_request_raw = raw
+        self._stim_request_seg = seg
 
     # initialize happens shortly after init
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
@@ -164,6 +194,15 @@ class PatternMethod:
                 reqs.append(AcquiredImageRequest(ch.channel_id, needs_raw, needs_seg))
             else:
                 logger.warning(f"Pattern {self.name} requested unknown channel {name}")
+
+        if self._stim_requested:
+            reqs.append(
+                AcquiredImageRequest(
+                    experiment.stimulation.channel_id,
+                    self._stim_request_raw,
+                    self._stim_request_seg,
+                )
+            )
 
         return reqs
 
@@ -185,7 +224,7 @@ class PatternMethod:
         binning = experiment.stimulation.binning
         self.update_binning(binning)
 
-    def get_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
+    def get_um_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
         h, w = self.pattern_shape
 
         y_range = np.arange(h) * self.pixel_size_um

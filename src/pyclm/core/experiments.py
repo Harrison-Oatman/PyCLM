@@ -222,7 +222,7 @@ class TimeCourse:
 class ExperimentSchedule:
     def __init__(
         self,
-        experiments: dict[str:Experiment],
+        experiments: dict[str, Experiment],
         positions: dict[str, PositionBase],
         t_count: int = 1,
         t_interval: float = 30.0,
@@ -238,7 +238,7 @@ class ExperimentSchedule:
 
         if timecourse:
             self.times = timecourse
-
+        else:
             self.times = TimeCourse(t_count, t_interval, t_setup, t_between)
 
     def as_dict(self):
