@@ -9,12 +9,14 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "h5py>=3.14.0",
+    "napari>=0.6.0",
     "natsort>=8.4.0",
     "notebook>=7.5.1",
     "opencv-python>=4.12.0.88",
     "pandas-stubs==2.3.2.250827",
     "pymmcore-plus==0.13.7",
     "pymmcore==11.2.1.71.0",
+    "pyside6>=6.10.2",
     "pyyaml>=6.0.3",
     "scikit-image>=0.25.2",
     "tifffile>=2025.9.20",
