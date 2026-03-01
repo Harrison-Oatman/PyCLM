@@ -7,7 +7,7 @@ from . import run_pyclm
 def main():
     args = process_args()
     base_path = Path(args.directory)
-    run_pyclm(base_path, args.config, dry=args.dry)
+    run_pyclm(base_path, args.config, dry=args.dry, gui=args.gui)
 
 
 def process_args():
@@ -18,6 +18,11 @@ def process_args():
     )
     parser.add_argument(
         "--dry", action="store_true", help="run without executing the experiment"
+    )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="run with an updating gui to track experiment progress",
     )
 
     return parser.parse_args()

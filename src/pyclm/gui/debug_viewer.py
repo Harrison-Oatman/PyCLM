@@ -1,17 +1,17 @@
 import os
+
 os.environ.setdefault("NAPARI_DISABLE_PLUGIN_AUTOLOAD", "1")
 
 import sys
-import numpy as np
+
 import napari
+import numpy as np
 from h5py import File
 
 
 def view_hdf5(filepath: str, channel="channel_638"):
     viewer = napari.Viewer()
-    # f = File(fp, mode="r", libver="latest", swmr=True)
-    with File(filepath, "r") as f:
-        
+    with File(filepath, mode="r", libver="latest", swmr=True) as f:
         timepoints = sorted(f.keys())
         print("Timepoints:", timepoints)
 

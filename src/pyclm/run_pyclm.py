@@ -1,11 +1,17 @@
 import logging
+import os
+import subprocess
+import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional
+from threading import Thread
 
 import numpy as np
 from toml import load
 
 logger = logging.getLogger(__name__)
+
+from pyclm.gui.gui_controller import launch_hdf5_layer_viewer
 
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
@@ -33,12 +39,30 @@ def set_logging(experiment_directory: Path):
     logging.basicConfig(handlers=[console_handler, file_handler])
 
 
+def launch_gui_process(
+    srcs: Sequence[tuple[str, str]], cwd: Path | None = None
+) -> subprocess.Popen:
+    args = [sys.executable, "-m", "pyclm.gui.gui_controller"]
+    for fp, ch in srcs:
+        args += ["--src", f"{fp}:{ch}"]
+    env = os.environ.copy()
+    env.setdefault("NAPARI_DISABLE_PLUGIN_AUTOLOAD", "1")
+    return subprocess.Popen(
+        args,
+        cwd=str(cwd) if cwd else None,
+        env=env,
+        stdout=None,
+        stderr=None,
+    )
+
+
 def run_pyclm(
     experiment_directory,
     config_path=None,
     segmentation_methods: dict[str, type[SegmentationMethod]] | None = None,
     pattern_methods: dict[str, type[PatternMethod]] | None = None,
     dry: bool = False,
+    gui: bool = False,
 ):
     """
     Run a pyclm experiment from a given directory and configuration file.
@@ -108,5 +132,14 @@ def run_pyclm(
     at = np.array(config["affine_transform"], dtype=np.float32)
 
     c.initialize(schedule, slm_shape, at, base_path)
+
+    gui_proc = None
+    if gui:
+        srcs = [
+            (str((base_path / "on.00.hdf5").resolve()), "channel_638"),
+            (str((base_path / "off.00.hdf5").resolve()), "channel_638"),
+        ]
+        gui_proc = launch_gui_process(srcs, cwd=base_path)
+        logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
     c.run()
