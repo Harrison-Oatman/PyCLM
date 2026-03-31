@@ -21,6 +21,7 @@ from h5py import File
 
 from pyclm.core.pattern_process import RequestPattern
 
+from .core_interface import MicroscopeCoreInterface
 from .datatypes import (
     AcquisitionData,
     CameraPattern,
@@ -113,6 +114,12 @@ class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
                 raise ValueError(f"Unexpected message: {msg}")
 
 
+def get_image_shape(core: MicroscopeCoreInterface, binning: int = 1) -> tuple[int, int]:
+    roi = core.getROI()
+    h, w = roi[3], roi[2]
+    return (h // binning, w // binning)
+
+
 class MicroscopeOutbox(DataPassingProcess):
     # grabs data from microscope, writes data to disk
 
@@ -145,7 +152,7 @@ class MicroscopeOutbox(DataPassingProcess):
 
         self.initialize_queues()
 
-    def initialize(self, schedule: ExperimentSchedule):
+    def initialize(self, schedule: ExperimentSchedule, core: MicroscopeCoreInterface):
         """
         Initialize the output files for the experiment schedule.
         Opens files in SWMR mode and writes metadata.
@@ -157,11 +164,8 @@ class MicroscopeOutbox(DataPassingProcess):
                 filepath = self.base_path / f"{exp_name}.hdf5"
                 filepath.parent.mkdir(parents=True, exist_ok=True)
 
-                # Using SWMR mode to allow synchronous read from other processes
                 f = File(filepath, "w", libver="latest")
-                f.swmr_mode = True
 
-                # save metadata for entire schedule and experiment
                 f.attrs["schedule_metadata"] = json.dumps(metadata, default=str)
 
                 if exp_name in schedule.experiments:
@@ -170,6 +174,74 @@ class MicroscopeOutbox(DataPassingProcess):
                         exp_config.as_dict(), default=str
                     )
 
+                    # Create t_index tracker
+                    f.create_dataset("current_t_index", data=np.int32(-1))
+
+                    experiment = schedule.experiments[exp_name]
+                    t_count = schedule.times.count
+
+                    for t in range(t_count):
+                        t_str = f"{t:05d}"
+
+                        # Stimulation channel
+                        stim = experiment.stimulation
+                        if stim.exposure > 0:
+                            stim_shape = get_image_shape(core, stim.binning)
+                            dset = f.create_dataset(
+                                f"{t_str}/stim_aq/data",
+                                shape=(0, 0),
+                                maxshape=stim_shape,
+                                dtype=np.uint16,
+                                chunks=True,
+                            )
+                            self._preallocate_attrs(dset, stim)
+                            if experiment.segmentation.save:
+                                dset = f.create_dataset(
+                                    f"{t_str}/stim_aq/seg",
+                                    shape=(0, 0),
+                                    maxshape=stim_shape,
+                                    dtype=np.uint16,
+                                    chunks=True,
+                                )
+                                self._preallocate_attrs(dset, stim)
+                            slm_device = core.getSLMDevice()
+                            if slm_device:
+                                slm_shape = (
+                                    core.getSLMHeight(slm_device),
+                                    core.getSLMWidth(slm_device),
+                                )
+                                dset = f.create_dataset(
+                                    f"{t_str}/stim_aq/dmd",
+                                    shape=(0, 0),
+                                    maxshape=slm_shape,
+                                    dtype=np.uint8,
+                                    chunks=True,
+                                )
+                                self._preallocate_attrs(dset, stim)
+
+                        # Imaging channels
+                        for channel_name, channel in experiment.channels.items():
+                            channel_shape = get_image_shape(core, channel.binning)
+                            dset = f.create_dataset(
+                                f"{t_str}/channel_{channel_name}/data",
+                                shape=(0, 0),
+                                maxshape=channel_shape,
+                                dtype=np.uint16,
+                                chunks=True,
+                            )
+                            self._preallocate_attrs(dset, channel)
+                            if experiment.segmentation.save:
+                                dset = f.create_dataset(
+                                    f"{t_str}/channel_{channel_name}/seg",
+                                    shape=(0, 0),
+                                    maxshape=channel_shape,
+                                    dtype=np.uint16,
+                                    chunks=True,
+                                )
+                                self._preallocate_attrs(dset, channel)
+
+                # Enable SWMR only after all datasets exist
+                f.swmr_mode = True
                 self.open_files[exp_name] = f
                 logger.info(f"Initialized HDF5 file for {exp_name} in SWMR mode.")
 
@@ -195,8 +267,6 @@ class MicroscopeOutbox(DataPassingProcess):
 
         if isinstance(data, SegmentationData):
             return
-
-        # print(aq_event)
 
         if aq_event.segment:
             self.seg_queue.put(data)
@@ -241,14 +311,43 @@ class MicroscopeOutbox(DataPassingProcess):
 
         return False
 
+    def _preallocate_attrs(self, dset, channel: ImagingConfig):
+        dset.attrs["id"] = ""
+        dset.attrs["position"] = [("", "")]
+        dset.attrs["experiment_name"] = ""
+        dset.attrs["time_scheduled"] = ""
+        dset.attrs["time_since_start"] = ""
+        dset.attrs["time_completed"] = ""
+        dset.attrs["complete"] = False
+        dset.attrs["exposure_time_ms"] = 0.0
+        dset.attrs["needs_slm"] = False
+        dset.attrs["binning"] = 1
+        dset.attrs["sub_axes"] = [""]
+        dset.attrs["save_output"] = False
+        dset.attrs["segment"] = False
+        dset.attrs["seg_method"] = ""
+        dset.attrs["save_seg"] = False
+        dset.attrs["raw_goes_to_pattern"] = False
+        dset.attrs["seg_goes_to_pattern"] = False
+        dset.attrs["channel_id"] = ""
+        dset.attrs["pattern_method"] = ""
+        dset.attrs["save_pattern"] = False
+        dset.attrs["pixel_width_um"] = ""
+        dset.attrs["pattern_id"] = ""
+
+        for cg in channel.get_config_groups():
+            dset.attrs[f"config_groups: {cg.group}"] = ""
+        for dp in channel.get_device_properties():
+            dset.attrs[f"devices: {dp.device}-{dp.property}"] = ""
+
     def write_data(self, data: AcquisitionData):
         aq_event = data.event
         relpath = aq_event.get_rel_path()
 
         # acquisition is saved as "data", its segmentation is saved as "seg"
-        dset_name = r"data"
+        dset_name = "data"
         if isinstance(data, SegmentationData):
-            dset_name = r"seg"
+            dset_name = "seg"
 
         try:
             # Retrieve open file handle
@@ -256,17 +355,31 @@ class MicroscopeOutbox(DataPassingProcess):
 
             if exp_name in self.open_files:
                 f = self.open_files[exp_name]
+
                 if aq_event.save_output:
-                    dset = f.create_dataset(relpath + dset_name, data=data.data)
+                    dset = f[relpath + dset_name]
+                    if dset.shape != data.data.shape:
+                        dset.resize(data.data.shape)
+                    dset[...] = data.data
                     aq_event.write_attrs(dset)
                     f.flush()
 
                 if isinstance(data, StimulationData):
-                    if aq_event.save_stim:
-                        dset = f.create_dataset(relpath + r"dmd", data=data.dmd_pattern)
+                    if aq_event.save_stim and (relpath + "dmd") in f:
+                        dset = f[relpath + "dmd"]
+                        if dset.shape != data.dmd_pattern.shape:
+                            dset.resize(data.dmd_pattern.shape)
+                        dset[...] = data.dmd_pattern
                         dset.attrs["pattern_id"] = str(data.pattern_id)
                         aq_event.write_attrs(dset)
                         f.flush()
+
+                # Update t_index if this timepoint is newer
+                t_index = aq_event.t_index
+                if f["current_t_index"][()] < t_index:
+                    f["current_t_index"][...] = np.int32(t_index)
+                    f.flush()
+
             else:
                 logger.warning(f"No open file found for experiment: {exp_name}")
 
@@ -640,7 +753,7 @@ class Manager:
                             needs_slm=True,
                             config_groups=stim.get_config_groups(),
                             devices=stim.get_device_properties(),
-                            sub_axes=[f"{t: 05d}", "stim_aq"],
+                            sub_axes=[f"{t:05d}", "stim_aq"],
                             t_index=t,
                             **channel_kwargs,
                         )
@@ -675,7 +788,7 @@ class Manager:
                             exposure_time_ms=channel.exposure,
                             config_groups=channel.get_config_groups(),
                             devices=channel.get_device_properties(),
-                            sub_axes=[f"{t: 05d}", f"channel_{channel_name}"],
+                            sub_axes=[f"{t:05d}", f"channel_{channel_name}"],
                             t_index=t,
                             **channel_kwargs,
                         )

@@ -24,33 +24,23 @@ class LayerSpec:
     name: str | None = None
 
 
-def _discover_timepoints_via_visit(f: h5py.File, channel_key: str) -> list[str]:
-    found: set[str] = set()
-    suffix = posixpath.join(channel_key, "data")
-
-    def visitor(name: str) -> None:
-        if not name.endswith(suffix):
-            return
-        parts = name.split("/")
-        if len(parts) >= 3:
-            found.add(parts[0])
-
+def _read_current_t_index(f: h5py.File) -> int:
     try:
-        f.visit(visitor)
+        f["current_t_index"].id.refresh()
+        return int(f["current_t_index"][()])
     except Exception:
-        pass
-
-    return list(natsorted(found))
+        return -1
 
 
 def _read_data_frame_swmr(
     f: h5py.File, t_val: str, channel_key: str
 ) -> np.ndarray | None:
     try:
-        g = f[t_val]
-        cg = g[channel_key]
-        d = cg["data"]
-        return np.array(d)
+        d = f[t_val][channel_key]["data"]
+        arr = np.array(d)
+        if arr.size == 0:
+            return None
+        return arr
     except Exception:
         return None
 
@@ -61,7 +51,7 @@ class LiveHDF5Layer:
         self.spec = spec
 
         self.f: h5py.File | None = None
-        self.seen: set[str] = set()
+        self.last_t_index: int = -1
         self.frame_shape: tuple[int, ...] | None = None
 
         self._open_file()
@@ -89,37 +79,39 @@ class LiveHDF5Layer:
         if self.f is None:
             return None
 
-        tps = _discover_timepoints_via_visit(self.f, self.spec.channel_key)
-        frames: list[np.ndarray] = []
+        current_t = _read_current_t_index(self.f)
+        if current_t < 0:
+            return None
 
-        for t in tps:
-            frame = _read_data_frame_swmr(self.f, t, self.spec.channel_key)
+        frames: list[np.ndarray] = []
+        for t in range(current_t + 1):
+            t_str = f"{t:05d}"
+            frame = _read_data_frame_swmr(self.f, t_str, self.spec.channel_key)
             if frame is None:
                 continue
-
             if self.frame_shape is None:
                 self.frame_shape = frame.shape
             if frame.shape != self.frame_shape:
                 continue
-
             frames.append(frame)
-            self.seen.add(t)
 
+        self.last_t_index = current_t
         return np.stack(frames, axis=0) if frames else None
 
     def refresh(self) -> bool:
-        self._open_file()
+        if self.f is None:
+            self._open_file()
         if self.f is None:
             return False
 
-        tps = _discover_timepoints_via_visit(self.f, self.spec.channel_key)
-        new_tps = [t for t in tps if t not in self.seen]
-        if not new_tps:
+        current_t = _read_current_t_index(self.f)
+        if current_t <= self.last_t_index:
             return False
 
         new_frames: list[np.ndarray] = []
-        for t in new_tps:
-            frame = _read_data_frame_swmr(self.f, t, self.spec.channel_key)
+        for t in range(self.last_t_index + 1, current_t + 1):
+            t_str = f"{t:05d}"
+            frame = _read_data_frame_swmr(self.f, t_str, self.spec.channel_key)
             if frame is None:
                 continue
 
@@ -129,7 +121,8 @@ class LiveHDF5Layer:
                 continue
 
             new_frames.append(frame)
-            self.seen.add(t)
+
+        self.last_t_index = current_t
 
         if not new_frames:
             return False
@@ -139,12 +132,14 @@ class LiveHDF5Layer:
 
         if cur is None or cur.size == 0 or cur.shape == (1, 1, 1):
             self.layer.data = new_stack
+            self.viewer.reset_view()
         else:
             if cur.shape[1:] != new_stack.shape[1:]:
                 self.layer.data = new_stack
             else:
                 self.layer.data = np.concatenate([cur, new_stack], axis=0)
 
+        self.layer.reset_contrast_limits()
         self.layer.refresh()
         return True
 
