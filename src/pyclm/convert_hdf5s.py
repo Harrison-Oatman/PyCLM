@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import cv2
+import h5py
 import numpy as np
 import tifffile
 from h5py import File
@@ -117,6 +118,10 @@ def make_tif(fp, at, chan="channel_638", binning_override=None):
             if t_val not in f:
                 continue
             data_group = f[t_val]
+
+            if not isinstance(data_group, h5py.Group):
+                continue
+
             if channel_key not in data_group:
                 continue
 
@@ -134,6 +139,9 @@ def make_tif(fp, at, chan="channel_638", binning_override=None):
                 # Ensure data is accessible (SWMR safety)
                 data_dset.refresh()
                 data = np.array(data_dset)
+
+                if data.shape == (0, 0):
+                    continue
 
             except Exception as e:
                 # might happen if writing is in progress for this specific frame
@@ -207,7 +215,6 @@ def process_args():
         help="binning during experiment (autodetected if not sepcified)",
         default=None,
     )
-    # Removed binning, overlay_pattern, just_patterns args
 
     return parser.parse_args()
 
