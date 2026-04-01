@@ -6,14 +6,23 @@ import yaml
 
 
 class TimeSeriesImageSource:
-    def __init__(self, folder: Path, loop: bool = True):
+    def __init__(self, frames: list[np.ndarray], loop: bool = True):
+        if not frames:
+            raise ValueError("TimeSeriesImageSource requires at least one frame.")
+        self._frames = [self._normalize_frame(f) for f in frames]
         self._loop = loop
-        self._pos_map: dict[tuple[float, float], str] = {}
-        self._index_map: dict[str, int] = {}
-        self._frames_map: dict[str, list[np.ndarray]] = {}
-        self._default_stack: str | None = None
+        self._idx = 0
 
-        self.initialize_from_folder(folder)
+    @classmethod
+    def from_tiff_stack(cls, path: Path, loop: bool = True) -> "TimeSeriesImageSource":
+        data = tiff.imread(str(path))
+        if data.ndim == 2:
+            frames = [data]
+        elif data.ndim == 3:
+            if data.shape[0] <= 4:
+                frames = [data[i] for i in range(data.shape[0])]
+            else:
+                frames = [data]
 
     def read_yaml(self, data_directory: Path):
         yaml_path = Path.joinpath(data_directory, "image_positions.yaml")
@@ -46,23 +55,16 @@ class TimeSeriesImageSource:
 
     @property
     def shape(self) -> tuple[int, ...]:
-        if self._default_stack is None:
-            raise RuntimeError("TimeSeriesImageSource not initialized")
-        return self._frames_map[self._default_stack][0].shape
+        return self._frames[0].shape
 
-    def next_frame(self, pos) -> np.ndarray:
-        pos = tuple(pos)
-        if pos not in self._pos_map:
-            raise KeyError(f"Position {pos} not found in image_positions.yaml")
-        stack_name = self._pos_map[pos]
-        frames = self._frames_map[stack_name]
-        frame = frames[self._index_map[stack_name]]
-        self._index_map[stack_name] += 1
-        if self._index_map[stack_name] >= len(frames):
+    def next_frame(self) -> np.ndarray:
+        frame = self._frames[self._idx]
+        self._idx += 1
+        if self._idx >= len(self._frames):
             if self._loop:
-                self._index_map[stack_name] = 0
+                self._idx = 0
             else:
-                self._index_map[stack_name] = len(frames) - 1
+                self._idx = len(self._frames) - 1
         return frame
 
     @staticmethod
