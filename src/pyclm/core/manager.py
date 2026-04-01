@@ -149,6 +149,7 @@ class MicroscopeOutbox(DataPassingProcess):
         self.base_path = base_path
 
         self.open_files = {}  # Map experiment name to open h5py File object
+        self.experiments = {}
 
         self.initialize_queues()
 
@@ -178,14 +179,21 @@ class MicroscopeOutbox(DataPassingProcess):
                     f.create_dataset("current_t_index", data=np.int32(-1))
 
                     experiment = schedule.experiments[exp_name]
+                    self.experiments[exp_name] = experiment
                     t_count = schedule.times.count
 
                     for t in range(t_count):
                         t_str = f"{t:05d}"
+                        this_t = t - experiment.t_delay
+
+                        if t < experiment.t_delay:
+                            continue
+                        if experiment.t_stop > 0 and this_t >= experiment.t_stop:
+                            continue
 
                         # Stimulation channel
                         stim = experiment.stimulation
-                        if stim.exposure > 0:
+                        if stim.exposure > 0 and this_t % stim.every_t == 0:
                             stim_shape = get_image_shape(core, stim.binning)
                             dset = f.create_dataset(
                                 f"{t_str}/stim_aq/data",
@@ -221,24 +229,39 @@ class MicroscopeOutbox(DataPassingProcess):
 
                         # Imaging channels
                         for channel_name, channel in experiment.channels.items():
-                            channel_shape = get_image_shape(core, channel.binning)
-                            dset = f.create_dataset(
-                                f"{t_str}/channel_{channel_name}/data",
-                                shape=(0, 0),
-                                maxshape=channel_shape,
-                                dtype=np.uint16,
-                                chunks=True,
-                            )
-                            self._preallocate_attrs(dset, channel)
-                            if experiment.segmentation.save:
+                            if this_t % channel.every_t == 0:
+                                channel_shape = get_image_shape(core, channel.binning)
                                 dset = f.create_dataset(
-                                    f"{t_str}/channel_{channel_name}/seg",
+                                    f"{t_str}/channel_{channel_name}/data",
                                     shape=(0, 0),
                                     maxshape=channel_shape,
                                     dtype=np.uint16,
                                     chunks=True,
                                 )
                                 self._preallocate_attrs(dset, channel)
+                                if experiment.segmentation.save:
+                                    dset = f.create_dataset(
+                                        f"{t_str}/channel_{channel_name}/seg",
+                                        shape=(0, 0),
+                                        maxshape=channel_shape,
+                                        dtype=np.uint16,
+                                        chunks=True,
+                                    )
+                                    self._preallocate_attrs(dset, channel)
+
+                    # Store every_t per channel
+                    every_t_map = {}
+                    for channel_name, channel in experiment.channels.items():
+                        every_t_map[f"channel_{channel_name}"] = channel.every_t
+                    stim = experiment.stimulation
+                    if stim.exposure > 0:
+                        every_t_map["stim_aq"] = stim.every_t
+                    f.attrs["every_t"] = json.dumps(every_t_map)
+
+                    # Store t_delay
+                    f.attrs["t_delay"] = experiment.t_delay
+                    f.attrs["t_stop"] = experiment.t_stop
+                    f.attrs["t_count"] = t_count
 
                 # Enable SWMR only after all datasets exist
                 f.swmr_mode = True
@@ -340,6 +363,46 @@ class MicroscopeOutbox(DataPassingProcess):
         for dp in channel.get_device_properties():
             dset.attrs[f"devices: {dp.device}-{dp.property}"] = ""
 
+    def _timepoint_complete(self, f, t_index: int, exp_name: str) -> bool:
+        t_str = f"{t_index:05d}"
+        experiment = self.experiments[exp_name]
+
+        t_delay = experiment.t_delay
+        t_stop = experiment.t_stop
+
+        if t_index < t_delay:
+            return True
+
+        this_t = t_index - t_delay
+
+        if t_stop > 0 and this_t >= t_stop:
+            return True
+
+        # Stimulation channel
+        stim = experiment.stimulation
+        if stim.exposure > 0 and stim.save:
+            if this_t % stim.every_t == 0:
+                path = f"{t_str}/stim_aq/data"
+                try:
+                    if f[path].shape == (0, 0):
+                        return False
+                except KeyError:
+                    return False
+
+        # Imaging channels
+        for channel_name, channel in experiment.channels.items():
+            if not channel.save:
+                continue
+            if this_t % channel.every_t == 0:
+                path = f"{t_str}/channel_{channel_name}/data"
+                try:
+                    if f[path].shape == (0, 0):
+                        return False
+                except KeyError:
+                    return False
+
+        return True
+
     def write_data(self, data: AcquisitionData):
         aq_event = data.event
         relpath = aq_event.get_rel_path()
@@ -374,9 +437,11 @@ class MicroscopeOutbox(DataPassingProcess):
                         aq_event.write_attrs(dset)
                         f.flush()
 
-                # Update t_index if this timepoint is newer
+                # Update t_index if this timepoint is newer and all scheduled channels are written
                 t_index = aq_event.t_index
-                if f["current_t_index"][()] < t_index:
+                if f["current_t_index"][()] < t_index and self._timepoint_complete(
+                    f, t_index, exp_name
+                ):
                     f["current_t_index"][...] = np.int32(t_index)
                     f.flush()
 
