@@ -11,8 +11,6 @@ from toml import load
 
 logger = logging.getLogger(__name__)
 
-from pyclm.gui.gui_controller import launch_hdf5_layer_viewer
-
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .directories import schedule_from_directory
