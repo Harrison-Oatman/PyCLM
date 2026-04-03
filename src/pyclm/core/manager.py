@@ -160,6 +160,8 @@ class MicroscopeOutbox(DataPassingProcess):
         """
 
         metadata = schedule.as_dict()
+        all_layers = []
+
         try:
             for exp_name in schedule.experiment_names:
                 filepath = self.base_path / f"{exp_name}.hdf5"
@@ -181,6 +183,10 @@ class MicroscopeOutbox(DataPassingProcess):
                     experiment = schedule.experiments[exp_name]
                     self.experiments[exp_name] = experiment
                     t_count = schedule.times.count
+
+                    all_layers.extend([(str(filepath.resolve()), f"chan_{c}") for c, chan in experiment.channels.items() if chan.save])
+                    if experiment.stimulation.save:
+                        all_layers.append((str(filepath.resolve()), "stim"))
 
                     for t in range(t_count):
                         t_str = f"{t:05d}"
@@ -272,6 +278,8 @@ class MicroscopeOutbox(DataPassingProcess):
             logger.error(f"Failed to initialize outbox files: {e}", exc_info=True)
             self.close_files()
             raise e
+
+        return all_layers
 
     def close_files(self):
         """Close all open HDF5 files."""

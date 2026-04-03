@@ -77,9 +77,11 @@ def _read_data_frame_swmr(
         d.id.refresh()
         arr = np.array(d)
         if arr.size == 0:
+            print(f"t={t_val} no data")
             return None
         return arr
     except Exception:
+        print(f"t = {t_val} exception")
         return None
 
 

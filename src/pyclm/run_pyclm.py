@@ -129,15 +129,16 @@ def run_pyclm(
     slm_shape = config["slm_shape_h"], config["slm_shape_w"]
     at = np.array(config["affine_transform"], dtype=np.float32)
 
-    c.initialize(schedule, slm_shape, at, base_path)
+    all_layers = c.initialize(schedule, slm_shape, at, base_path)
 
     gui_proc = None
     if gui:
-        srcs = [
-            (str((base_path / "on.00.hdf5").resolve()), "channel_638"),
-            (str((base_path / "off.00.hdf5").resolve()), "channel_638"),
-        ]
-        gui_proc = launch_gui_process(srcs, cwd=base_path)
+        # srcs = [
+        #     (str((base_path / "on.00.hdf5").resolve()), "channel_638"),
+        #     (str((base_path / "off.00.hdf5").resolve()), "channel_638"),
+        # ]
+        print(all_layers)
+        gui_proc = launch_gui_process(all_layers, cwd=base_path)
         logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
     c.run()

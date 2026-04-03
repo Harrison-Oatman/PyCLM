@@ -126,7 +126,9 @@ class Controller:
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
-        self.outbox.initialize(schedule, self.core)
+        all_layers = self.outbox.initialize(schedule, self.core)
+
+        return all_layers
 
     def run(self):
         with ThreadPoolExecutor() as executor:

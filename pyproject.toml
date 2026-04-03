@@ -23,7 +23,7 @@ dependencies = [
     "toml>=0.10.2",
 ]
 
-[optional-dependencies]
+[project.optional-dependencies]
 cellpose = [
     "cellpose>=4.0.6",
     "torch",
