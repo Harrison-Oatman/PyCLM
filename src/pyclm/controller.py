@@ -39,10 +39,7 @@ class Controller:
             # Applies if config specifies that a real microscope is in use
             self.core = RealMicroscopeCore()
         else:
-            # image_source = TimeSeriesImageSource.from_tiff_stack(Path("path/to/stack.tif"), loop=True)
-            image_source = TimeSeriesImageSource.from_folder(
-                Path("tif-source"), pattern="*.tif", loop=True
-            )
+            image_source = TimeSeriesImageSource(Path("tif-source"), loop=True)
             self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
@@ -129,7 +126,9 @@ class Controller:
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
-        self.outbox.initialize(schedule)
+        all_layers = self.outbox.initialize(schedule, self.core)
+
+        return all_layers
 
     def run(self):
         with ThreadPoolExecutor() as executor:

@@ -6,23 +6,14 @@ import yaml
 
 
 class TimeSeriesImageSource:
-    def __init__(self, frames: list[np.ndarray], loop: bool = True):
-        if not frames:
-            raise ValueError("TimeSeriesImageSource requires at least one frame.")
-        self._frames = [self._normalize_frame(f) for f in frames]
+    def __init__(self, folder: Path, loop: bool = True):
         self._loop = loop
-        self._idx = 0
+        self._pos_map: dict[tuple[float, float], str] = {}
+        self._index_map: dict[str, int] = {}
+        self._frames_map: dict[str, list[np.ndarray]] = {}
+        self._default_stack: str | None = None
 
-    @classmethod
-    def from_tiff_stack(cls, path: Path, loop: bool = True) -> "TimeSeriesImageSource":
-        data = tiff.imread(str(path))
-        if data.ndim == 2:
-            frames = [data]
-        elif data.ndim == 3:
-            if data.shape[0] <= 4:
-                frames = [data[i] for i in range(data.shape[0])]
-            else:
-                frames = [data]
+        self.initialize_from_folder(folder)
 
     def read_yaml(self, data_directory: Path):
         yaml_path = Path.joinpath(data_directory, "image_positions.yaml")
@@ -55,16 +46,23 @@ class TimeSeriesImageSource:
 
     @property
     def shape(self) -> tuple[int, ...]:
-        return self._frames[0].shape
+        if self._default_stack is None:
+            raise RuntimeError("TimeSeriesImageSource not initialized")
+        return self._frames_map[self._default_stack][0].shape
 
-    def next_frame(self) -> np.ndarray:
-        frame = self._frames[self._idx]
-        self._idx += 1
-        if self._idx >= len(self._frames):
+    def next_frame(self, pos) -> np.ndarray:
+        pos = tuple(pos)
+        if pos not in self._pos_map:
+            raise KeyError(f"Position {pos} not found in image_positions.yaml")
+        stack_name = self._pos_map[pos]
+        frames = self._frames_map[stack_name]
+        frame = frames[self._index_map[stack_name]]
+        self._index_map[stack_name] += 1
+        if self._index_map[stack_name] >= len(frames):
             if self._loop:
-                self._idx = 0
+                self._index_map[stack_name] = 0
             else:
-                self._idx = len(self._frames) - 1
+                self._index_map[stack_name] = len(frames) - 1
         return frame
 
     @staticmethod
@@ -88,9 +86,28 @@ class TimeSeriesImageSource:
                 axes = tif.series[0].axes
                 data = self._normalize_axes_ome(data, axes)
             else:
-                raise ValueError(
-                    f"{file_path} is not an OME-TIFF. This loader requires OME axis metadata."
-                )
+                # Non-OME fallback: infer axes from ndim, then normalize to TCZYX
+                # Heuristics (common cases):
+                #   2D: YX
+                #   3D: TYX
+                #   4D: TCYX
+                #   5D: TCZYX
+                if data.ndim == 2:
+                    axes = "YX"
+                elif data.ndim == 3:
+                    axes = "TYX"
+                elif data.ndim == 4:
+                    axes = "TCYX"
+                elif data.ndim == 5:
+                    axes = "TCZYX"
+                else:
+                    raise ValueError(
+                        f"{file_path} has unsupported ndim={data.ndim}. "
+                        "Expected 2D-5D TIFF for non-OME fallback."
+                    )
+
+                data = self._normalize_axes_ome(data, axes)
+
         if data.ndim != 5:
             raise RuntimeError("TIFF data not 5D after normalization")
         return data
