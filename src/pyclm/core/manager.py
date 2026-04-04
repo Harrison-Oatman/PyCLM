@@ -11,7 +11,7 @@ import json
 import logging
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from time import time
+from time import time, sleep
 from typing import Any
 
 import numpy as np
@@ -160,7 +160,6 @@ class MicroscopeOutbox(DataPassingProcess):
         """
 
         metadata = schedule.as_dict()
-        all_layers = []
 
         try:
             for exp_name in schedule.experiment_names:
@@ -183,10 +182,6 @@ class MicroscopeOutbox(DataPassingProcess):
                     experiment = schedule.experiments[exp_name]
                     self.experiments[exp_name] = experiment
                     t_count = schedule.times.count
-
-                    all_layers.extend([(str(filepath.resolve()), f"chan_{c}") for c, chan in experiment.channels.items() if chan.save])
-                    if experiment.stimulation.save:
-                        all_layers.append((str(filepath.resolve()), "stim"))
 
                     for t in range(t_count):
                         t_str = f"{t:05d}"
@@ -278,6 +273,12 @@ class MicroscopeOutbox(DataPassingProcess):
             logger.error(f"Failed to initialize outbox files: {e}", exc_info=True)
             self.close_files()
             raise e
+        
+        all_layers = []
+        for exp_name, experiment in schedule.experiments.items():
+            filepath = str((self.base_path / f"{exp_name}.hdf5").resolve())
+            for channel_name in experiment.channels:
+                all_layers.append((filepath, f"channel_{channel_name}"))
 
         return all_layers
 
@@ -431,27 +432,42 @@ class MicroscopeOutbox(DataPassingProcess):
                     dset = f[relpath + dset_name]
                     if dset.shape != data.data.shape:
                         dset.resize(data.data.shape)
-                    dset[...] = data.data
-                    aq_event.write_attrs(dset)
-                    f.flush()
+                    for attempt in range(3):
+                        try:
+                            dset[...] = data.data
+                            aq_event.write_attrs(dset)
+                            f.flush()
+                            break
+                        except PermissionError:
+                            sleep(0.05)
 
                 if isinstance(data, StimulationData):
                     if aq_event.save_stim and (relpath + "dmd") in f:
                         dset = f[relpath + "dmd"]
                         if dset.shape != data.dmd_pattern.shape:
                             dset.resize(data.dmd_pattern.shape)
-                        dset[...] = data.dmd_pattern
-                        dset.attrs["pattern_id"] = str(data.pattern_id)
-                        aq_event.write_attrs(dset)
-                        f.flush()
+                        for attempt in range(3):
+                            try:
+                                dset[...] = data.dmd_pattern
+                                dset.attrs["pattern_id"] = str(data.pattern_id)
+                                aq_event.write_attrs(dset)
+                                f.flush()
+                                break
+                            except PermissionError:
+                                sleep(0.05)
 
                 # Update t_index if this timepoint is newer and all scheduled channels are written
                 t_index = aq_event.t_index
                 if f["current_t_index"][()] < t_index and self._timepoint_complete(
                     f, t_index, exp_name
                 ):
-                    f["current_t_index"][...] = np.int32(t_index)
-                    f.flush()
+                    for attempt in range(3):
+                        try:
+                            f["current_t_index"][...] = np.int32(t_index)
+                            f.flush()
+                            break
+                        except PermissionError:
+                            sleep(0.05)
 
             else:
                 logger.warning(f"No open file found for experiment: {exp_name}")

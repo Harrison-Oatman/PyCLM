@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 os.environ.setdefault("NAPARI_DISABLE_PLUGIN_AUTOLOAD", "1")
 
@@ -118,7 +119,8 @@ class LiveHDF5Layer:
         self._stack: np.ndarray | None = None
         self._last_frame: np.ndarray | None = None
 
-        self._open_file()
+        if sys.platform != "win32":
+            self._open_file()
 
         layer_name = spec.name or f"{spec.path.name} :: {spec.channel_key}"
         initial = self._load_initial_stack()
@@ -141,10 +143,20 @@ class LiveHDF5Layer:
         self.schedule = _read_channel_schedule(self.f, self.spec.channel_key)
 
     def _load_initial_stack(self) -> np.ndarray | None:
-        if self.f is None:
-            return None
+        if sys.platform == "win32":
+            try:
+                with h5py.File(str(self.spec.path), mode="r", libver="latest", swmr=True) as f:
+                    self.schedule = _read_channel_schedule(f, self.spec.channel_key)
+                    return self._do_load_initial(f)
+            except (PermissionError, OSError, RuntimeError):
+                return None
+        else:
+            if self.f is None:
+                return None
+            return self._do_load_initial(self.f)
 
-        current_t = _read_current_t_index(self.f)
+    def _do_load_initial(self, f: h5py.File) -> np.ndarray | None:
+        current_t = _read_current_t_index(f)
         if current_t < 0:
             return None
 
@@ -154,7 +166,7 @@ class LiveHDF5Layer:
             if not self.schedule.is_scheduled_at(t):
                 continue
             t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(self.f, t_str, self.spec.channel_key)
+            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key)
             if frame is None:
                 continue
             if self.frame_shape is None:
@@ -177,12 +189,24 @@ class LiveHDF5Layer:
         return stack
 
     def refresh(self) -> bool:
-        if self.f is None:
-            self._open_file()
-        if self.f is None:
-            return False
+        if sys.platform == "win32":
+            try:
+                with h5py.File(str(self.spec.path), mode="r", libver="latest", swmr=True) as f:
+                    return self._do_refresh(f)
+            except (PermissionError, OSError, RuntimeError):
+                return False
+        else:
+            if self.f is None:
+                self._open_file()
+            if self.f is None:
+                return False
+            try:
+                return self._do_refresh(self.f)
+            except (PermissionError, OSError, RuntimeError):
+                return False
 
-        current_t = _read_current_t_index(self.f)
+    def _do_refresh(self, f: h5py.File) -> bool:
+        current_t = _read_current_t_index(f)
         if current_t <= self.last_t_index:
             return False
 
@@ -193,7 +217,7 @@ class LiveHDF5Layer:
             if not self.schedule.is_scheduled_at(t):
                 continue
             t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(self.f, t_str, self.spec.channel_key)
+            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key)
             if frame is None:
                 continue
             if self.frame_shape is None:
