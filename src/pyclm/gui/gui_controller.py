@@ -145,7 +145,9 @@ class LiveHDF5Layer:
     def _load_initial_stack(self) -> np.ndarray | None:
         if sys.platform == "win32":
             try:
-                with h5py.File(str(self.spec.path), mode="r", libver="latest", swmr=True) as f:
+                with h5py.File(
+                    str(self.spec.path), mode="r", libver="latest", swmr=True
+                ) as f:
                     self.schedule = _read_channel_schedule(f, self.spec.channel_key)
                     return self._do_load_initial(f)
             except (PermissionError, OSError, RuntimeError):
@@ -191,7 +193,9 @@ class LiveHDF5Layer:
     def refresh(self) -> bool:
         if sys.platform == "win32":
             try:
-                with h5py.File(str(self.spec.path), mode="r", libver="latest", swmr=True) as f:
+                with h5py.File(
+                    str(self.spec.path), mode="r", libver="latest", swmr=True
+                ) as f:
                     return self._do_refresh(f)
             except (PermissionError, OSError, RuntimeError):
                 return False

@@ -11,7 +11,7 @@ import json
 import logging
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from time import time, sleep
+from time import sleep, time
 from typing import Any
 
 import numpy as np
@@ -273,7 +273,7 @@ class MicroscopeOutbox(DataPassingProcess):
             logger.error(f"Failed to initialize outbox files: {e}", exc_info=True)
             self.close_files()
             raise e
-        
+
         all_layers = []
         for exp_name, experiment in schedule.experiments.items():
             filepath = str((self.base_path / f"{exp_name}.hdf5").resolve())
@@ -432,7 +432,7 @@ class MicroscopeOutbox(DataPassingProcess):
                     dset = f[relpath + dset_name]
                     if dset.shape != data.data.shape:
                         dset.resize(data.data.shape)
-                    for attempt in range(3):
+                    for _attempt in range(3):
                         try:
                             dset[...] = data.data
                             aq_event.write_attrs(dset)
@@ -446,7 +446,7 @@ class MicroscopeOutbox(DataPassingProcess):
                         dset = f[relpath + "dmd"]
                         if dset.shape != data.dmd_pattern.shape:
                             dset.resize(data.dmd_pattern.shape)
-                        for attempt in range(3):
+                        for _attempt in range(3):
                             try:
                                 dset[...] = data.dmd_pattern
                                 dset.attrs["pattern_id"] = str(data.pattern_id)
@@ -461,7 +461,7 @@ class MicroscopeOutbox(DataPassingProcess):
                 if f["current_t_index"][()] < t_index and self._timepoint_complete(
                     f, t_index, exp_name
                 ):
-                    for attempt in range(3):
+                    for _attempt in range(3):
                         try:
                             f["current_t_index"][...] = np.int32(t_index)
                             f.flush()
