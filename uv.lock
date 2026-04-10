@@ -324,6 +324,41 @@ wheels = [
 ]
 
 [[package]]
+name = "colorcet"
+version = "3.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/c3/ae78e10b7139d6b7ce080d2e81d822715763336aa4229720f49cb3b3e15b/colorcet-3.1.0.tar.gz", hash = "sha256:2921b3cd81a2288aaf2d63dbc0ce3c26dcd882e8c389cc505d6886bf7aa9a4eb", size = 2183107, upload-time = "2024-02-29T19:15:42.976Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/c6/9963d588cc3d75d766c819e0377a168ef83cf3316a92769971527a1ad1de/colorcet-3.1.0-py3-none-any.whl", hash = "sha256:2a7d59cc8d0f7938eeedd08aad3152b5319b4ba3bcb7a612398cc17a384cb296", size = 260286, upload-time = "2024-02-29T19:15:40.494Z" },
+]
+
+[[package]]
+name = "colorspacious"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/75/e4/aa41ae14c5c061205715006c8834496d86ec7500f1edda5981f0f0190cc6/colorspacious-1.1.2.tar.gz", hash = "sha256:5e9072e8cdca889dac445c35c9362a22ccf758e97b00b79ff0d5a7ba3e11b618", size = 688573, upload-time = "2018-04-08T04:27:30.83Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/a1/318b9aeca7b9856410ededa4f52d6f82174d1a41e64bdd70d951e532675a/colorspacious-1.1.2-py2.py3-none-any.whl", hash = "sha256:c78befa603cea5dccb332464e7dd29e96469eebf6cd5133029153d1e69e3fd6f", size = 37735, upload-time = "2018-04-08T04:27:22.143Z" },
+]
+
+[[package]]
+name = "colorstamps"
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorspacious" },
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "scipy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/98/fd93b028e07048f67b86f3914ec85c9fa02fffe8fa82781d27b07e34c122/colorstamps-0.1.3-py3-none-any.whl", hash = "sha256:49693ffdc890859f0828e0beb394ac9541071504103221503476f802aedb345b", size = 12840, upload-time = "2024-08-16T09:51:02.455Z" },
+]
+
+[[package]]
 name = "comm"
 version = "0.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1820,11 +1855,19 @@ dependencies = [
     { name = "toml" },
 ]
 
+[package.optional-dependencies]
+analysis = [
+    { name = "colorcet" },
+    { name = "colorstamps" },
+    { name = "seaborn" },
+]
+
 [package.dev-dependencies]
 analysis = [
     { name = "laptrack" },
     { name = "matplotlib" },
     { name = "pandas" },
+    { name = "statannotations" },
     { name = "tqdm" },
 ]
 dev = [
@@ -1835,6 +1878,7 @@ dev = [
     { name = "pytest" },
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
+    { name = "statannotations" },
     { name = "tqdm" },
 ]
 docs = [
@@ -1849,6 +1893,8 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "colorcet", marker = "extra == 'analysis'", specifier = ">=3.1.0" },
+    { name = "colorstamps", marker = "extra == 'analysis'", specifier = ">=0.1.3" },
     { name = "h5py", specifier = ">=3.14.0" },
     { name = "natsort", specifier = ">=8.4.0" },
     { name = "notebook", specifier = ">=7.5.1" },
@@ -1857,15 +1903,18 @@ requires-dist = [
     { name = "pymmcore", specifier = "==11.2.1.71.0" },
     { name = "pymmcore-plus", specifier = "==0.13.7" },
     { name = "scikit-image", specifier = ">=0.25.2" },
+    { name = "seaborn", marker = "extra == 'analysis'", specifier = ">=0.13.2" },
     { name = "tifffile", specifier = ">=2025.9.20" },
     { name = "toml", specifier = ">=0.10.2" },
 ]
+provides-extras = ["analysis"]
 
 [package.metadata.requires-dev]
 analysis = [
     { name = "laptrack", specifier = ">=0.17.0" },
     { name = "matplotlib", specifier = ">=3.10.6" },
     { name = "pandas", specifier = ">=2.3.2" },
+    { name = "statannotations", specifier = ">=0.7.2" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 dev = [
@@ -1876,6 +1925,7 @@ dev = [
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
+    { name = "statannotations", specifier = ">=0.7.2" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 docs = [
@@ -2522,6 +2572,20 @@ wheels = [
 ]
 
 [[package]]
+name = "seaborn"
+version = "0.13.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/59/a451d7420a77ab0b98f7affa3a1d78a313d2f7281a57afb1a34bae8ab412/seaborn-0.13.2.tar.gz", hash = "sha256:93e60a40988f4d65e9f4885df477e2fdaff6b73a9ded434c1ab356dd57eefff7", size = 1457696, upload-time = "2024-01-25T13:21:52.551Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl", hash = "sha256:636f8336facf092165e27924f223d3c62ca560b1f2bb5dff7ab7fad265361987", size = 294914, upload-time = "2024-01-25T13:21:49.598Z" },
+]
+
+[[package]]
 name = "send2trash"
 version = "1.8.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2738,6 +2802,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/28/e3/55dcc2cfbc3ca9c29519eb6884dd1415ecb53b0e934862d3559ddcb7e20b/stack_data-0.6.3.tar.gz", hash = "sha256:836a778de4fec4dcd1dcd89ed8abff8a221f58308462e1c4aa2a3cf30148f0b9", size = 44707, upload-time = "2023-09-30T13:58:05.479Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl", hash = "sha256:d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695", size = 24521, upload-time = "2023-09-30T13:58:03.53Z" },
+]
+
+[[package]]
+name = "statannotations"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+    { name = "seaborn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/07/6d/9f851b0ca42eb429f1b044634d63ff07bc4f6bbfb52639ceb7e03a5a46eb/statannotations-0.7.2.tar.gz", hash = "sha256:a93e428682d66c9fca5a399d5bd3fe7c9cef0500f53840c6f5362526b4501e93", size = 46629, upload-time = "2025-03-22T13:27:14.706Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/ef/19390fa617d0417dd432d14a10eb5735a5513d7b6aebb357b10900d42af8/statannotations-0.7.2-py3-none-any.whl", hash = "sha256:61cd63c9bcdffe37dad30bb2a33aa6aa03f28df9636eda8deae1548f91be8580", size = 39684, upload-time = "2025-03-22T13:27:13.19Z" },
 ]
 
 [[package]]

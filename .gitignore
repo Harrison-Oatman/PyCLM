@@ -11,6 +11,10 @@ notebooks/gol_snaps/
 log.txt
 /other/*
 *.pdf
+figures/**/*.tif
+figures/**/*.png
+figures/**/*.avi
+figures/**/*.mp4
 /example_scripts/
 # Documentation
 documentation/_build/
