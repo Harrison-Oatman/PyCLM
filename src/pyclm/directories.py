@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 from pathlib import Path
 from xml.etree import ElementTree
@@ -9,6 +10,7 @@ from .core.experiments import (
     ConfigGroup,
     Experiment,
     ImagingConfig,
+    MicroscopePosition,
     PatternConfig,
     PositionWithAutoFocus,
     SegmentationConfig,
@@ -157,6 +159,52 @@ def read_schedule(toml_path):
     return out
 
 
+def positions_from_pos(fp) -> list[MicroscopePosition]:
+    """
+    Parse a MicroManager PositionList.pos file (JSON Property Map v2).
+
+    The XY stage is identified by the ``DefaultXYStage`` field in each position
+    entry.  The Z stage is the first single-axis device whose name is not the
+    XY stage.  All remaining single-axis devices are stored as optional extras
+    keyed by their device name (e.g. ``{"PFSOffset": 11122.0}``).
+    """
+    with open(fp) as f:
+        data = json.load(f)
+
+    positions = []
+
+    for pos_data in data["map"]["StagePositions"]["array"]:
+        label = pos_data["Label"]["scalar"]
+        xy_stage = pos_data["DefaultXYStage"]["scalar"]
+        z_stage = pos_data["DefaultZStage"]["scalar"]
+
+        x = y = z = None
+        extras: dict = {}
+
+        for dev_entry in pos_data["DevicePositions"]["array"]:
+            device = dev_entry["Device"]["scalar"]
+            values = [float(v) for v in dev_entry["Position_um"]["array"]]
+
+            if device == xy_stage:
+                x, y = values[0], values[1]
+            elif device == z_stage:
+                z = values[0]
+            elif z_stage == "" and z is None and len(values) == 1:
+                # First non-XY single-axis device is the Z stage
+                z = values[0]
+            else:
+                extras[device] = values[0] if len(values) == 1 else values
+
+        if x is None or y is None:
+            raise ValueError(f"Position '{label}' in {fp} has no XY stage entry.")
+        if z is None:
+            raise ValueError(f"Position '{label}' in {fp} has no Z stage entry.")
+
+        positions.append(MicroscopePosition(x=x, y=y, z=z, label=label, extras=extras))
+
+    return positions
+
+
 def positions_from_xml(fp):
     tree = ElementTree.parse(fp)
     root = tree.getroot()
@@ -200,9 +248,18 @@ def schedule_from_directory(experiment_dir: Path):
     tomls = experiment_dir.glob("*.toml")
     tomls = {f.stem: str(f) for f in tomls}
 
-    positions_path = experiment_dir / "multipoints.xml"
+    pos_path = experiment_dir / "PositionList.pos"
+    xml_path = experiment_dir / "multipoints.xml"
 
-    pos_list = positions_from_xml(str(positions_path))
+    if pos_path.exists():
+        pos_list = positions_from_pos(str(pos_path))
+    elif xml_path.exists():
+        pos_list = positions_from_xml(str(xml_path))
+    else:
+        raise FileNotFoundError(
+            f"No position list found in {experiment_dir}. "
+            "Expected 'PositionList.pos' or 'multipoints.xml'."
+        )
 
     positions = {}
     experiments = {}

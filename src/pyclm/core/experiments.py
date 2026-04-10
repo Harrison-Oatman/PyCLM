@@ -173,18 +173,49 @@ class PositionBase:
         return {}
 
 
-class PositionWithAutoFocus(PositionBase):
-    def __init__(self, x=None, y=None, z=None, autofocus_offset=None, label=None):
-        self.label = label
+class MicroscopePosition(PositionBase):
+    """
+    Standard microscope position.  x, y, and z are required.  Any optional
+    hardware-specific values (e.g. focus-offset) are stored in ``extras``
+    keyed by device name, e.g. ``{"PFSOffset": 11122.0}``.
+    """
+
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        label: str | None = None,
+        extras: dict | None = None,
+    ):
         self.x = x
         self.y = y
         self.z = z
+        self.label = label
+        self.extras: dict = extras if extras is not None else {}
+
+    def as_dict(self):
+        d = {"label": self.label, "x": self.x, "y": self.y, "z": self.z}
+        d.update(self.extras)
+        return d
+
+
+class PositionWithAutoFocus(MicroscopePosition):
+    """
+    Legacy position class for MicroManager multipoints.xml files.
+    Prefer ``MicroscopePosition`` with ``extras={"PFSOffset": value}`` for new code.
+    """
+
+    def __init__(self, x=None, y=None, z=None, autofocus_offset=None, label=None):
+        extras = {}
+        if autofocus_offset is not None:
+            extras["PFSOffset"] = autofocus_offset
+        super().__init__(x=x, y=y, z=z, label=label, extras=extras)
         self.autofocus_offset = autofocus_offset
 
     def get_xy(self):
         if not ((self.x is None) or (self.y is None)):
             return [self.x, self.y]
-
         return None
 
     def get_z(self):

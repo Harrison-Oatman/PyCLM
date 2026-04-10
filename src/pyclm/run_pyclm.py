@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
+from .core.position_mover import PositionMover
 from .directories import schedule_from_directory
 
 
@@ -38,6 +39,8 @@ def run_pyclm(
     config_path=None,
     segmentation_methods: dict[str, type[SegmentationMethod]] | None = None,
     pattern_methods: dict[str, type[PatternMethod]] | None = None,
+    position_mover: PositionMover | None = None,
+    dry_image_source=None,
     dry: bool = False,
 ):
     """
@@ -81,7 +84,12 @@ def run_pyclm(
 
     base_path = experiment_directory
 
-    c = Controller(config["config_path"], dry)
+    c = Controller(
+        config["config_path"],
+        dry,
+        position_mover=position_mover,
+        dry_image_source=dry_image_source,
+    )
 
     # register any custom methods
     if segmentation_methods is not None:
