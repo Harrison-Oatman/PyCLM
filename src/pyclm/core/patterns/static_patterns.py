@@ -1,6 +1,7 @@
 import numpy as np
 
 from .pattern import PatternMethod
+from .zoo import ZooMeta
 
 
 class CirclePattern(PatternMethod):
@@ -9,6 +10,12 @@ class CirclePattern(PatternMethod):
     """
 
     name = "circle"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"rad": 60},
+        title="Circle",
+        description="Filled circle centred on the camera field of view.",
+    )
 
     def __init__(self, rad=1, **kwargs):
         super().__init__(**kwargs)
@@ -36,6 +43,12 @@ class FullOnPattern(PatternMethod):
     """
 
     name = "full_on"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={},
+        title="Full On",
+        description="Illuminates the entire camera field of view.",
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

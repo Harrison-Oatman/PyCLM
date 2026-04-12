@@ -19,4 +19,7 @@ figures/**/*.mp4
 # Documentation
 documentation/_build/
 documentation/_static/
+documentation/_generated/
+documentation/_zoo_gallery.md
+documentation/zoo_sources/*.tif
 
