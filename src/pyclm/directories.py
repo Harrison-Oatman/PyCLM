@@ -174,7 +174,7 @@ def positions_from_pos(fp) -> list[MicroscopePosition]:
     positions = []
 
     for pos_data in data["map"]["StagePositions"]["array"]:
-        label = pos_data["Label"]["scalar"]
+        label = str(pos_data["Label"]["scalar"]).replace("-", ".")
         xy_stage = pos_data["DefaultXYStage"]["scalar"]
         z_stage = pos_data["DefaultZStage"]["scalar"]
 
