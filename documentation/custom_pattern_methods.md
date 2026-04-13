@@ -44,7 +44,7 @@ class MyCustomPattern(PatternMethod):
         # x/y coordinates of every pixel in microns (same shape as the camera output)
         xx, yy = self.get_um_meshgrid()
 
-        # centre of the field of view in microns
+        # center of the field of view in microns
         cx, cy = self.center_um()
 
         # return a float array in [0, 1] the same shape as the camera output
@@ -89,7 +89,7 @@ from pyclm import PatternMethod
 
 
 class AnnulusPattern(PatternMethod):
-    """Illuminates a ring centred on the FOV."""
+    """Illuminates a ring centerd on the FOV."""
 
     name = "annulus"
 
@@ -202,7 +202,7 @@ from pyclm.core.patterns.pattern import PatternMethod, PatternContext
 | `self.pattern_shape` | `(height, width)` in pixels, set by `configure_system` |
 | `self.pixel_size_um` | microns per pixel (accounts for binning) |
 | `self.get_um_meshgrid()` | returns `(xx, yy)` arrays in µm, shape `pattern_shape` |
-| `self.center_um()` | returns `(cx, cy)` centre of the FOV in µm |
+| `self.center_um()` | returns `(cx, cy)` center of the FOV in µm |
 | `self.add_requirement(channel_name, raw, seg)` | declare that `generate` needs raw/seg data for a channel |
 | `self.request_stim(raw, seg)` | same, but for the stimulation-output channel |
 

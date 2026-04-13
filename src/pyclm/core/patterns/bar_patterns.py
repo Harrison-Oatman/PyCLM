@@ -165,7 +165,7 @@ class RotatingBarPattern(PatternMethod):
         source="mdck",
         kwargs={"num_bars": 12, "angular_velocity": 2.0, "bar_width": 20},
         title="Rotating Bar",
-        description="Spoke-like bars rotating around the centre of the field.",
+        description="Spoke-like bars rotating around the center of the field.",
     )
 
     def __init__(
