@@ -45,7 +45,7 @@ class StationaryWavePattern(WavePatternBase):
 
     def generate(self, context):
         xx, yy = self.get_um_meshgrid()
-        center_y, center_x = self.center_um
+        center_x, center_y = self.center_um()
         distance = np.sqrt((xx - center_x) ** 2 + (yy - center_y) ** 2)
 
         is_on = ((distance / self.period_space) % 1.0) < self.duty_cycle
@@ -86,7 +86,7 @@ class WavePattern(WavePatternBase):
         t = context.time / 60
 
         xx, yy = self.get_um_meshgrid()
-        center_y, center_x = self.center_um()
+        center_x, center_y = self.center_um()
         distance = np.sqrt((xx - center_x) ** 2 + (yy - center_y) ** 2)
 
         is_on = (

@@ -14,60 +14,42 @@ class MyCustomPattern(PatternMethod):
     ...
 ```
 
-The subclass needs to implement at least two methods: `__init__` and `generate`. 
-First, the `__init__` method, which is standard for python: it is called when an instance of the custom pattern class is created.
-PatternMethods objects are generated for each position, and are instantiated as the experiment is starting.
-The `__init__` method defines keyword arguments that the user can pass in via `.toml` files.
+The subclass needs to implement two methods — `__init__` and `generate` — and set a `name` class attribute.
 
-The final function of the `__init__` method is to request that the ``generate`` method be supplied with imaging data 
-and/or segmented images. This is done by calling ``self.add_requirement``.
 ```python
+from pyclm import PatternMethod, PatternContext
+
 class MyCustomPattern(PatternMethod):
-    ...
-    # the below __init__ function definition defines two 
-    # keyword arguments that can be supplied in the .toml
+    """A custom pattern method."""
+
+    name = "custom_method"  # used in logging; does not need to match the run_pyclm dict key
+
+    # keyword arguments defined here can be set in the experiment .toml
     def __init__(self, keyword_a="default_value_a", keyword_b=42, **kwargs):
         super().__init__(**kwargs)  # boilerplate, always needs to be present
 
-        # store keywords
+        # store keywords as attributes so generate() can access them
         self.attribute_a = keyword_a
         self.attribute_b = keyword_b
 
-        # request raw image data from e.g. RFP channel
-        self.add_requirement("RFP", raw=True, seg=False)
+        # declare what imaging data generate() needs — called once at startup
+        self.add_requirement("RFP", raw=True, seg=False)   # raw image from the RFP channel
+        self.add_requirement("GFP", raw=False, seg=True)   # segmentation mask from the GFP channel
 
-        # request the segmentation of the GFP channel
-        self.add_requirement("GFP", raw=False, seg=True)
-```
-
-The second method is the `generate` function, which actually produces the pattern to be supplied to the DMD. 
-`generate` takes in a `PatternContext` object (described below) and returns a pattern. The pattern should be the same 
-size and shape as the data coming out of the camera. PyCLM will automatically translate this pattern to the DMD.
-
-```python
-from pyclm import PatternContext, PatternMethod
-
-class MyCustomPattern(PatternMethod):
-    ...
     def generate(self, context: PatternContext):
-        
-        # you may choose to unpack data from the context
-        time = context.time  # current time of the experiment in seconds since start
+        # unpack data declared in __init__ via add_requirement()
+        raw = context.raw("RFP")           # np.ndarray — most recent RFP image
+        seg = context.segmentation("GFP")  # np.ndarray — labelled segmentation mask
 
-        # unpack data requested in __init__ using add_requirement()
-        raw = context.raw("RFP")  # the most recent data in the RFP channel
-        seg = context.segmentation("GFP")
-
-        # gets the x coordinates and y coordinates of the camera in microns
+        # x/y coordinates of every pixel in microns (same shape as the camera output)
         xx, yy = self.get_um_meshgrid()
 
-        # gets the center of the image in microns
-        xc, yc = self.center_um()
+        # centre of the field of view in microns
+        cx, cy = self.center_um()
 
-        # you must return a pattern the same size as the input image
-        # raw, seg, xx, and yy all have the same shape as the camera output
-        # e.g. illuminate the right half of the image a percentage specified by the user:
-        pattern = (self.keyword_b / 100) * (xx > xc)
+        # return a float array in [0, 1] the same shape as the camera output
+        # e.g. illuminate the right half at the intensity fraction set by keyword_b:
+        pattern = (self.attribute_b / 100) * (xx > cx)
 
         return pattern
 ```
@@ -119,7 +101,7 @@ class AnnulusPattern(PatternMethod):
 
     def generate(self, context) -> np.ndarray:
         xx, yy = self.get_um_meshgrid()
-        cy, cx = self.center_um()
+        cx, cy = self.center_um()
 
         dist_sq = (xx - cx) ** 2 + (yy - cy) ** 2
 
@@ -160,7 +142,7 @@ This method reads per-cell mean intensity and illuminates only the cells below a
 # my_patterns.py
 import numpy as np
 from skimage.measure import regionprops
-from pyclm.core.patterns.pattern import PatternMethod
+from pyclm import PatternMethod
 
 
 class IntensityThresholdPattern(PatternMethod):
@@ -220,7 +202,7 @@ from pyclm.core.patterns.pattern import PatternMethod, PatternContext
 | `self.pattern_shape` | `(height, width)` in pixels, set by `configure_system` |
 | `self.pixel_size_um` | microns per pixel (accounts for binning) |
 | `self.get_um_meshgrid()` | returns `(xx, yy)` arrays in µm, shape `pattern_shape` |
-| `self.center_um()` | returns `(cy, cx)` centre of the FOV in µm |
+| `self.center_um()` | returns `(cx, cy)` centre of the FOV in µm |
 | `self.add_requirement(channel_name, raw, seg)` | declare that `generate` needs raw/seg data for a channel |
 | `self.request_stim(raw, seg)` | same, but for the stimulation-output channel |
 
