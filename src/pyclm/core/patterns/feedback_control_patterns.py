@@ -6,6 +6,7 @@ from scipy.stats import gaussian_kde
 from skimage.measure import label, regionprops, regionprops_table
 
 from .pattern import AcquiredImageRequest, DataDock, PatternMethod
+from .zoo import ZooMeta
 
 
 class PerCellPatternMethod(PatternMethod):
@@ -112,6 +113,12 @@ class PerCellPatternMethod(PatternMethod):
 
 class RotateCcwModel(PerCellPatternMethod):
     name = "rotate_ccw"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"channel": "seg_channel"},
+        title="Rotate CCW",
+        description="Illuminates the half of each cell pointing counter-clockwise around the field center.",
+    )
 
     def __init__(self, channel=None, **kwargs):
         super().__init__(channel=channel, **kwargs)
@@ -127,6 +134,12 @@ class RotateCcwModel(PerCellPatternMethod):
 
 class MoveOutModel(PerCellPatternMethod):
     name = "move_out"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"channel": "seg_channel"},
+        title="Move Out",
+        description="Illuminates the outward-facing half of each cell.",
+    )
 
     def __init__(self, channel=None, **kwargs):
         super().__init__(channel=channel, **kwargs)
@@ -142,6 +155,12 @@ class MoveOutModel(PerCellPatternMethod):
 
 class MoveInModel(PerCellPatternMethod):
     name = "move_in"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"channel": "seg_channel"},
+        title="Move In",
+        description="Illuminates the inward-facing half of each cell.",
+    )
 
     def __init__(self, channel=None, **kwargs):
         super().__init__(channel=channel, **kwargs)
@@ -199,46 +218,46 @@ class BounceModel(PerCellPatternMethod):
         return super().generate(context)
 
 
-class DensityModel(PerCellPatternMethod):
-    name = "density_gradient"
-
-    def __init__(self, channel=None, **kwargs):
-        super().__init__(channel=channel, **kwargs)
-
-    def generate(self, context) -> np.ndarray:
-        seg = context.segmentation(self.channel)
-
-        if self.voronoi:
-            px_dis = distance_transform_edt(seg == 0)
-            seg = self.voronoi_rebuild(seg)
-
-            seg = seg * (px_dis < 50)
-
-        h, w = self.pattern_shape
-
-        new_img = np.zeros((int(h), int(w)), dtype=np.float16)
-
-        density = generate_density(seg)
-
-        if self.direction == -1:
-            dy, dx = np.gradient(density)
-        else:
-            dy, dx = np.negative(np.gradient(density))
-
-        grad_direction = np.arctan2(dy, dx)
-
-        for prop in regionprops(seg):
-            prop_centroid = np.round(prop.centroid).astype(int)
-
-            vec = grad_direction[prop_centroid[0], prop_centroid[1]]
-            vec = (np.sin(vec), np.cos(vec))
-
-            cell_stim = self.prop_vector(prop, vec)
-
-            new_img[prop.bbox[0] : prop.bbox[2], prop.bbox[1] : prop.bbox[3]] += (
-                cell_stim
-            )
-
-        new_img_clamped = np.clip(new_img, 0, 1).astype(np.float16)
-
-        return new_img_clamped
+# class DensityModel(PerCellPatternMethod):
+#     name = "density_gradient"
+#
+#     def __init__(self, channel=None, **kwargs):
+#         super().__init__(channel=channel, **kwargs)
+#
+#     def generate(self, context) -> np.ndarray:
+#         seg = context.segmentation(self.channel)
+#
+#         if self.voronoi:
+#             px_dis = distance_transform_edt(seg == 0)
+#             seg = self.voronoi_rebuild(seg)
+#
+#             seg = seg * (px_dis < 50)
+#
+#         h, w = self.pattern_shape
+#
+#         new_img = np.zeros((int(h), int(w)), dtype=np.float16)
+#
+#         density = generate_density(seg)
+#
+#         if self.direction == -1:
+#             dy, dx = np.gradient(density)
+#         else:
+#             dy, dx = np.negative(np.gradient(density))
+#
+#         grad_direction = np.arctan2(dy, dx)
+#
+#         for prop in regionprops(seg):
+#             prop_centroid = np.round(prop.centroid).astype(int)
+#
+#             vec = grad_direction[prop_centroid[0], prop_centroid[1]]
+#             vec = (np.sin(vec), np.cos(vec))
+#
+#             cell_stim = self.prop_vector(prop, vec)
+#
+#             new_img[prop.bbox[0] : prop.bbox[2], prop.bbox[1] : prop.bbox[3]] += (
+#                 cell_stim
+#             )
+#
+#         new_img_clamped = np.clip(new_img, 0, 1).astype(np.float16)
+#
+#         return new_img_clamped

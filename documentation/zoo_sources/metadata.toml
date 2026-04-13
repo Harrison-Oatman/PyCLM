@@ -1,0 +1,21 @@
+# Metadata for zoo sample image sources.
+# Add one section per source name.  The source name must match the stem of
+# the corresponding .tif file (e.g. "mdck" -> zoo_sources/mdck.tif).
+
+[mdck]
+pixel_size_um = 1.333
+vmin = 800
+vmax = 9000
+description = "MDCK (membrane)"
+
+[fly]
+pixel_size_um = 1.333
+vmin = 0
+vmax = 7000
+description = "Drosophila embryo"
+
+[mcf10a]
+pixel_size_um = 1.333
+vmin = 0
+vmax = 5000
+description = "MCF10A (TagRFP-nls)"

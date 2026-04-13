@@ -8,8 +8,9 @@ from pymmcore_plus import CMMCorePlus
 from .core_interface import MicroscopeCoreInterface
 from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
-from .experiments import ConfigGroup, DeviceProperty, PositionWithAutoFocus
+from .experiments import ConfigGroup, DeviceProperty, MicroscopePosition
 from .messages import UpdateZPositionMessage
+from .position_mover import BasicPositionMover, PositionMover
 from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
@@ -23,10 +24,14 @@ class MicroscopeProcess(BaseProcess):
         self,
         core: MicroscopeCoreInterface,
         aq: AllQueues,
+        position_mover: PositionMover | None = None,
         stop_event: Event | None = None,
     ):
         super().__init__(stop_event, name="microscope")
         self.core = core
+        self.position_mover = (
+            position_mover if position_mover is not None else BasicPositionMover()
+        )
 
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
@@ -168,77 +173,20 @@ class MicroscopeProcess(BaseProcess):
             )
             self.warned_binning = True
 
-    def move_to_position(self, position: PositionWithAutoFocus) -> tuple[bool, float]:
-        start_time = time()
-
-        core = self.core
-
-        xy = position.get_xy()
-        z = position.get_z()
-        pfs = position.get_autofocus_offset()
-
-        z_moved = False
-
-        if (z is not None) and (z < self.core.getZPosition()):
-            core.setPosition(z)
-            z_moved = True
-
-        if xy is not None:
-            logger.info(f"moving to xy {xy}")
-            core.setXYPosition(xy[0], -xy[1])
-        else:
-            logger.debug(f"move_to_position called with no xy position: {position}")
-
-        if z is not None:
-            if not z_moved:
-                logger.info(f"moving to z position {z}")
-                core.setPosition(z)
-
-                z_moved = True
-        else:
-            logger.debug(f"move_to_position called with no z position: {position}")
-
-        if pfs is not None:
-            logger.info(f"setting pfs offset {pfs}")
-            core.setAutoFocusOffset(pfs)
-
-            z_moved = True
-        else:
-            logger.debug(f"move_to_position called with no pfs offset: {position}")
-
-        if not z_moved:
-            return False, 0
-
-        # todo: fix hard-coded PFS status property and PFS required on
-
-        core.setProperty("PFS", "FocusMaintenance", "On")
-
-        while core.getProperty("PFS", "PFS Status") != "0000001100001010":
-            pass
-
-        logger.info(f"move+focus took {time() - start_time:0.3f}")
-
-        return True, core.getZPosition()
-
     def handle_update_position_event(self, up_event: UpdateStagePositionEvent):
-        if isinstance(up_event.position, PositionWithAutoFocus):
-            z_moved, z_new_position = self.move_to_position(up_event.position)
+        position = up_event.position
+        z_moved, z_new_position = self.position_mover.move_to(position, self.core)
 
-            if z_moved:
-                old_z = up_event.position.get_z()
+        if z_moved:
+            old_z = position.z
 
-                if np.abs(old_z - z_new_position) > 5:
-                    logger.warning(
-                        f"Major Z position change: {old_z}, {z_new_position}"
-                    )
+            if np.abs(old_z - z_new_position) > 5:
+                logger.warning(f"Major Z position change: {old_z}, {z_new_position}")
 
-                if abs(z_new_position - old_z) > 1.0:
-                    self.manager.put(
-                        UpdateZPositionMessage(z_new_position, up_event.experiment_name)
-                    )
-
-        else:
-            raise NotImplementedError("only implemented PositionWithAutoFocus")
+            if abs(z_new_position - old_z) > 1.0:
+                self.manager.put(
+                    UpdateZPositionMessage(z_new_position, up_event.experiment_name)
+                )
 
     def handle_update_pattern_event(self, up_event: UpdatePatternEvent, slm_await_s):
         event_id = up_event.id

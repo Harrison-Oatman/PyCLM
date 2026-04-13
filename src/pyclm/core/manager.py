@@ -32,7 +32,7 @@ from .datatypes import (
 from .events import (
     AcquisitionEvent,
     UpdatePatternEvent,
-    UpdatePositionWithAutoFocusEvent,
+    UpdateStagePositionEvent,
 )
 from .experiments import (
     Experiment,
@@ -211,7 +211,6 @@ class MicroscopeOutbox(DataPassingProcess):
         match msg.message:
             case "close":
                 self.manager_done = True
-                self.close_files()
 
             case "stream_close":
                 self.stream_count += 1
@@ -538,7 +537,7 @@ class Manager:
 
     def construct_position_event_message(self, position, name):
         self.msgout["microscope"].put(
-            UpdatePositionEventMessage(UpdatePositionWithAutoFocusEvent(position, name))
+            UpdatePositionEventMessage(UpdateStagePositionEvent(position, name))
         )
 
     def send_make_pattern_request(self, loop_iter, experiment_name, time_sec):

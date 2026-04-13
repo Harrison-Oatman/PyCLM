@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//mnt/c/FeedbackControl/**)",
+      "Bash(uv run:*)",
+      "Bash(dir /s /b \"C:\\\\FeedbackControl\\\\pyclm\\\\tests\")",
+      "Bash(python:*)",
+      "Bash(uv sync:*)"
+    ]
+  }
+}
