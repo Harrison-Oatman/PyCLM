@@ -8,11 +8,17 @@ from .experiments import Experiment
 from .messages import Message
 from .queues import AllQueues
 from .segmentation import SegmentationMethod
-from .segmentation.cellpose_segmentation import CellposeSegmentationMethod
+from .segmentation.cellpose_segmentation import (
+    CellposeSegmentationMethod,
+    EmbryoSegmentationMethod,
+)
 
 
 class SegmentationProcess(BaseProcess):
-    known_models: ClassVar = {"cellpose": CellposeSegmentationMethod}
+    known_models: ClassVar = {
+        "cellpose": CellposeSegmentationMethod,
+        "embryo_resizing": EmbryoSegmentationMethod,
+    }
 
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="segmentation")

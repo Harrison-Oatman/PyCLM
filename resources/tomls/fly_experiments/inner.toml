@@ -1,0 +1,58 @@
+# fly embryo patterning
+# This experiment segments and applies a bar of light 
+# to the inner 10% of the embryo's long axis.
+
+# information related to imaging conditions, channels, frequency
+[config_groups]
+Objective = "1-Plan Apo LmbdD0.80 20x"
+System = "Startup"
+
+[device_properties]
+
+
+[imaging]
+every_t = 5
+exposure = 500
+save = true
+binning = 4
+
+    [imaging.config_groups]
+    # information related to imaging conditions, channels, frequency
+    Laser-Intensity = "70%"
+    LightPath = "Fluor"
+
+
+# determines channel axis
+[channels]
+group = "Channel"
+presets = ["545", "638"]
+
+#    # channel specific details, overwrites imaging properties
+    [channels.638]
+    exposure = 2000
+
+	[channels.545]
+	every_t = 10
+    exposure = 500
+
+
+# information related to stimulation
+[stimulation]
+every_t = 1
+exposure = 1000
+save = false
+
+    [stimulation.config_groups]
+    Channel = "DMD"
+    LightPath = "DMD"
+    Laser-Intensity = "AllOff"
+    Sola = "80"
+
+[segmentation]
+method = "embryo_resizing"
+save = true
+
+# information related to pattern generation
+[pattern]
+method = "inner"
+fraction_length = 0.10

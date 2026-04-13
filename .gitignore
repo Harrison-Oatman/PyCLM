@@ -2,7 +2,6 @@
 notebooks/gol_snaps/
 .idea/
 /plots/*
-/resources/*
 */.ipynb_checkpoints/*
 *.pyc
 /test/
