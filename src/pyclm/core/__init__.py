@@ -7,7 +7,7 @@ from .experiments import ExperimentSchedule, MicroscopePosition
 from .manager import Manager, MicroscopeOutbox, SLMBuffer
 from .microscope import MicroscopeProcess
 from .pattern_process import PatternProcess
-from .patterns import ROI, CameraProperties, PatternMethod
+from .patterns import ROI, CameraProperties, PatternContext, PatternMethod
 from .position_mover import BasicPositionMover, PFSPositionMover, PositionMover
 from .queues import AllQueues
 from .segmentation import SegmentationMethod

@@ -12,7 +12,7 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 
 ## 1. Install PyCLM
 
-Clone the repository and create a virtual environment using [uv](https://docs.astral.sh/uv/):
+Create a virtual environment using [uv](https://docs.astral.sh/uv/) and install pyclm:
 
 ```bash
 git clone https://github.com/Harrison-Oatman/PyCLM.git
@@ -31,6 +31,8 @@ uv sync --extra cellpose
 ## 2. Configure MicroManager
 
 PyCLM drives hardware through [pymmcore-plus](https://pymmcore-plus.github.io/pymmcore-plus/), which loads a standard MicroManager `.cfg` file.
+
+**See [MicroManager documentation](https://micro-manager.org/Micro-Manager_Configuration_Guide)**
 
 **Before running PyCLM you must have:**
 
@@ -64,7 +66,7 @@ If your microscope has no SLM, set the shape to the physical DMD resolution anyw
 
 ---
 
-## 4. Implement a PositionMover
+## 4. Choose or Implement a PositionMover
 
 PyCLM needs to know how to move to an imaging position on your hardware. Three choices are available:
 
