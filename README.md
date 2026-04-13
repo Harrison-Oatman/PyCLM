@@ -1,7 +1,7 @@
 # PyCLM
 A Modular Closed-Loop Microscopy Software in Python
 
-**Documentation available at [readthedocs](https://pyclm.readthedocs.io/en/latest/)**
+**Documentation available at [readthedocs]([https://pyclm.readthedocs.io/en/latest/](https://pyclm.readthedocs.io/en/latest/first_time_setup.html))**
 
 ![](documentation\imgs\Figure%201.png "PyCLM Overview")
 
