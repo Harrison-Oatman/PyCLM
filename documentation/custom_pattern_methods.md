@@ -1,4 +1,4 @@
-# Custom Pattern Methods
+# Writing Custom Pattern Methods
 
 ## Overview
 Custom patterns provide a way to extend PyCLM and enable a wide range of new experiments using python.
