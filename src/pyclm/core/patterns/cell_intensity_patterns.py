@@ -3,10 +3,17 @@ import tifffile
 from skimage.measure import regionprops
 
 from .pattern import AcquiredImageRequest, DataDock, PatternMethod
+from .zoo import ZooMeta
 
 
 class NucleusControlMethod(PatternMethod):
     name = "nucleus_control_base"
+    zoo_meta = ZooMeta(
+        source="mcf10a",
+        title="Generic Nucleus Control",
+        kwargs={"_channel": ""},
+        description="Subclass this method to apply per-cell intensity",
+    )
 
     def __init__(self, channel=None, **kwargs):
         super().__init__(**kwargs)
@@ -51,6 +58,13 @@ class BinaryNucleusClampModel(NucleusControlMethod):
 
         self.clamp_target = clamp_target
 
+    zoo_meta = ZooMeta(
+        source="mcf10a",
+        title="Bang-Bang Controller",
+        kwargs={"_channel": "", "clamp_target": 75},
+        description="Applies light if nucleus is below target intensity",
+    )
+
     def process_prop(self, prop):
         if prop.intensity_mean > self.clamp_target:
             return prop.image * 0
@@ -76,9 +90,6 @@ class CenteredImageModel(NucleusControlMethod):
         self.max_intensity = max_intensity
 
         self.target_image = None
-
-    # todo: warp image to target size
-    # def
 
     def make_target_image(self):
         img = self.img
@@ -138,7 +149,15 @@ class CenteredImageModel(NucleusControlMethod):
 class GlobalCycleModel(NucleusControlMethod):
     name = "global_cycle"
 
-    def __init__(self, channel, period_m=10, **kwargs):
+    zoo_meta = ZooMeta(
+        source="mcf10a",
+        title="Open loop intensity cycle",
+        kwargs={"_channel": "gfp"},
+        time_seconds=5,
+        description="Applies light for a given period with a 50% duty cycle",
+    )
+
+    def __init__(self, channel="545", period_m=10, **kwargs):
         super().__init__(channel=channel, **kwargs)
 
         self.period_s = period_m * 60
@@ -150,4 +169,4 @@ class GlobalCycleModel(NucleusControlMethod):
 
         h, w = self.pattern_shape
 
-        return np.zeros((int(h), int(w))) * is_on
+        return np.ones((int(h), int(w))) * is_on

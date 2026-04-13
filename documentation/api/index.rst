@@ -9,8 +9,9 @@ float32 array in ``[0, 1]`` with shape equal to the camera ROI.
    :maxdepth: 1
 
    pattern_base
+   fly_patterns
    bar_patterns
+   cell_intensity_patterns
    wave_patterns
    static_patterns
-   feedback_control_patterns
-   ktr_patterns
+   fbc_cell_movement

@@ -128,13 +128,13 @@ def _build_gallery(app: Sphinx) -> None:
 # ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
-
 _PATTERN_MODULES = [
+    "pyclm.core.patterns.embryo_patterns",
     "pyclm.core.patterns.bar_patterns",
+    "pyclm.core.patterns.cell_intensity_patterns",
+    "pyclm.core.patterns.fbc_cell_movement",
     "pyclm.core.patterns.wave_patterns",
     "pyclm.core.patterns.static_patterns",
-    "pyclm.core.patterns.feedback_control_patterns",
-    "pyclm.core.patterns.ktr_patterns",
 ]
 
 
@@ -166,40 +166,34 @@ def _get_toml_name(cls: type, known_models_inv: dict) -> str | None:
 
 
 def _discover_zoo_classes() -> list[type]:
-    """Import all pattern modules and return classes that have ``zoo_meta``."""
+    """Import pattern modules in _PATTERN_MODULES order and return classes that
+    have ``zoo_meta``, preserving that order."""
     # Make pyclm importable from the Sphinx source tree.
     src_dir = str(Path(__file__).parents[2] / "src")
     if src_dir not in sys.path:
         sys.path.insert(0, src_dir)
 
-    # Import pattern base to get PatternMethod
-    try:
-        from pyclm.core.patterns.pattern import PatternMethod
-    except ImportError as exc:
-        logger.warning("zoo_gallery: cannot import PatternMethod - %s", exc)
-        return []
+    zoo_classes: list[type] = []
+    seen: set[type] = set()
 
     for mod_name in _PATTERN_MODULES:
         try:
-            importlib.import_module(mod_name)
+            mod = importlib.import_module(mod_name)
         except ImportError as exc:
             logger.warning("zoo_gallery: could not import %s - %s", mod_name, exc)
+            continue
 
-    zoo_classes = []
-    for cls in _all_subclasses(PatternMethod):
-        # Only include classes that DIRECTLY declare zoo_meta (not inherit it).
-        if "zoo_meta" in cls.__dict__ and cls.__dict__["zoo_meta"] is not None:
-            zoo_classes.append(cls)
+        for obj in vars(mod).values():
+            if (
+                isinstance(obj, type)
+                and "zoo_meta" in obj.__dict__
+                and obj.__dict__["zoo_meta"] is not None
+                and obj not in seen
+            ):
+                zoo_classes.append(obj)
+                seen.add(obj)
 
     return zoo_classes
-
-
-def _all_subclasses(cls: type) -> list[type]:
-    result = []
-    for sub in cls.__subclasses__():
-        result.append(sub)
-        result.extend(_all_subclasses(sub))
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -232,8 +226,17 @@ def _build_entry(
     # Build zoo subclass with geometry bound to the sample image
     ZooCls = make_zoo_subclass(cls, raw.shape, pixel_size_um)
 
+    # use all kwargs
+    kwargs = zoo_meta.kwargs
+    real_kwargs = {}
+    public_kwargs = {}
+    for item, kwarg in kwargs.items():
+        real_kwargs[item.lstrip("_")] = kwarg
+        if item[0] != "_":
+            public_kwargs[item] = kwarg
+
     # Instantiate
-    instance = ZooCls(**zoo_meta.kwargs)
+    instance = ZooCls(**real_kwargs)
     instance.pixel_size_um = pixel_size_um
     instance.pattern_shape = raw.shape
 
@@ -260,7 +263,7 @@ def _build_entry(
         "png_name": png_name,
         "title": title,
         "description": description,
-        "kwargs": zoo_meta.kwargs,
+        "kwargs": public_kwargs,
         "toml_name": _get_toml_name(cls, known_models_inv),
     }
 
