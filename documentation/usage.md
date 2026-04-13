@@ -1,6 +1,6 @@
 # Usage
 
-For first time usage, see [_Installation_](installation.md).
+For first time usage, see the [First-Time Setup Guide](first_time_setup.md). For installation details, see [Installation](installation.md).
 
 Running an experiment with PyCLM is split into three parts:
 

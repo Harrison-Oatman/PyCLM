@@ -1,0 +1,5 @@
+[timing]
+steps = 4
+interval_seconds = 1.0
+setup_time_seconds = 0.0
+time_between_positions = 0.05
