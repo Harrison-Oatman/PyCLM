@@ -40,16 +40,14 @@ class Controller:
         config="MMConfig_demo.cfg",
         dry=False,
         position_mover: PositionMover | None = None,
-        dry_image_source: TimeSeriesImageSource | None = None,
+        dry_image_source: Path | None = None,
     ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
             self.core = RealMicroscopeCore()
         else:
             if dry_image_source is None:
-                image_source = TimeSeriesImageSource.from_folder(
-                    Path("tif-source"), pattern="*.tif", loop=True
-                )
+                image_source = TimeSeriesImageSource(Path("tif-source"), loop=True)
             else:
                 image_source = dry_image_source
             self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
@@ -141,7 +139,9 @@ class Controller:
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
-        self.outbox.initialize(schedule)
+        all_layers = self.outbox.initialize(schedule, self.core)
+
+        return all_layers
 
     def run(self):
         with ThreadPoolExecutor() as executor:

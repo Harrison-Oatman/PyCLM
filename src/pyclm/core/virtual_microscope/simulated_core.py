@@ -157,7 +157,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         self._exposure_ms = float(exposure_ms)
 
     def snapImage(self) -> None:
-        frame = np.asarray(self._image_source.next_frame())
+        frame = np.asarray(self._image_source.next_frame([self._x, self._y]))
         x, y, w, h = self._roi
         frame = frame[y : y + h, x : x + w, ...] if frame.ndim >= 2 else frame
 

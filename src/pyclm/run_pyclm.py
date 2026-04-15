@@ -1,6 +1,10 @@
 import logging
+import os
+import subprocess
+import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional
+from threading import Thread
 
 import numpy as np
 from toml import load
@@ -10,7 +14,7 @@ logger = logging.getLogger(__name__)
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .core.position_mover import PositionMover
-from .directories import schedule_from_directory
+from .directories import dry_schedule_from_directory, schedule_from_directory
 
 
 def set_logging(experiment_directory: Path):
@@ -34,6 +38,23 @@ def set_logging(experiment_directory: Path):
     logging.basicConfig(handlers=[console_handler, file_handler])
 
 
+def launch_gui_process(
+    srcs: Sequence[tuple[str, str]], cwd: Path | None = None
+) -> subprocess.Popen:
+    args = [sys.executable, "-m", "pyclm.gui.gui_controller"]
+    for fp, ch in srcs:
+        args += ["--src", f"{fp}:{ch}"]
+    env = os.environ.copy()
+    env.setdefault("NAPARI_DISABLE_PLUGIN_AUTOLOAD", "1")
+    return subprocess.Popen(
+        args,
+        cwd=str(cwd) if cwd else None,
+        env=env,
+        stdout=None,
+        stderr=None,
+    )
+
+
 def run_pyclm(
     experiment_directory,
     config_path=None,
@@ -42,6 +63,7 @@ def run_pyclm(
     position_mover: PositionMover | None = None,
     dry_image_source=None,
     dry: bool = False,
+    gui: bool = False,
 ):
     """
     Run a pyclm experiment from a given directory and configuration file.
@@ -84,6 +106,13 @@ def run_pyclm(
 
     base_path = experiment_directory
 
+    # For dry runs without an explicit image source, discover the schedule and
+    # image source together from the directory before creating the Controller.
+    if dry and dry_image_source is None:
+        schedule, dry_image_source = dry_schedule_from_directory(base_path)
+    else:
+        schedule = schedule_from_directory(base_path)
+
     c = Controller(
         config["config_path"],
         dry,
@@ -110,11 +139,19 @@ def run_pyclm(
         cg = core.getConfigGroupObject(group, False)
         print(cg.name, list(cg.items()))
 
-    schedule = schedule_from_directory(base_path)
-
     slm_shape = config["slm_shape_h"], config["slm_shape_w"]
     at = np.array(config["affine_transform"], dtype=np.float32)
 
-    c.initialize(schedule, slm_shape, at, base_path)
+    all_layers = c.initialize(schedule, slm_shape, at, base_path)
+
+    gui_proc = None
+    if gui:
+        # srcs = [
+        #     (str((base_path / "on.00.hdf5").resolve()), "channel_638"),
+        #     (str((base_path / "off.00.hdf5").resolve()), "channel_638"),
+        # ]
+        print(all_layers)
+        gui_proc = launch_gui_process(all_layers, cwd=base_path)
+        logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
     c.run()
