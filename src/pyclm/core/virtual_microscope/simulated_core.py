@@ -161,15 +161,6 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         x, y, w, h = self._roi
         frame = frame[y : y + h, x : x + w, ...] if frame.ndim >= 2 else frame
 
-        binning = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
-        try:
-            b = int(str(binning).split("x")[0])
-        except Exception:
-            b = 1
-
-        if b > 1 and frame.ndim >= 2:
-            frame = self._bin2d(frame, b)
-
         self._last_image = frame
 
     def getImage(self) -> Any:
@@ -201,23 +192,3 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
     # Synchronization
     def waitForSystem(self) -> None:
         return None
-
-    @staticmethod
-    def _bin2d(frame: np.ndarray, b: int) -> np.ndarray:
-        if b <= 1:
-            return frame
-        if frame.ndim == 2:
-            h, w = frame.shape
-            h2, w2 = (h // b) * b, (w // b) * b
-            f = frame[:h2, :w2].reshape(h2 // b, b, w2 // b, b).mean(axis=(1, 3))
-            return (
-                f.astype(frame.dtype) if np.issubdtype(frame.dtype, np.integer) else f
-            )
-        if frame.ndim == 3:
-            h, w, c = frame.shape
-            h2, w2 = (h // b) * b, (w // b) * b
-            f = frame[:h2, :w2, :].reshape(h2 // b, b, w2 // b, b, c).mean(axis=(1, 3))
-            return (
-                f.astype(frame.dtype) if np.issubdtype(frame.dtype, np.integer) else f
-            )
-        return frame

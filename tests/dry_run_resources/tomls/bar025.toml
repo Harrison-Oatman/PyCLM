@@ -1,0 +1,45 @@
+# information related to imaging conditions, channels, frequency
+[config_groups]
+Objective = "1-Plan Apo LmbdD0.80 20x"
+System = "Startup"
+
+[device_properties]
+
+
+[imaging]
+every_t = 2
+exposure = 50
+save = true
+binning = 1
+
+    [imaging.config_groups]
+    # information related to imaging conditions, channels, frequency
+    Laser-Intensity = "50%"
+    LightPath = "Fluor"
+
+
+# determines channel axis
+[channels]
+group = "Channel"
+presets = ["545"]
+
+
+# information related to stimulation
+[stimulation]
+every_t = 1
+exposure = 50
+save = true
+
+    [stimulation.config_groups]
+    Channel = "DMD"
+    LightPath = "DMD"
+    Laser-Intensity = "AllOff"
+    Sola = "30"
+
+
+# information related to pattern generation
+[pattern]
+method = "bar"
+duty_cycle = 0.2
+bar_speed = 0.25
+period = 100

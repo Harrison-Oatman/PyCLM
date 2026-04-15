@@ -41,13 +41,17 @@ analysis = [
     "matplotlib>=3.10.6",
     "pandas>=2.3.2",
     "tqdm>=4.67.1",
+    "statannotations>=0.7.2",
 ]
 
 docs = [
+    "matplotlib>=3.10.6",
+    "myst-parser",
+    "nox>=2025.2.9",
     "pytest>=8.4.2",
+    "scipy>=1.15.0",
     "sphinx",
     "sphinx-rtd-theme",
-    "myst-parser",
 ]
 
 dev = [
@@ -60,15 +64,15 @@ test = [
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cu121" },
+    { index = "pytorch-cu128" },
 ]
 torchvision = [
-    { index = "pytorch-cu121" },
+    { index = "pytorch-cu128" },
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.ruff.lint]
@@ -83,6 +87,7 @@ select = [
 [project.scripts]
 pyclm = "pyclm.__main__:main"
 convert_hdf5s = "pyclm.convert_hdf5s:main"
+
 
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]

@@ -26,6 +26,7 @@ from .core import (
     SegmentationProcess,
     SLMBuffer,
 )
+from .core.position_mover import PositionMover
 from .core.real_core import RealMicroscopeCore
 from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
 from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
@@ -34,12 +35,21 @@ logger = logging.getLogger(__name__)
 
 
 class Controller:
-    def __init__(self, config="MMConfig_demo.cfg", dry=False):
+    def __init__(
+        self,
+        config="MMConfig_demo.cfg",
+        dry=False,
+        position_mover: PositionMover | None = None,
+        dry_image_source: Path | None = None,
+    ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
             self.core = RealMicroscopeCore()
         else:
-            image_source = TimeSeriesImageSource(Path("tif-source"), loop=True)
+            if dry_image_source is None:
+                image_source = TimeSeriesImageSource(Path("tif-source"), loop=True)
+            else:
+                image_source = dry_image_source
             self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
@@ -47,7 +57,10 @@ class Controller:
         self.stop_event = Event()
 
         self.microscope = MicroscopeProcess(
-            core=self.core, aq=self.all_queues, stop_event=self.stop_event
+            core=self.core,
+            aq=self.all_queues,
+            position_mover=position_mover,
+            stop_event=self.stop_event,
         )
         self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
         self.outbox = MicroscopeOutbox(aq=self.all_queues, stop_event=self.stop_event)

@@ -1,6 +1,7 @@
 import numpy as np
 
 from .pattern import DataDock, PatternMethod
+from .zoo import ZooMeta
 
 
 class BarPatternBase(PatternMethod):
@@ -56,6 +57,12 @@ class BarPattern(BarPatternBase):
     """
 
     name = "bar"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"duty_cycle": 0.2, "bar_speed": 1.0, "period": 100},
+        title="Moving Bar",
+        description="Periodic bar sweeping along the y-axis at constant speed.",
+    )
 
     def __init__(self, duty_cycle=0.2, bar_speed=1, period=30, **kwargs):
         """
@@ -154,6 +161,12 @@ class BouncingBarPattern(BarPattern):
 
 class RotatingBarPattern(PatternMethod):
     name = "rotate_bar"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"num_bars": 12, "angular_velocity": 2.0, "bar_width": 20},
+        title="Rotating Bar",
+        description="Spoke-like bars rotating around the center of the field.",
+    )
 
     def __init__(
         self,

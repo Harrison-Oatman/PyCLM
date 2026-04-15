@@ -12,8 +12,64 @@ class TimeSeriesImageSource:
         self._index_map: dict[str, int] = {}
         self._frames_map: dict[str, list[np.ndarray]] = {}
         self._default_stack: str | None = None
+        self._use_default_for_unknown: bool = False
 
         self.initialize_from_folder(folder)
+
+    @classmethod
+    def from_mapping(
+        cls,
+        pos_to_tif: dict[tuple[float, float], Path],
+        loop: bool = True,
+    ) -> "TimeSeriesImageSource":
+        """Build a source directly from a coordinate → TIF-path mapping."""
+        instance = cls.__new__(cls)
+        instance._loop = loop
+        instance._pos_map = {}
+        instance._index_map = {}
+        instance._frames_map = {}
+        instance._default_stack = None
+        instance._use_default_for_unknown = False
+
+        for pos, tif_path in pos_to_tif.items():
+            tif_path = Path(tif_path)
+            name = str(tif_path)
+            instance._pos_map[pos] = name
+            if name not in instance._frames_map:
+                data = instance._load_and_normalize_tiff(tif_path)
+                frames = [data[t, 0, 0] for t in range(data.shape[0])]
+                instance._frames_map[name] = frames
+                instance._index_map[name] = 0
+
+        if instance._frames_map:
+            instance._default_stack = next(iter(instance._frames_map.keys()))
+
+        return instance
+
+    @classmethod
+    def from_tiff_stack(
+        cls,
+        tif_path: Path,
+        loop: bool = True,
+    ) -> "TimeSeriesImageSource":
+        """Build a source from a single TIF stack used for all positions."""
+        instance = cls.__new__(cls)
+        instance._loop = loop
+        instance._pos_map = {}
+        instance._index_map = {}
+        instance._frames_map = {}
+        instance._default_stack = None
+        instance._use_default_for_unknown = True
+
+        tif_path = Path(tif_path)
+        name = str(tif_path)
+        data = instance._load_and_normalize_tiff(tif_path)
+        frames = [data[t, 0, 0] for t in range(data.shape[0])]
+        instance._frames_map[name] = frames
+        instance._index_map[name] = 0
+        instance._default_stack = name
+
+        return instance
 
     def read_yaml(self, data_directory: Path):
         yaml_path = Path.joinpath(data_directory, "image_positions.yaml")
@@ -53,8 +109,12 @@ class TimeSeriesImageSource:
     def next_frame(self, pos) -> np.ndarray:
         pos = tuple(pos)
         if pos not in self._pos_map:
-            raise KeyError(f"Position {pos} not found in image_positions.yaml")
-        stack_name = self._pos_map[pos]
+            if self._use_default_for_unknown and self._default_stack is not None:
+                stack_name = self._default_stack
+            else:
+                raise KeyError(f"Position {pos} not found in image source")
+        else:
+            stack_name = self._pos_map[pos]
         frames = self._frames_map[stack_name]
         frame = frames[self._index_map[stack_name]]
         self._index_map[stack_name] += 1

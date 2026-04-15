@@ -2,7 +2,6 @@
 notebooks/gol_snaps/
 .idea/
 /plots/*
-/resources/*
 */.ipynb_checkpoints/*
 *.pyc
 /test/
@@ -12,7 +11,14 @@ log.txt
 /other/*
 *.pdf
 /example_scripts/
+/figures/**/*.tif
+/figures/**/*.mp4
+/figures/**/*.avi
+/figures/**/*.pdf
+/figures/**/*.png
 # Documentation
 documentation/_build/
 documentation/_static/
+documentation/_generated/
+documentation/_zoo_gallery.md
 

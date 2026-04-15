@@ -1,3 +1,5 @@
+from cv2 import resize
+
 from .segmentation import *
 
 
@@ -64,3 +66,43 @@ class CellposeSegmentationMethod(SegmentationMethod):
         masks = self.cellpose_resource.eval(data, normalize=self.normalization)
 
         return masks
+
+
+class EmbryoSegmentationMethod(CellposeSegmentationMethod):
+    name = "embryo_resizing"
+
+    def __init__(
+        self,
+        experiment_name,
+        model="embryomodel",
+        use_gpu=True,
+        normlow=0,
+        normhigh=0.15,
+        ideal_size=(100, 100),
+        cache_result=True,
+        **kwargs,
+    ):
+        super().__init__(experiment_name, model, use_gpu, normlow, normhigh)
+
+        self.ideal_size = ideal_size
+        self.cached_result = None
+        self.do_cache = cache_result
+
+    def segment(self, data):
+        # use cached result if caching (e.g. because embryo doesn't move)
+        if self.do_cache and self.cached_result:
+            return self.cached_result
+
+        # downscale to make the embryo smaller
+        downscaled_frame = resize(data, self.ideal_size)
+
+        out = super().segment(downscaled_frame)
+        mask = out > 0
+
+        # upscale back to full size
+        big_mask = resize(mask.astype(float), data.shape, order=1) > 0.5
+
+        if self.do_cache:
+            self.cached_result = big_mask
+
+        return big_mask

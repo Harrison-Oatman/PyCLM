@@ -7,6 +7,7 @@ from h5py import Dataset
 from .experiments import (
     ConfigGroup,
     DeviceProperty,
+    MicroscopePosition,
     PositionBase,
     PositionWithAutoFocus,
 )
@@ -68,7 +69,7 @@ class AcquisitionEvent:
     def __init__(
         self,
         experiment,
-        position: PositionWithAutoFocus,
+        position: MicroscopePosition,
         channel_id: UUID,
         scheduled_time=0,
         scheduled_time_since_start=0,

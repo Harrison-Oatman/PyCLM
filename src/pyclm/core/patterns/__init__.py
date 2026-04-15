@@ -4,14 +4,19 @@ from .bar_patterns import (
     RotatingBarPattern,
     SawToothMethod,
 )
-from .feedback_control_patterns import (
+from .cell_intensity_patterns import (
+    BinaryNucleusClampModel,
+    CenteredImageModel,
+    GlobalCycleModel,
+)
+from .embryo_patterns import InnerPatternMethod, OuterPatternMethod
+from .fbc_cell_movement import (
     BounceModel,
     MoveDownModel,
     MoveInModel,
     MoveOutModel,
     RotateCcwModel,
 )
-from .ktr_patterns import BinaryNucleusClampModel, CenteredImageModel, GlobalCycleModel
 from .pattern import (
     ROI,
     AcquiredImageRequest,
@@ -40,4 +45,6 @@ known_models = {
     "global_cycle": GlobalCycleModel,
     "centered_image": CenteredImageModel,
     "rotate_bar": RotatingBarPattern,
+    "embryo_inner": InnerPatternMethod,
+    "embryo_outer": OuterPatternMethod,
 }

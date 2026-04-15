@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
-from .directories import schedule_from_directory
+from .core.position_mover import PositionMover
+from .directories import dry_schedule_from_directory, schedule_from_directory
 
 
 def set_logging(experiment_directory: Path):
@@ -59,6 +60,8 @@ def run_pyclm(
     config_path=None,
     segmentation_methods: dict[str, type[SegmentationMethod]] | None = None,
     pattern_methods: dict[str, type[PatternMethod]] | None = None,
+    position_mover: PositionMover | None = None,
+    dry_image_source=None,
     dry: bool = False,
     gui: bool = False,
 ):
@@ -103,7 +106,19 @@ def run_pyclm(
 
     base_path = experiment_directory
 
-    c = Controller(config["config_path"], dry)
+    # For dry runs without an explicit image source, discover the schedule and
+    # image source together from the directory before creating the Controller.
+    if dry and dry_image_source is None:
+        schedule, dry_image_source = dry_schedule_from_directory(base_path)
+    else:
+        schedule = schedule_from_directory(base_path)
+
+    c = Controller(
+        config["config_path"],
+        dry,
+        position_mover=position_mover,
+        dry_image_source=dry_image_source,
+    )
 
     # register any custom methods
     if segmentation_methods is not None:
@@ -123,8 +138,6 @@ def run_pyclm(
     for group in core.getAvailableConfigGroups():
         cg = core.getConfigGroupObject(group, False)
         print(cg.name, list(cg.items()))
-
-    schedule = schedule_from_directory(base_path)
 
     slm_shape = config["slm_shape_h"], config["slm_shape_w"]
     at = np.array(config["affine_transform"], dtype=np.float32)
