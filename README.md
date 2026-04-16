@@ -1,7 +1,7 @@
 # PyCLM
 A Modular Closed-Loop Microscopy Software in Python
 
-**Documentation available at [readthedocs]([https://pyclm.readthedocs.io/en/latest/](https://pyclm.readthedocs.io/en/latest/first_time_setup.html))**
+Please see out documentation at [readthedocs](https://pyclm.readthedocs.io/en/latest/first_time_setup.html)
 
 ![](documentation\imgs\Figure%201.png "PyCLM Overview")
 
@@ -27,15 +27,12 @@ Ideally, the number of possible simultaneous experiments should be limited only 
 PyCLM is installed with [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv add closed-loop-microscopy
+git clone https://github.com/Harrison-Oatman/PyCLM.git
+cd PyCLM
+uv sync
 ```
 
-Optional extras:
-
-```bash
-uv add "closed-loop-microscopy[cellpose]"      # CellposeSAM segmentation (requires CUDA)
-uv add "closed-loop-microscopy[calibration]"   # DMD calibration tools
-```
+See [First-Time Setup Guide](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) to get started.
 
 ### Hardware requirement: Micro-Manager
 
