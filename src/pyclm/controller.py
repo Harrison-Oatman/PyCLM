@@ -46,9 +46,7 @@ class Controller:
             self.core = RealMicroscopeCore()
         else:
             if dry_image_source is None:
-                raise ValueError(
-                    "dry_image_source must be provided when dry=True."
-                )
+                raise ValueError("dry_image_source must be provided when dry=True.")
             self.core = SimulatedMicroscopeCore(dry_image_source, slm_device=None)
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
