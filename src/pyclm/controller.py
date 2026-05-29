@@ -29,7 +29,6 @@ from .core import (
 from .core.position_mover import PositionMover
 from .core.real_core import RealMicroscopeCore
 from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
-from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +46,10 @@ class Controller:
             self.core = RealMicroscopeCore()
         else:
             if dry_image_source is None:
-                image_source = TimeSeriesImageSource(Path("tif-source"), loop=True)
-            else:
-                image_source = dry_image_source
-            self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
+                raise ValueError(
+                    "dry_image_source must be provided when dry=True."
+                )
+            self.core = SimulatedMicroscopeCore(dry_image_source, slm_device=None)
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
 
