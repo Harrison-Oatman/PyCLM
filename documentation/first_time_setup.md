@@ -300,6 +300,14 @@ positions:
     source: off.tif
 ```
 
+Add `--gui` to open a live Napari viewer that updates as data is written:
+
+```bash
+uv run pyclm path/to/experiment_dir --dry --gui
+```
+
+`--gui` can also be used during a real experiment to monitor output in real time.
+
 **Programmatically** (required when using a custom `PositionMover` or custom pattern/segmentation methods):
 
 ```python
