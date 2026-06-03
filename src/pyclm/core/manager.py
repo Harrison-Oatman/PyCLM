@@ -280,6 +280,10 @@ class MicroscopeOutbox(DataPassingProcess):
             for channel_name in experiment.channels:
                 all_layers.append((filepath, f"channel_{channel_name}"))
 
+            if experiment.stimulation.save:
+                all_layers.append((filepath, "stim_aq"))
+
+
         return all_layers
 
     def close_files(self):
