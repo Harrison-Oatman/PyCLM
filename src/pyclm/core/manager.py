@@ -283,7 +283,6 @@ class MicroscopeOutbox(DataPassingProcess):
             if experiment.stimulation.save:
                 all_layers.append((filepath, "stim_aq"))
 
-
         return all_layers
 
     def close_files(self):
