@@ -165,6 +165,10 @@ class MicroscopeOutbox(DataPassingProcess):
             for exp_name in schedule.experiment_names:
                 filepath = self.base_path / f"{exp_name}.hdf5"
                 filepath.parent.mkdir(parents=True, exist_ok=True)
+                if filepath.exists():
+                    raise FileExistsError(
+                        f"HDF5 file with this name already exists: {filepath}"
+                    )
 
                 f = File(filepath, "w", libver="latest")
 
