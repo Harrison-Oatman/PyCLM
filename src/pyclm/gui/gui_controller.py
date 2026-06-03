@@ -336,6 +336,14 @@ def _parse_src(s: str) -> tuple[str, str]:
     return path, ch
 
 
+def _parse_all_layers(s: str) -> list[tuple[str, str]]:
+    layers = []
+    with open(s, encoding="utf-8") as file:
+        for line in file:
+            layers.append(_parse_src(line))
+    return layers
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Napari SWMR HDF5 viewer (one layer per file/channel)"
@@ -344,12 +352,24 @@ def main(argv: list[str] | None = None) -> int:
         "--src",
         action="append",
         type=_parse_src,
-        required=True,
+        required=False,
         help='Repeatable: "file.hdf5:channel_638"',
+    )
+    p.add_argument(
+        "--layers",
+        action="store",
+        type=_parse_all_layers,
+        required=False,
+        help="all_layers.txt saved in experiment file",
     )
     args = p.parse_args(argv)
 
-    app = launch_hdf5_layer_viewer(args.src)
+    if not args.src:
+        if not args.layers:
+            raise ValueError("One of --layers or --src must be provided")
+        app = launch_hdf5_layer_viewer(args.layers)
+    else:
+        app = launch_hdf5_layer_viewer(args.src)
     app.run()
     return 0
 
