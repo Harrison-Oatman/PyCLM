@@ -87,6 +87,7 @@ select = [
 [project.scripts]
 pyclm = "pyclm.__main__:main"
 convert_hdf5s = "pyclm.convert_hdf5s:main"
+gui = "pyclm.gui.gui_controller:main"
 
 
 [build-system]
