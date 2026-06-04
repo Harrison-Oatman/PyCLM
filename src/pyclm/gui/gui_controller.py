@@ -102,7 +102,14 @@ def _read_stim_frame_swmr(
         b = int(binning)
         if "stim_aq" in f[t_val].keys() and "dmd" in f[t_val]["stim_aq"]:
             pattern = np.array(f[t_val]["stim_aq"]["dmd"])
-            data_shape = np.array(f[t_val][channel_key]["data"]).shape
+            imaging_key = next(
+                (k for k in f[t_val].keys() if k.startswith("channel_")), None
+            )
+            if imaging_key is None:
+                return None
+            data_shape = np.array(f[t_val][imaging_key]["data"]).shape
+            if 0 in data_shape:
+                return None
             tf = cv2.warpAffine(
                 np.round(pattern).astype(np.uint8),
                 ati,
@@ -161,6 +168,9 @@ class LiveHDF5Layer:
             initial = np.zeros((1, 64, 64), dtype=np.uint16)
         print(f"add_image: {layer_name} shape={initial.shape}")
         self.layer = self.viewer.add_image(initial, name=layer_name)
+        if spec.channel_key == "stim_dmd":
+            self.layer.colormap = "red"
+            self.layer.reset_contrast_limits()
 
     def _open_file(self) -> None:
         try:
