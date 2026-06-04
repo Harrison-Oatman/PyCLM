@@ -338,7 +338,7 @@ class LiveHDF5Layer:
 class HDF5LayerViewerApp:
     def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None):
         self.viewer = napari.Viewer()
-        self.layers = [LiveHDF5Layer(self.viewer, s, at=at) for s in specs]
+        self.layers = [LiveHDF5Layer(self.viewer, s, at=at) for s in specs[::-1]]
 
         self._poll_timer = QtCore.QTimer()
         self._poll_timer.setInterval(1000)
@@ -386,10 +386,17 @@ def launch_hdf5_layer_viewer(
     at: np.ndarray | None = None,
 ) -> HDF5LayerViewerApp:
     filtered = []
+
+    seen_fps = set()
+
     for fp, ch in specs:
+        if fp not in seen_fps:
+            if _stim_exposure_nonzero(experiment_dir, Path(fp)):
+                filtered.append((fp, "stim_dmd"))
+
         filtered.append((fp, ch))
-        if _stim_exposure_nonzero(experiment_dir, Path(fp)):
-            filtered.append((fp, "stim_dmd"))
+        seen_fps.add(fp)
+
     layer_specs = [LayerSpec(path=Path(fp), channel_key=ch) for fp, ch in filtered]
     return HDF5LayerViewerApp(layer_specs, at=at)
 
@@ -409,7 +416,7 @@ def _parse_src(s: str) -> tuple[str, str]:
     return path, ch
 
 
-def _parse_all_layers(s: str) -> list[tuple[str, str]]:
+def _parse_all_layers(s: Path) -> list[tuple[str, str]]:
     layers = []
     with open(s, encoding="utf-8") as file:
         for line in file:
@@ -471,23 +478,18 @@ def main(argv: list[str] | None = None) -> int:
         required=False,
         help='Repeatable: "file.hdf5:channel_638"',
     )
-    p.add_argument(
-        "--layers",
-        action="store",
-        type=_parse_all_layers,
-        required=False,
-        help="all_layers.txt saved in experiment file",
-    )
     p.add_argument("--config", help="path to pyclm_config.toml file", default=None)
     args = p.parse_args(argv)
     experiment_dir = Path(args.experiment)
     at = find_affine_transform(experiment_dir, args.config)
-
     if not args.src:
-        if not args.layers:
-            raise ValueError("One of --layers or --src must be provided")
+        all_layers_path = experiment_dir / "all_layers.txt"
+        assert all_layers_path.exists(), "no all_layers.txt found in experiment directory"
+
+        layers = _parse_all_layers(all_layers_path)
+
         app = launch_hdf5_layer_viewer(
-            args.layers, experiment_dir=experiment_dir, at=at
+            layers, experiment_dir=experiment_dir, at=at
         )
     else:
         app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at)
