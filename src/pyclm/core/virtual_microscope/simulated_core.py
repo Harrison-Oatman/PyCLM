@@ -24,7 +24,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
     def __init__(
         self,
         image_source,
-        pixel_size_um: float = 0.108,
+        pixel_size_um: float = 0.33,
         camera_name: str = "SimulatedCamera",
         slm_device: str = "SimulatedSLM",
         slm_shape: tuple[int, int] = (1140, 900),
@@ -160,7 +160,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         frame = np.asarray(self._image_source.next_frame([self._x, self._y]))
         x, y, w, h = self._roi
         frame = frame[y : y + h, x : x + w, ...] if frame.ndim >= 2 else frame
-        print(frame.shape)
+        print(f"Simulated image shape: {frame.shape}")
 
         # binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
         # binning = int(binning_str.split("x")[0])
@@ -181,10 +181,15 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         return self._last_image
 
     def getPixelSizeUm(self) -> float:
-        return self._pixel_size_um
+        binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
+        binning = int(binning_str.split("x")[0])
+        return self._pixel_size_um * binning
 
     def getROI(self):
-        return self._roi
+        binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
+        binning = int(binning_str.split("x")[0])
+        x, y, w, h = self._roi
+        return (x, y, w * 4, h * 4)
 
     # Stage/focus/positioning
     def getZPosition(self) -> float:
