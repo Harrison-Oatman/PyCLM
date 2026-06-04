@@ -117,8 +117,8 @@ class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
 def get_image_shape(core: MicroscopeCoreInterface, binning: int = 1) -> tuple[int, int]:
     roi = core.getROI()
     h, w = roi[3], roi[2]
-    return (h, w)
-    # return (h // binning, w // binning)
+    # return (h, w)
+    return (h // binning, w // binning)
 
 
 class MicroscopeOutbox(DataPassingProcess):

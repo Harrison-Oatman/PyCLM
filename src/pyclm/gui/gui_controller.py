@@ -168,7 +168,7 @@ class LiveHDF5Layer:
         layer_name = spec.name or f"{spec.path.name} :: {spec.channel_key}"
         initial = self._load_initial_stack()
         if initial is None:
-            initial = np.zeros((1, 64, 64), dtype=np.uint16)
+            initial = np.zeros((1, 800, 800), dtype=np.uint16)
         print(f"add_image: {layer_name} shape={initial.shape}")
         self.layer = self.viewer.add_image(initial, name=layer_name)
         if spec.channel_key == "stim_dmd":
