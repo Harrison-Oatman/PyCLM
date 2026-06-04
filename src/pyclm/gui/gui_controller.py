@@ -78,7 +78,7 @@ def _read_data_frame_swmr(
     f: h5py.File, t_val: str, channel_key: str, at
 ) -> np.ndarray | None:
     if channel_key == "stim_dmd":
-        return _read_stim_frame_swmr(f, t_val, "stim_aq", at)
+        return _read_stim_frame_swmr(f, t_val, at)
     else:
         try:
             d = f[t_val][channel_key]["data"]
@@ -93,31 +93,29 @@ def _read_data_frame_swmr(
             return None
 
 
-def _read_stim_frame_swmr(
-    f: h5py.File, t_val: str, channel_key: str, at
-) -> np.ndarray | None:
+def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
     ati = cv2.invertAffineTransform(at)
     try:
-        binning = get_binning_from_metadata(f, channel_key)
-        b = int(binning)
-        if "stim_aq" in f[t_val].keys() and "dmd" in f[t_val]["stim_aq"]:
-            pattern = np.array(f[t_val]["stim_aq"]["dmd"])
-            imaging_key = next(
-                (k for k in f[t_val].keys() if k.startswith("channel_")), None
-            )
-            if imaging_key is None:
-                return None
-            data_shape = np.array(f[t_val][imaging_key]["data"]).shape
-            if 0 in data_shape:
-                return None
-            tf = cv2.warpAffine(
-                np.round(pattern).astype(np.uint8),
-                ati,
-                (data_shape[1] * b, data_shape[0] * b),
-            ).astype(np.uint16)
-            return downscale_local_mean(tf, (b, b)).astype(np.uint16)
-        else:
+        if "stim_aq" not in f[t_val].keys() or "dmd" not in f[t_val]["stim_aq"]:
             return None
+        imaging_key = next(
+            (k for k in f[t_val].keys() if k.startswith("channel_")), None
+        )
+        if imaging_key is None:
+            return None
+        d = f[t_val][imaging_key]["data"]
+        d.id.refresh()
+        data_shape = d.shape
+        if 0 in data_shape:
+            return None
+        b = int(get_binning_from_metadata(f, imaging_key))
+        pattern = np.array(f[t_val]["stim_aq"]["dmd"])
+        tf = cv2.warpAffine(
+            np.round(pattern).astype(np.uint8),
+            ati,
+            (data_shape[1] * b, data_shape[0] * b),
+        ).astype(np.uint16)
+        return downscale_local_mean(tf, (b, b)).astype(np.uint16)
     except Exception:
         print(f"t = {t_val} exception")
         return None
@@ -128,19 +126,23 @@ def _upsample_to_absolute(
     acquired_at: list[int],
     t_count: int,
     frame_shape: tuple[int, ...],
+    hold: bool = True,
 ) -> np.ndarray:
-    # Build a dense stack where each timepoint t holds the most recently acquired frame
     out = np.zeros(
         (t_count, *frame_shape), dtype=frames[0].dtype if frames else np.uint16
     )
     if not frames:
         return out
-    acq_idx = 0
-    for t in range(t_count):
-        if acq_idx + 1 < len(acquired_at) and acquired_at[acq_idx + 1] <= t:
-            acq_idx += 1
-        if acquired_at[acq_idx] <= t:
-            out[t] = frames[acq_idx]
+    if hold:
+        acq_idx = 0
+        for t in range(t_count):
+            if acq_idx + 1 < len(acquired_at) and acquired_at[acq_idx + 1] <= t:
+                acq_idx += 1
+            if acquired_at[acq_idx] <= t:
+                out[t] = frames[acq_idx]
+    else:
+        for frame, t in zip(frames, acquired_at, strict=False):
+            out[t] = frame
     return out
 
 
@@ -158,6 +160,7 @@ class LiveHDF5Layer:
         self.schedule: ChannelSchedule = ChannelSchedule()
         self._stack: np.ndarray | None = None
         self._last_frame: np.ndarray | None = None
+        self._hold: bool = spec.channel_key != "stim_dmd"
 
         if sys.platform != "win32":
             self._open_file()
@@ -169,7 +172,11 @@ class LiveHDF5Layer:
         print(f"add_image: {layer_name} shape={initial.shape}")
         self.layer = self.viewer.add_image(initial, name=layer_name)
         if spec.channel_key == "stim_dmd":
-            self.layer.colormap = "red"
+            self.layer.colormap = "cyan"
+            self.layer.contrast_limits = (0, 255)
+            self.layer.contrast_limits_range = (0, 255)
+            self.layer.opacity = 0.2
+        else:
             self.layer.reset_contrast_limits()
 
     def _open_file(self) -> None:
@@ -229,7 +236,7 @@ class LiveHDF5Layer:
 
         self._last_frame = frames[-1]
         stack = _upsample_to_absolute(
-            frames, acquired_at, current_t + 1, self.frame_shape
+            frames, acquired_at, current_t + 1, self.frame_shape, hold=self._hold
         )
         self._stack = stack
         return stack
@@ -282,24 +289,24 @@ class LiveHDF5Layer:
         if self.frame_shape is None:
             return False
 
-        # Combine the previous last frame with new frames
-        if self._last_frame is not None:
-            hold_frames = [self._last_frame, *new_frames]
-        else:
-            hold_frames = new_frames
-        if self._last_frame is not None:
-            hold_at = [prev_last] + [a for a in acquired_at]
-        else:
-            hold_at = [a for a in acquired_at]
-
         dense_new = np.zeros((n_new, *self.frame_shape), dtype=np.uint16)
-        if hold_frames:
-            acq_idx = 0
-            for i, t in enumerate(range(prev_last + 1, current_t + 1)):
-                if acq_idx + 1 < len(hold_at) and hold_at[acq_idx + 1] <= t:
-                    acq_idx += 1
-                if hold_at[acq_idx] <= t:
-                    dense_new[i] = hold_frames[acq_idx]
+        if self._hold:
+            hold_frames = (
+                [self._last_frame] if self._last_frame is not None else []
+            ) + new_frames
+            hold_at = (
+                [prev_last] if self._last_frame is not None else []
+            ) + acquired_at
+            if hold_frames:
+                acq_idx = 0
+                for i, t in enumerate(range(prev_last + 1, current_t + 1)):
+                    if acq_idx + 1 < len(hold_at) and hold_at[acq_idx + 1] <= t:
+                        acq_idx += 1
+                    if hold_at[acq_idx] <= t:
+                        dense_new[i] = hold_frames[acq_idx]
+        else:
+            for frame, t in zip(new_frames, acquired_at, strict=False):
+                dense_new[t - (prev_last + 1)] = frame
 
         if new_frames:
             self._last_frame = new_frames[-1]
@@ -315,7 +322,8 @@ class LiveHDF5Layer:
             else:
                 self.layer.data = np.concatenate([cur, dense_new], axis=0)
 
-        self.layer.reset_contrast_limits()
+        if self.spec.channel_key != "stim_dmd":
+            self.layer.reset_contrast_limits()
         self.layer.refresh()
         return True
 

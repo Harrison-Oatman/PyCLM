@@ -47,7 +47,9 @@ class Controller:
         else:
             if dry_image_source is None:
                 raise ValueError("dry_image_source must be provided when dry=True.")
-            self.core = SimulatedMicroscopeCore(dry_image_source, slm_device=None)
+            self.core = SimulatedMicroscopeCore(
+                dry_image_source, slm_device="SimulatedSLM"
+            )
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
 
@@ -110,6 +112,9 @@ class Controller:
         affine_transform: np.ndarray,
         out_path: Path,
     ):
+        if isinstance(self.core, SimulatedMicroscopeCore):
+            self.core._slm_h, self.core._slm_w = int(slm_shape[0]), int(slm_shape[1])
+
         self.set_binning(1)
 
         camera_roi = ROI(*self.core.getROI())

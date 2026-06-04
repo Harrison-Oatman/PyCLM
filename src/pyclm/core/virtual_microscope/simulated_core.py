@@ -160,17 +160,18 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         frame = np.asarray(self._image_source.next_frame([self._x, self._y]))
         x, y, w, h = self._roi
         frame = frame[y : y + h, x : x + w, ...] if frame.ndim >= 2 else frame
+        print(frame.shape)
 
-        binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
-        binning = int(binning_str.split("x")[0])
-        if binning > 1 and frame.ndim >= 2:
-            h_out, w_out = frame.shape[0] // binning, frame.shape[1] // binning
-            frame = (
-                frame[: h_out * binning, : w_out * binning]
-                .reshape(h_out, binning, w_out, binning)
-                .mean(axis=(1, 3))
-                .astype(frame.dtype)
-            )
+        # binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
+        # binning = int(binning_str.split("x")[0])
+        # if binning > 1 and frame.ndim >= 2:
+        #     h_out, w_out = frame.shape[0] // binning, frame.shape[1] // binning
+        #     frame = (
+        #         frame[: h_out * binning, : w_out * binning]
+        #         .reshape(h_out, binning, w_out, binning)
+        #         .mean(axis=(1, 3))
+        #         .astype(frame.dtype)
+        #     )
 
         self._last_image = frame
 
