@@ -11,10 +11,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import cv2
 import h5py
 import napari
 import numpy as np
+from h5py import File
 from qtpy import QtCore
+from skimage.transform import downscale_local_mean
+from toml import load
 
 
 @dataclass
@@ -71,16 +75,42 @@ def _read_channel_schedule(f: h5py.File, channel_key: str) -> ChannelSchedule:
 
 
 def _read_data_frame_swmr(
-    f: h5py.File, t_val: str, channel_key: str
+    f: h5py.File, t_val: str, channel_key: str, at
 ) -> np.ndarray | None:
-    try:
-        d = f[t_val][channel_key]["data"]
-        d.id.refresh()
-        arr = np.array(d)
-        if arr.size == 0:
-            print(f"t={t_val} no data")
+    if channel_key == "stim_dmd":
+        return _read_stim_frame_swmr(f, t_val, "stim_aq", at)
+    else:
+        try:
+            d = f[t_val][channel_key]["data"]
+            d.id.refresh()
+            arr = np.array(d)
+            if arr.size == 0:
+                print(f"t={t_val} no data")
+                return None
+            return arr
+        except Exception:
+            print(f"t = {t_val} exception")
             return None
-        return arr
+
+
+def _read_stim_frame_swmr(
+    f: h5py.File, t_val: str, channel_key: str, at
+) -> np.ndarray | None:
+    ati = cv2.invertAffineTransform(at)
+    try:
+        binning = get_binning_from_metadata(f, channel_key)
+        b = int(binning)
+        if "stim_aq" in f[t_val].keys() and "dmd" in f[t_val]["stim_aq"]:
+            pattern = np.array(f[t_val]["stim_aq"]["dmd"])
+            data_shape = np.array(f[t_val][channel_key]["data"]).shape
+            tf = cv2.warpAffine(
+                np.round(pattern).astype(np.uint8),
+                ati,
+                (data_shape[1] * b, data_shape[0] * b),
+            ).astype(np.uint16)
+            return downscale_local_mean(tf, (b, b)).astype(np.uint16)
+        else:
+            return None
     except Exception:
         print(f"t = {t_val} exception")
         return None
@@ -108,10 +138,13 @@ def _upsample_to_absolute(
 
 
 class LiveHDF5Layer:
-    def __init__(self, viewer: napari.Viewer, spec: LayerSpec):
+    def __init__(
+        self, viewer: napari.Viewer, spec: LayerSpec, at: np.ndarray | None = None
+    ):
         self.viewer = viewer
         self.spec = spec
 
+        self.at = at
         self.f: h5py.File | None = None
         self.last_t_index: int = -1
         self.frame_shape: tuple[int, ...] | None = None
@@ -125,7 +158,8 @@ class LiveHDF5Layer:
         layer_name = spec.name or f"{spec.path.name} :: {spec.channel_key}"
         initial = self._load_initial_stack()
         if initial is None:
-            initial = np.zeros((1, 1, 1), dtype=np.uint16)
+            initial = np.zeros((1, 64, 64), dtype=np.uint16)
+        print(f"add_image: {layer_name} shape={initial.shape}")
         self.layer = self.viewer.add_image(initial, name=layer_name)
 
     def _open_file(self) -> None:
@@ -168,7 +202,7 @@ class LiveHDF5Layer:
             if not self.schedule.is_scheduled_at(t):
                 continue
             t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key)
+            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key, self.at)
             if frame is None:
                 continue
             if self.frame_shape is None:
@@ -221,7 +255,7 @@ class LiveHDF5Layer:
             if not self.schedule.is_scheduled_at(t):
                 continue
             t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key)
+            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key, self.at)
             if frame is None:
                 continue
             if self.frame_shape is None:
@@ -284,9 +318,9 @@ class LiveHDF5Layer:
 
 
 class HDF5LayerViewerApp:
-    def __init__(self, specs: Sequence[LayerSpec]):
+    def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None):
         self.viewer = napari.Viewer()
-        self.layers = [LiveHDF5Layer(self.viewer, s) for s in specs]
+        self.layers = [LiveHDF5Layer(self.viewer, s, at=at) for s in specs]
 
         self._poll_timer = QtCore.QTimer()
         self._poll_timer.setInterval(1000)
@@ -316,9 +350,30 @@ class HDF5LayerViewerApp:
         self.viewer.window.show()
 
 
-def launch_hdf5_layer_viewer(specs: Sequence[tuple[str, str]]) -> HDF5LayerViewerApp:
-    layer_specs = [LayerSpec(path=Path(fp), channel_key=ch) for fp, ch in specs]
-    return HDF5LayerViewerApp(layer_specs)
+def _stim_exposure_nonzero(experiment_dir: Path, hdf5_path: Path) -> bool:
+    stem = hdf5_path.stem.split(".")[0]
+    toml_path = experiment_dir / f"{stem}.toml"
+    if not toml_path.exists():
+        return True
+    try:
+        data = load(toml_path)
+        return data.get("stimulation", {}).get("exposure", 0) != 0
+    except Exception:
+        return True
+
+
+def launch_hdf5_layer_viewer(
+    specs: Sequence[tuple[str, str]],
+    experiment_dir: Path | None = None,
+    at: np.ndarray | None = None,
+) -> HDF5LayerViewerApp:
+    filtered = []
+    for fp, ch in specs:
+        filtered.append((fp, ch))
+        if _stim_exposure_nonzero(experiment_dir, Path(fp)):
+            filtered.append((fp, "stim_dmd"))
+    layer_specs = [LayerSpec(path=Path(fp), channel_key=ch) for fp, ch in filtered]
+    return HDF5LayerViewerApp(layer_specs, at=at)
 
 
 def _parse_src(s: str) -> tuple[str, str]:
@@ -344,10 +399,53 @@ def _parse_all_layers(s: str) -> list[tuple[str, str]]:
     return layers
 
 
+def find_affine_transform(input_dir, config_path):
+    # copied from main.py
+    # search for config file if not provided
+    if config_path is None:
+        # look in the experiment directory for pyclm_config.toml
+        config_path = input_dir / "pyclm_config.toml"
+
+        # look in the current working directory for pyclm_config.toml
+        if not config_path.exists():
+            config_path = Path("pyclm_config.toml")
+
+    config_path = Path(config_path)
+
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Config file not found at {config_path}. Affine transform is required."
+        )
+
+    config = load(config_path)
+    return np.array(config["affine_transform"], dtype=np.float32)
+
+
+def get_binning_from_metadata(f: File, chan_key: str):
+    """
+    Extract binning from file attributes or return default 1.
+    """
+    if "experiment_metadata" in list(f.attrs.keys()):
+        try:
+            meta = json.loads(f.attrs["experiment_metadata"])
+            # chan_key is typically "channel_NAME"
+            # channel keys in metadata are "NAME"
+            if chan_key.startswith("channel_"):
+                short_name = chan_key.replace("channel_", "", 1)
+                if short_name in meta.get("channels", {}):
+                    return meta["channels"][short_name].get("binning", 1)
+            else:
+                return meta["segmentation"].get("binning", 1)
+        except Exception as e:
+            print(f"Error reading binning from metadata: {e}")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Napari SWMR HDF5 viewer (one layer per file/channel)"
     )
+    p.add_argument("experiment", help="directory containing experiment files")
     p.add_argument(
         "--src",
         action="append",
@@ -362,14 +460,19 @@ def main(argv: list[str] | None = None) -> int:
         required=False,
         help="all_layers.txt saved in experiment file",
     )
+    p.add_argument("--config", help="path to pyclm_config.toml file", default=None)
     args = p.parse_args(argv)
+    experiment_dir = Path(args.experiment)
+    at = find_affine_transform(experiment_dir, args.config)
 
     if not args.src:
         if not args.layers:
             raise ValueError("One of --layers or --src must be provided")
-        app = launch_hdf5_layer_viewer(args.layers)
+        app = launch_hdf5_layer_viewer(
+            args.layers, experiment_dir=experiment_dir, at=at
+        )
     else:
-        app = launch_hdf5_layer_viewer(args.src)
+        app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at)
     app.run()
     return 0
 
