@@ -39,9 +39,16 @@ def set_logging(experiment_directory: Path):
 
 
 def launch_gui_process(
-    srcs: Sequence[tuple[str, str]], cwd: Path | None = None
+    srcs: Sequence[tuple[str, str]],
+    cwd: Path | None = None,
+    experiment_dir: Path | None = None,
 ) -> subprocess.Popen:
-    args = [sys.executable, "-m", "pyclm.gui.gui_controller"]
+    args = [
+        sys.executable,
+        "-m",
+        "pyclm.gui.gui_controller",
+        str(experiment_dir or cwd or "."),
+    ]
     for fp, ch in srcs:
         args += ["--src", f"{fp}:{ch}"]
     env = os.environ.copy()
@@ -150,7 +157,9 @@ def run_pyclm(
     gui_proc = None
     if gui:
         print(all_layers)
-        gui_proc = launch_gui_process(all_layers, cwd=base_path)
+        gui_proc = launch_gui_process(
+            all_layers, cwd=base_path, experiment_dir=base_path
+        )
         logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
     c.run()
