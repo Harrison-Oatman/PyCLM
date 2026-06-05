@@ -22,7 +22,8 @@ class PatternAlongAxis(PatternMethod):
         props = regionprops(labeled_mask)
 
         if len(props) == 0:
-            np.zeros_like(mask)
+            print(f'No props segmented: {self.experiment_name}')
+            return np.zeros_like(mask)
 
         biggest_prop_area = 0
         for prop in props:
@@ -55,7 +56,7 @@ class InnerPatternMethod(PatternAlongAxis):
         kwargs={"fraction_length": 0.1},
     )
 
-    name = "ap_inner"
+    name = "embryo_inner"
 
     def __init__(self, fraction_length=0.1, **kwargs):
         super().__init__(**kwargs)
@@ -74,7 +75,7 @@ class OuterPatternMethod(PatternAlongAxis):
         kwargs={"fraction_length": 0.1},
     )
 
-    name = "ap_outer"
+    name = "embryo_outer"
 
     def __init__(self, fraction_length=0.1, **kwargs):
         super().__init__(**kwargs)
