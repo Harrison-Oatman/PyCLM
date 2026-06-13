@@ -22,7 +22,7 @@ class PatternAlongAxis(PatternMethod):
         props = regionprops(labeled_mask)
 
         if len(props) == 0:
-            print(f'No props segmented: {self.experiment_name}')
+            print(f"No props segmented: {self.experiment_name}")
             return np.zeros_like(mask)
 
         biggest_prop_area = 0

@@ -484,13 +484,13 @@ def main(argv: list[str] | None = None) -> int:
     at = find_affine_transform(experiment_dir, args.config)
     if not args.src:
         all_layers_path = experiment_dir / "all_layers.txt"
-        assert all_layers_path.exists(), "no all_layers.txt found in experiment directory"
+        assert all_layers_path.exists(), (
+            "no all_layers.txt found in experiment directory"
+        )
 
         layers = _parse_all_layers(all_layers_path)
 
-        app = launch_hdf5_layer_viewer(
-            layers, experiment_dir=experiment_dir, at=at
-        )
+        app = launch_hdf5_layer_viewer(layers, experiment_dir=experiment_dir, at=at)
     else:
         app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at)
     app.run()

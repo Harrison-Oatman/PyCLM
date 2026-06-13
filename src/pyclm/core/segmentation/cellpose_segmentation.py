@@ -105,7 +105,6 @@ class EmbryoSegmentationMethod(CellposeSegmentationMethod):
         big_mask = np.array(big_mask)
         print(f"big_mask shape: {big_mask.shape}")
 
-
         if self.do_cache:
             self.cached_result = big_mask
 
