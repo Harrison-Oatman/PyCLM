@@ -73,14 +73,16 @@ def _t_key(t: int) -> str:
 # Per-timepoint structure (from manager.py pre-allocation):
 #   stim_aq/data  — written when stim.save=true  → shape _CAMERA_SHAPE
 #   stim_aq/seg   — pre-allocated but never filled (no seg method) → (0, 0)
+#   stim_aq/dmd
 #   channel_*/data — written at imaging channel every_t            → shape _CAMERA_SHAPE
 #   channel_*/seg  — pre-allocated but never filled                → (0, 0)
-# No stim_aq/dmd because SimulatedMicroscopeCore is created with slm_device=None.
 #
 # Plus one top-level scalar: current_t_index.
 EXPECTED_DATASETS: dict[str, _Spec] = {
     "current_t_index": _Spec(shape=(), dtype=np.dtype("int32")),
 }
+
+_SLM_SHAPE = (1140, 912)
 
 for _t in range(_STEPS):
     _k = _t_key(_t)
@@ -90,6 +92,9 @@ for _t in range(_STEPS):
         )
         EXPECTED_DATASETS[f"{_k}/stim_aq/seg"] = _Spec(
             shape=_EMPTY_SHAPE, dtype=np.dtype("uint16")
+        )
+        EXPECTED_DATASETS[f"{_k}/stim_aq/dmd"] = _Spec(
+            shape=_SLM_SHAPE, dtype=np.dtype("uint8")
         )
     if _t % _IMAGING_EVERY_T == 0:
         EXPECTED_DATASETS[f"{_k}/channel_545/data"] = _Spec(
