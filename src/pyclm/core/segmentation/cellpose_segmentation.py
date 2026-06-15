@@ -90,7 +90,7 @@ class EmbryoSegmentationMethod(CellposeSegmentationMethod):
 
     def segment(self, data):
         # use cached result if caching (e.g. because embryo doesn't move)
-        if self.do_cache and self.cached_result:
+        if self.do_cache and (self.cached_result is not None):
             return self.cached_result
 
         # downscale to make the embryo smaller
@@ -100,7 +100,10 @@ class EmbryoSegmentationMethod(CellposeSegmentationMethod):
         mask = out > 0
 
         # upscale back to full size
-        big_mask = resize(mask.astype(float), data.shape, order=1) > 0.5
+        big_mask = resize(mask.astype(float), data.shape) > 0.5
+
+        big_mask = np.array(big_mask)
+        print(f"big_mask shape: {big_mask.shape}")
 
         if self.do_cache:
             self.cached_result = big_mask

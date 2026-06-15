@@ -53,7 +53,7 @@ class NucleusControlMethod(PatternMethod):
 class BinaryNucleusClampModel(NucleusControlMethod):
     name = "binary_nucleus_clamp"
 
-    def __init__(self, channel, clamp_target, **kwargs):
+    def __init__(self, channel="545", clamp_target=10000, **kwargs):
         super().__init__(channel=channel, **kwargs)
 
         self.clamp_target = clamp_target

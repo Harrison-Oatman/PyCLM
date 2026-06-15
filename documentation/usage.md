@@ -17,7 +17,7 @@ Multiple experiments can be run simultaneously using PyCLM, without any programm
 Once a directory for the multi-experiment has been set up, close out of all existing microscope control software, activate your venv or conda environment, and run main.py with command-line arguments.
 
 - Data is saved continuously during the multi-experiment, and the code execution can be aborted at any time without data loss.
-- Experiment progress can be monitored through the experiment log, as well as through continuous .tif export.
+- Experiment progress can be monitored through the experiment log, or in real time using the `--gui` flag, which opens a live Napari viewer that updates as images are acquired.
 
 ## 3. Analyzing a completed multi-experiment
 Data is exported into separate .hdf5 files for each experiment, which alongside acquired images contain important metadata about timing and imaging configurations. These files also track the light pattern applied at each timepoint and the segmentation generated, if applicable.

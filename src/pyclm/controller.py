@@ -29,7 +29,6 @@ from .core import (
 from .core.position_mover import PositionMover
 from .core.real_core import RealMicroscopeCore
 from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
-from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +39,17 @@ class Controller:
         config="MMConfig_demo.cfg",
         dry=False,
         position_mover: PositionMover | None = None,
-        dry_image_source: TimeSeriesImageSource | None = None,
+        dry_image_source: Path | None = None,
     ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
             self.core = RealMicroscopeCore()
         else:
             if dry_image_source is None:
-                image_source = TimeSeriesImageSource.from_folder(
-                    Path("tif-source"), pattern="*.tif", loop=True
-                )
-            else:
-                image_source = dry_image_source
-            self.core = SimulatedMicroscopeCore(image_source, slm_device=None)
+                raise ValueError("dry_image_source must be provided when dry=True.")
+            self.core = SimulatedMicroscopeCore(
+                dry_image_source, slm_device="SimulatedSLM"
+            )
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
 
@@ -115,6 +112,9 @@ class Controller:
         affine_transform: np.ndarray,
         out_path: Path,
     ):
+        if isinstance(self.core, SimulatedMicroscopeCore):
+            self.core._slm_h, self.core._slm_w = int(slm_shape[0]), int(slm_shape[1])
+
         self.set_binning(1)
 
         camera_roi = ROI(*self.core.getROI())
@@ -141,7 +141,9 @@ class Controller:
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
-        self.outbox.initialize(schedule)
+        all_layers = self.outbox.initialize(schedule, self.core)
+
+        return all_layers
 
     def run(self):
         with ThreadPoolExecutor() as executor:

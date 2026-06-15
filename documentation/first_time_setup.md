@@ -280,11 +280,33 @@ Pass `--config` if `pyclm_config.toml` is not in the experiment directory or rep
 uv run pyclm path/to/experiment_dir --config path/to/pyclm_config.toml
 ```
 
-Use `--dry` to do a full rehearsal without connecting to the microscope (images are read from a `tif-source/` folder in the working directory):
+Use `--dry` to run a full rehearsal without connecting to the microscope:
 
 ```bash
 uv run pyclm path/to/experiment_dir --dry
 ```
+
+In dry mode, PyCLM reads simulated images from TIF files placed inside the experiment directory. Positions are loaded from `PositionList.pos` or `multipoints.xml` if present, and each TIF is matched to a position by label (e.g. `on.00.tif` matches position `on.00`) or stem (e.g. `on.tif` matches any position with stem `on`). For explicit control, add a `dry_run.yml` to the experiment directory mapping position names to TIF files:
+
+```yaml
+positions:
+  - name: on.00
+    x: 0.0
+    y: 0.0
+    source: on.tif
+  - name: off.00
+    x: 500.0
+    y: 0.0
+    source: off.tif
+```
+
+Add `--gui` to open a live Napari viewer that updates as data is written:
+
+```bash
+uv run pyclm path/to/experiment_dir --dry --gui
+```
+
+`--gui` can also be used during a real experiment to monitor output in real time.
 
 **Programmatically** (required when using a custom `PositionMover` or custom pattern/segmentation methods):
 

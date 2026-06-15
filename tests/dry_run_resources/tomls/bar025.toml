@@ -10,7 +10,7 @@ System = "Startup"
 every_t = 2
 exposure = 50
 save = true
-binning = 4
+binning = 1
 
     [imaging.config_groups]
     # information related to imaging conditions, channels, frequency
@@ -28,7 +28,7 @@ presets = ["545"]
 [stimulation]
 every_t = 1
 exposure = 50
-save = false
+save = true
 
     [stimulation.config_groups]
     Channel = "DMD"
