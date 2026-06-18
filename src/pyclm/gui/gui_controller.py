@@ -8,7 +8,8 @@ os.environ.setdefault("NAPARI_DISABLE_PLUGIN_AUTOLOAD", "1")
 import argparse
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -16,9 +17,8 @@ import h5py
 import napari
 import numpy as np
 from h5py import File
-from magicgui import magic_factory, magicgui
-from magicgui.widgets import Container, Label
 from qtpy import QtCore
+from qtpy.QtWidgets import QPlainTextEdit
 from skimage.transform import downscale_local_mean
 from toml import load
 
@@ -77,15 +77,20 @@ def _read_channel_schedule(f: h5py.File, channel_key: str) -> ChannelSchedule:
 
 
 def _read_data_frame_swmr(
-    f: h5py.File, t_val: str, channel_key: str, at
+    f: h5py.File, t_val: str, channel_key: str, at, logger=None
 ) -> np.ndarray | None:
     if channel_key == "stim_dmd":
-        return _read_stim_frame_swmr(f, t_val, at)
+        return _read_stim_frame_swmr(f, t_val, at, logger)
     else:
         try:
             d = f[t_val][channel_key]["data"]
             d.id.refresh()
             arr = np.array(d)
+            if logger:
+                logger.appendPlainText(
+                    f"Loaded data from {Path(f.filename).name} :: {channel_key} "
+                    f"at timepoint {t_val} - {datetime.now().strftime('%H:%M:%S')}"
+                )
             if arr.size == 0:
                 print(f"t={t_val} no data")
                 return None
@@ -95,7 +100,9 @@ def _read_data_frame_swmr(
             return None
 
 
-def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
+def _read_stim_frame_swmr(
+    f: h5py.File, t_val: str, at, logger=None
+) -> np.ndarray | None:
     ati = cv2.invertAffineTransform(at)
     try:
         if t_val not in f:
@@ -119,6 +126,11 @@ def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
             ati,
             (data_shape[1] * b, data_shape[0] * b),
         ).astype(np.uint16)
+        if logger:
+            logger.appendPlainText(
+                f"Loaded stim data from {Path(f.filename).name} "
+                f"at timepoint {t_val} - {datetime.now().strftime('%H:%M:%S')}"
+            )
         return downscale_local_mean(tf, (b, b)).astype(np.uint16)
     except Exception as e:
         print(f"t = {t_val} stim frame exception: {type(e).__name__}: {e}")
@@ -152,10 +164,15 @@ def _upsample_to_absolute(
 
 class LiveHDF5Layer:
     def __init__(
-        self, viewer: napari.Viewer, spec: LayerSpec, at: np.ndarray | None = None
+        self,
+        viewer: napari.Viewer,
+        spec: LayerSpec,
+        logger: QPlainTextEdit,
+        at: np.ndarray | None = None,
     ):
         self.viewer = viewer
         self.spec = spec
+        self.logger = logger
 
         self.at = at
         self.f: h5py.File | None = None
@@ -223,7 +240,9 @@ class LiveHDF5Layer:
             if not self.schedule.is_scheduled_at(t):
                 continue
             t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key, self.at)
+            frame = _read_data_frame_swmr(
+                f, t_str, self.spec.channel_key, self.at, logger=self.logger
+            )
             if frame is None:
                 continue
             if self.frame_shape is None:
@@ -276,7 +295,9 @@ class LiveHDF5Layer:
             if not self.schedule.is_scheduled_at(t):
                 continue
             t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key, self.at)
+            frame = _read_data_frame_swmr(
+                f, t_str, self.spec.channel_key, self.at, logger=self.logger
+            )
             if frame is None:
                 continue
             if self.frame_shape is None:
@@ -342,17 +363,16 @@ class LiveHDF5Layer:
 class HDF5LayerViewerApp:
     def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None):
         self.viewer = napari.Viewer()
+        self._log_label = QPlainTextEdit()
+        self._log_label.setReadOnly(True)
         self.viewer.window.add_dock_widget(
-            self.dashboard_widget, name="PyCLM Dashboard", area="right"
+            self._log_label, name="Logs", area="right", tabify=True
         )
-        self._log_label = Label(
-            value="Logging information not available. Logging file must exist in the experiment directory."
-        )
-        self.logging_widget = Container(widgets=[self._log_label], layout="vertical")
-        self.viewer.window.add_dock_widget(
-            self.logging_widget, name="Experiment Logs", area="right"
-        )
-        self.layers = [LiveHDF5Layer(self.viewer, s, at=at) for s in specs[::-1]]
+
+        self.layers = [
+            LiveHDF5Layer(self.viewer, s, logger=self._log_label, at=at)
+            for s in specs[::-1]
+        ]
 
         self._poll_timer = QtCore.QTimer()
         self._poll_timer.setInterval(1000)
@@ -363,10 +383,6 @@ class HDF5LayerViewerApp:
             self.viewer.window._qt_window.destroyed.connect(lambda *_: self.close())
         except Exception:
             pass
-
-    @magicgui(call_button="Run Algorithm", layout="vertical")
-    def dashboard_widget(viewer: napari.Viewer, threshold: float = 0.5, blur: int = 3):
-        print(f"Running with threshold {threshold} and blur {blur}")
 
     def refresh(self) -> int:
         changed = 0
