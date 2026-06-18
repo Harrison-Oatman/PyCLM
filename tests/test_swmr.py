@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 import pytest
 
-from pyclm.convert_hdf5s import get_binning_from_metadata, make_tif
+from pyclm.convert_hdf5s import AffineCalibration, ExperimentFile, convert_channel
 from pyclm.core.datatypes import AcquisitionData
 from pyclm.core.events import AcquisitionEvent
 from pyclm.core.experiments import ExperimentSchedule, TimeCourse
@@ -117,16 +117,18 @@ def test_swmr_initialization_and_reading():
                 assert f.swmr_mode
                 assert "schedule_metadata" in f.attrs
                 assert "experiment_metadata" in f.attrs
+                assert "camera_roi" in f.attrs
 
-                # Verify binning read
-                assert get_binning_from_metadata(f, "channel_638") == 2
+            # Verify binning read
+            with ExperimentFile(h5_path) as ef:
+                assert ef.read_binning("channel_638") == 2
 
-            # Verify make_tif can read it
-            # make_tif writes a tif file and requires valid affine transform now
-            # Mock affine transform (2x3 matrix)
+            # Verify convert_channel can read it and requires a valid affine
+            # transform. Mock affine transform (2x3 matrix)
             mock_at = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float)
+            calibration = AffineCalibration(mock_at)
 
-            make_tif(str(h5_path), at=mock_at, chan="channel_638")
+            convert_channel(h5_path, "channel_638", calibration)
 
             # Output should be _patterns.tif now
             tif_path = base_path / "test_exp_channel_638_patterns.tif"
