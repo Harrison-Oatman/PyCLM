@@ -16,6 +16,8 @@ import h5py
 import napari
 import numpy as np
 from h5py import File
+from magicgui import magic_factory, magicgui
+from magicgui.widgets import Container, Label
 from qtpy import QtCore
 from skimage.transform import downscale_local_mean
 from toml import load
@@ -96,6 +98,8 @@ def _read_data_frame_swmr(
 def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
     ati = cv2.invertAffineTransform(at)
     try:
+        if t_val not in f:
+            return None
         if "stim_aq" not in f[t_val].keys() or "dmd" not in f[t_val]["stim_aq"]:
             return None
         imaging_key = next(
@@ -116,8 +120,8 @@ def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
             (data_shape[1] * b, data_shape[0] * b),
         ).astype(np.uint16)
         return downscale_local_mean(tf, (b, b)).astype(np.uint16)
-    except Exception:
-        print(f"t = {t_val} exception")
+    except Exception as e:
+        print(f"t = {t_val} stim frame exception: {type(e).__name__}: {e}")
         return None
 
 
@@ -168,7 +172,7 @@ class LiveHDF5Layer:
         layer_name = spec.name or f"{spec.path.name} :: {spec.channel_key}"
         initial = self._load_initial_stack()
         if initial is None:
-            initial = np.zeros((1, 800, 800), dtype=np.uint16)
+            initial = np.zeros((1, 1, 1), dtype=np.uint16)
         print(f"add_image: {layer_name} shape={initial.shape}")
         self.layer = self.viewer.add_image(initial, name=layer_name)
         if spec.channel_key == "stim_dmd":
@@ -338,6 +342,16 @@ class LiveHDF5Layer:
 class HDF5LayerViewerApp:
     def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None):
         self.viewer = napari.Viewer()
+        self.viewer.window.add_dock_widget(
+            self.dashboard_widget, name="PyCLM Dashboard", area="right"
+        )
+        self._log_label = Label(
+            value="Logging information not available. Logging file must exist in the experiment directory."
+        )
+        self.logging_widget = Container(widgets=[self._log_label], layout="vertical")
+        self.viewer.window.add_dock_widget(
+            self.logging_widget, name="Experiment Logs", area="right"
+        )
         self.layers = [LiveHDF5Layer(self.viewer, s, at=at) for s in specs[::-1]]
 
         self._poll_timer = QtCore.QTimer()
@@ -349,6 +363,10 @@ class HDF5LayerViewerApp:
             self.viewer.window._qt_window.destroyed.connect(lambda *_: self.close())
         except Exception:
             pass
+
+    @magicgui(call_button="Run Algorithm", layout="vertical")
+    def dashboard_widget(viewer: napari.Viewer, threshold: float = 0.5, blur: int = 3):
+        print(f"Running with threshold {threshold} and blur {blur}")
 
     def refresh(self) -> int:
         changed = 0
