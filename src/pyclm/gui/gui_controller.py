@@ -16,6 +16,7 @@ import cv2
 import h5py
 import napari
 import numpy as np
+import pyqtgraph as pg
 from h5py import File
 from qtpy import QtCore
 from qtpy.QtWidgets import QPlainTextEdit
@@ -365,8 +366,16 @@ class HDF5LayerViewerApp:
         self.viewer = napari.Viewer()
         self._log_label = QPlainTextEdit()
         self._log_label.setReadOnly(True)
+
+        self._position_map = pg.PlotWidget(title="Position Map")
+        # self._scatter_item = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 200))
+        # self._position_map.addItem(self._scatter_item)
+
         self.viewer.window.add_dock_widget(
             self._log_label, name="Logs", area="right", tabify=True
+        )
+        self.viewer.window.add_dock_widget(
+            self._position_map, name="Position Map", area="right", tabify=True
         )
 
         self.layers = [
