@@ -89,8 +89,8 @@ def _read_data_frame_swmr(
             arr = np.array(d)
             if logger:
                 logger.appendPlainText(
-                    f"Loaded data from {Path(f.filename).name} :: {channel_key} "
-                    f"at timepoint {t_val} - {datetime.now().strftime('%H:%M:%S')}"
+                    f"{datetime.now().strftime('%H:%M:%S')} - Loaded data from {Path(f.filename).name} :: {channel_key} "
+                    f"at timepoint {t_val}"
                 )
             if arr.size == 0:
                 print(f"t={t_val} no data")
@@ -129,8 +129,8 @@ def _read_stim_frame_swmr(
         ).astype(np.uint16)
         if logger:
             logger.appendPlainText(
-                f"Loaded stim data from {Path(f.filename).name} "
-                f"at timepoint {t_val} - {datetime.now().strftime('%H:%M:%S')}"
+                f"{datetime.now().strftime('%H:%M:%S')} - Loaded stim data from {Path(f.filename).name} "
+                f"at timepoint {t_val}"
             )
         return downscale_local_mean(tf, (b, b)).astype(np.uint16)
     except Exception as e:
@@ -367,16 +367,16 @@ class HDF5LayerViewerApp:
         self._log_label = QPlainTextEdit()
         self._log_label.setReadOnly(True)
 
-        self._position_map = pg.PlotWidget(title="Position Map")
+        # self._position_map = pg.PlotWidget(title="Position Map")
         # self._scatter_item = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 200))
         # self._position_map.addItem(self._scatter_item)
 
         self.viewer.window.add_dock_widget(
             self._log_label, name="Logs", area="right", tabify=True
         )
-        self.viewer.window.add_dock_widget(
-            self._position_map, name="Position Map", area="right", tabify=True
-        )
+        # self.viewer.window.add_dock_widget(
+        #     self._position_map, name="Position Map", area="right", tabify=True
+        # )
 
         self.layers = [
             LiveHDF5Layer(self.viewer, s, logger=self._log_label, at=at)
