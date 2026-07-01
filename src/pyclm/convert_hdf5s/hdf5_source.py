@@ -101,7 +101,7 @@ class ExperimentFile:
 
                 seg = None
                 if has_seg:
-                    if "seg" in group[channel_key]:
+                    if "seg" in group[channel_key] and group[channel_key]["seg"].shape == data.shape:
                         seg_dset = group[channel_key]["seg"]
                         seg_dset.refresh()
                         seg = np.array(seg_dset)
