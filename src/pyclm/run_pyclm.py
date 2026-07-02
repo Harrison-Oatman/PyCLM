@@ -5,6 +5,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from threading import Thread
+import json
 
 import numpy as np
 from toml import load
@@ -149,10 +150,18 @@ def run_pyclm(
     slm_shape = config["slm_shape_h"], config["slm_shape_w"]
     at = np.array(config["affine_transform"], dtype=np.float32)
 
-    all_layers = c.initialize(schedule, slm_shape, at, base_path)
+    c.initialize(schedule, slm_shape, at, base_path)
+
+    all_layers = c.all_layers
+    t_gcd = c.t_gcd
+
+    all_layers_output = {
+        "t": t_gcd,
+        "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers]
+    }
+
     with open(f"{base_path}/all_layers.txt", "w") as file:
-        for filepath, channel in all_layers:
-            file.write(f"{filepath}:{channel}\n")
+        json.dump(all_layers_output, file, indent=4)
 
     gui_proc = None
     if gui:

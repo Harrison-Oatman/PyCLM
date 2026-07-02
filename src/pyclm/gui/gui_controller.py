@@ -124,22 +124,22 @@ def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
 def _upsample_to_absolute(
     frames: list[np.ndarray],
     acquired_at: list[int],
-    t_count: int,
+    t_display: list[int],
     frame_shape: tuple[int, ...],
     hold: bool = True,
 ) -> np.ndarray:
     out = np.zeros(
-        (t_count, *frame_shape), dtype=frames[0].dtype if frames else np.uint16
+        (len(t_display), *frame_shape), dtype=frames[0].dtype if frames else np.uint16
     )
     if not frames:
         return out
     if hold:
         acq_idx = 0
-        for t in range(t_count):
+        for i, t in enumerate(t_display):
             if acq_idx + 1 < len(acquired_at) and acquired_at[acq_idx + 1] <= t:
                 acq_idx += 1
             if acquired_at[acq_idx] <= t:
-                out[t] = frames[acq_idx]
+                out[i] = frames[acq_idx]
     else:
         for frame, t in zip(frames, acquired_at, strict=False):
             out[t] = frame
@@ -148,10 +148,11 @@ def _upsample_to_absolute(
 
 class LiveHDF5Layer:
     def __init__(
-        self, viewer: napari.Viewer, spec: LayerSpec, at: np.ndarray | None = None
+        self, viewer: napari.Viewer, spec: LayerSpec, at: np.ndarray | None = None, every_t: int = 1,
     ):
         self.viewer = viewer
         self.spec = spec
+        self.every_t = every_t
 
         self.at = at
         self.f: h5py.File | None = None
@@ -160,7 +161,7 @@ class LiveHDF5Layer:
         self.schedule: ChannelSchedule = ChannelSchedule()
         self._stack: np.ndarray | None = None
         self._last_frame: np.ndarray | None = None
-        self._hold: bool = spec.channel_key != "stim_dmd"
+        self._hold: bool = True
 
         if sys.platform != "win32":
             self._open_file()
@@ -236,7 +237,7 @@ class LiveHDF5Layer:
 
         self._last_frame = frames[-1]
         stack = _upsample_to_absolute(
-            frames, acquired_at, current_t + 1, self.frame_shape, hold=self._hold
+            frames, acquired_at, np.arange(0, current_t + 1, self.every_t), self.frame_shape, hold=self._hold
         )
         self._stack = stack
         return stack
@@ -268,6 +269,7 @@ class LiveHDF5Layer:
         new_frames: list[np.ndarray] = []
         acquired_at: list[int] = []
 
+        # reads all frames since last refresh
         for t in range(self.last_t_index + 1, current_t + 1):
             if not self.schedule.is_scheduled_at(t):
                 continue
@@ -282,7 +284,15 @@ class LiveHDF5Layer:
             new_frames.append(frame)
             acquired_at.append(t)
 
-        n_new = current_t - self.last_t_index
+        # determine which new frames to add
+        new_t_values = []
+        for t in range(self.last_t_index, current_t):
+            if t % self.every_t == 0:
+                new_t_values.append(t)
+
+        n_new = len(new_t_values)
+
+        # generate a stack containing the new data
         prev_last = self.last_t_index
         self.last_t_index = current_t
 
@@ -290,6 +300,7 @@ class LiveHDF5Layer:
             return False
 
         dense_new = np.zeros((n_new, *self.frame_shape), dtype=np.uint16)
+
         if self._hold:
             hold_frames = (
                 [self._last_frame] if self._last_frame is not None else []
@@ -299,11 +310,13 @@ class LiveHDF5Layer:
             ) + acquired_at
             if hold_frames:
                 acq_idx = 0
-                for i, t in enumerate(range(prev_last + 1, current_t + 1)):
+                for i, t in enumerate(new_t_values):
                     if acq_idx + 1 < len(hold_at) and hold_at[acq_idx + 1] <= t:
                         acq_idx += 1
                     if hold_at[acq_idx] <= t:
                         dense_new[i] = hold_frames[acq_idx]
+
+        # this else condition might not work yet
         else:
             for frame, t in zip(new_frames, acquired_at, strict=False):
                 dense_new[t - (prev_last + 1)] = frame
@@ -336,9 +349,10 @@ class LiveHDF5Layer:
 
 
 class HDF5LayerViewerApp:
-    def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None):
+    def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None, every_t: int = 1):
         self.viewer = napari.Viewer()
-        self.layers = [LiveHDF5Layer(self.viewer, s, at=at) for s in specs[::-1]]
+        self.layers = [LiveHDF5Layer(self.viewer, s, at=at, every_t=every_t) for s in specs[::-1]]
+        self.every_t = every_t
 
         self._poll_timer = QtCore.QTimer()
         self._poll_timer.setInterval(1000)
@@ -384,6 +398,7 @@ def launch_hdf5_layer_viewer(
     specs: Sequence[tuple[str, str]],
     experiment_dir: Path | None = None,
     at: np.ndarray | None = None,
+    every_t: int = 1,
 ) -> HDF5LayerViewerApp:
     filtered = []
 
@@ -398,7 +413,7 @@ def launch_hdf5_layer_viewer(
         seen_fps.add(fp)
 
     layer_specs = [LayerSpec(path=Path(fp), channel_key=ch) for fp, ch in filtered]
-    return HDF5LayerViewerApp(layer_specs, at=at)
+    return HDF5LayerViewerApp(layer_specs, at=at, every_t=every_t)
 
 
 def _parse_src(s: str) -> tuple[str, str]:
@@ -416,12 +431,16 @@ def _parse_src(s: str) -> tuple[str, str]:
     return path, ch
 
 
-def _parse_all_layers(s: Path) -> list[tuple[str, str]]:
+def _parse_all_layers(s: Path) -> tuple[list[tuple[str, str]], int]:
+
+    with open(s) as file:
+        all_layers_json = json.load(file)
+
     layers = []
-    with open(s, encoding="utf-8") as file:
-        for line in file:
-            layers.append(_parse_src(line))
-    return layers
+    for line in all_layers_json["all_layers"]:
+        layers.append(_parse_src(line))
+
+    return layers, all_layers_json["t"]
 
 
 def find_affine_transform(input_dir, config_path):
@@ -478,6 +497,7 @@ def main(argv: list[str] | None = None) -> int:
         required=False,
         help='Repeatable: "file.hdf5:channel_638"',
     )
+    p.add_argument("--every_t", default=0, type=int, help="which multiple of frames to show")
     p.add_argument("--config", help="path to pyclm_config.toml file", default=None)
     args = p.parse_args(argv)
     experiment_dir = Path(args.experiment)
@@ -488,11 +508,11 @@ def main(argv: list[str] | None = None) -> int:
             "no all_layers.txt found in experiment directory"
         )
 
-        layers = _parse_all_layers(all_layers_path)
+        layers, every_t = _parse_all_layers(all_layers_path)
 
-        app = launch_hdf5_layer_viewer(layers, experiment_dir=experiment_dir, at=at)
+        app = launch_hdf5_layer_viewer(layers, experiment_dir=experiment_dir, at=at, every_t=every_t)
     else:
-        app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at)
+        app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at, every_t=args.every_t)
     app.run()
     return 0
 
