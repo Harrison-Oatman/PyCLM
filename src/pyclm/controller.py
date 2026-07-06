@@ -1,5 +1,6 @@
 import logging
 import traceback
+import math
 from concurrent.futures import (
     ALL_COMPLETED,
     FIRST_COMPLETED,
@@ -80,6 +81,9 @@ class Controller:
 
         self.camera_properties = None
 
+        self.all_layers = None
+        self.t_gcd = 1
+
     def set_binning(self, binning: int):
         core = self.core
         camera = self.core.getCameraDevice()
@@ -127,11 +131,22 @@ class Controller:
         self.pattern.initialize(self.camera_properties)
 
         pattern_requirements = {}
+        t_seen = set()
         for name, experiment in schedule.experiments.items():
             pattern_requirements[name] = self.pattern.request_method(experiment)
 
             if any([req.needs_seg for req in pattern_requirements[name]]):
                 self.segmentation.request_method(experiment)
+
+            for channel in experiment.channels.values():
+                t_seen.add(channel.every_t)
+
+        if len(t_seen) == 1:
+            self.t_gcd = t_seen.pop()
+
+        elif len(t_seen) > 1:
+            self.t_gcd = math.gcd(*t_seen)
+
 
         self.pattern.initialize_models()
 
@@ -143,7 +158,8 @@ class Controller:
         self.outbox.base_path = out_path
         all_layers = self.outbox.initialize(schedule, self.core)
 
-        return all_layers
+        self.all_layers = all_layers
+
 
     def run(self):
         with ThreadPoolExecutor() as executor:
