@@ -67,7 +67,7 @@ class ExperimentFile:
     def has_seg(self, channel_key: str) -> bool:
         for t_key in self._timepoint_keys():
             group = self._file[t_key]
-            if channel_key in group and "seg" in group[channel_key]:
+            if channel_key in group and "seg" in group[channel_key] and (group[channel_key]["seg"].shape[0] > 0):
                 return True
         return False
 

@@ -18,6 +18,7 @@ class SegmentationProcess(BaseProcess):
     known_models: ClassVar = {
         "cellpose": CellposeSegmentationMethod,
         "embryo_resizing": EmbryoSegmentationMethod,
+        "base_method": SegmentationMethod,
     }
 
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):

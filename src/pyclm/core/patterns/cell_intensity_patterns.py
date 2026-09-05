@@ -146,7 +146,7 @@ class CenteredImageModel(NucleusControlMethod):
         return super().generate(context)
 
 
-class GlobalCycleModel(NucleusControlMethod):
+class GlobalCycleModel(PatternMethod):
     name = "global_cycle"
 
     zoo_meta = ZooMeta(
@@ -157,8 +157,8 @@ class GlobalCycleModel(NucleusControlMethod):
         description="Applies light for a given period with a 50% duty cycle",
     )
 
-    def __init__(self, channel="545", period_m=10, **kwargs):
-        super().__init__(channel=channel, **kwargs)
+    def __init__(self, period_m=10, **kwargs):
+        super().__init__(**kwargs)
 
         self.period_s = period_m * 60
 

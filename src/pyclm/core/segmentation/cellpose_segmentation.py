@@ -38,8 +38,8 @@ class CellposeSegmentationMethod(SegmentationMethod):
         experiment_name,
         model="cpsam",
         use_gpu=True,
-        normlow=0,
-        normhigh=5000,
+        normlow=None,
+        normhigh=None,
         **kwargs,
     ):
         super().__init__(experiment_name)
@@ -48,7 +48,13 @@ class CellposeSegmentationMethod(SegmentationMethod):
 
         self.model_name = model
         self.use_gpu = use_gpu
-        self.normalization = {"lowhigh": [normlow, normhigh]}
+
+        if normlow is not None and normhigh is not None:
+
+            self.normalization = {"lowhigh": [normlow, normhigh]}
+
+        else:
+            self.normalization = True
 
         self.cellpose_resource = None
         self.initialized = False
@@ -76,8 +82,8 @@ class EmbryoSegmentationMethod(CellposeSegmentationMethod):
         experiment_name,
         model="embryomodel",
         use_gpu=True,
-        normlow=0,
-        normhigh=0.15,
+        normlow=None,
+        normhigh=None,
         ideal_size=(100, 100),
         cache_result=True,
         **kwargs,
