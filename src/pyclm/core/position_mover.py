@@ -79,7 +79,7 @@ class PFSPositionMover(PositionMover):
             core.setPosition(position.z)
 
         logger.info(f"moving to xy ({position.x}, {position.y})")
-        core.setXYPosition(position.x, -position.y)
+        core.setXYPosition(position.x, position.y)
 
         logger.info(f"moving to z {position.z}")
         core.setPosition(position.z)

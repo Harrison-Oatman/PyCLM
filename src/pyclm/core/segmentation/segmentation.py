@@ -33,7 +33,7 @@ class SharedSegmentationResourceRequest:
 
 
 class SegmentationMethod:
-    name = "base_model"
+    name = "base_method"
 
     def __init__(self, experiment_name, **kwargs):
         self.experiment_name = experiment_name

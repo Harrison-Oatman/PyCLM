@@ -124,7 +124,7 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         no_seg = True
 
     if no_seg:
-        segmentation_config = SegmentationConfig("none")
+        segmentation_config = SegmentationConfig("base_method")
 
     # make pattern config
     pattern = toml_data["pattern"]

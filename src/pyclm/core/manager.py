@@ -174,6 +174,7 @@ class MicroscopeOutbox(DataPassingProcess):
                 f = File(filepath, "w", libver="latest")
 
                 f.attrs["schedule_metadata"] = json.dumps(metadata, default=str)
+                f.attrs["camera_roi"] = list(core.getROI())
 
                 if exp_name in schedule.experiments:
                     exp_config = schedule.experiments[exp_name]

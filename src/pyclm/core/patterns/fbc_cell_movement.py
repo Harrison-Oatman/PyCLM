@@ -93,7 +93,7 @@ class PerCellPatternMethod(PatternMethod):
             px_dis = distance_transform_edt(seg == 0)
             seg = self.voronoi_rebuild(seg)
 
-            seg = seg * (px_dis < 50)
+            seg = seg * (px_dis < 25)
 
         h, w = self.pattern_shape
 
