@@ -11,9 +11,7 @@ dependencies = [
     "h5py>=3.14.0",
     "napari>=0.6.0",
     "natsort>=8.4.0",
-    "notebook>=7.5.1",
     "opencv-python>=4.12.0.88",
-    "pandas-stubs==2.3.2.250827",
     "pymmcore-plus==0.13.7",
     "pymmcore==11.2.1.71.0",
     "pyside6>=6.10.2",
@@ -36,14 +34,6 @@ calibration = [
 
 [dependency-groups]
 
-analysis = [
-    "laptrack>=0.17.0",
-    "matplotlib>=3.10.6",
-    "pandas>=2.3.2",
-    "tqdm>=4.67.1",
-    "statannotations>=0.7.2",
-]
-
 docs = [
     "matplotlib>=3.10.6",
     "myst-parser",
@@ -55,7 +45,6 @@ docs = [
 ]
 
 dev = [
-    { include-group = "analysis" },
     { include-group = "docs" },
 ]
 test = [
