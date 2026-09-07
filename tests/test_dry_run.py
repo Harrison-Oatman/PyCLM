@@ -302,6 +302,36 @@ def test_dry_run_yml(yml_experiment_dir):
     assert_hdf5_content(yml_experiment_dir, 2)
 
 
+def test_dry_run_ome_zarr(yml_experiment_dir):
+    """
+    Same run as test_dry_run_yml with [output] format = "ome-zarr": two zarr
+    stores, no HDF5, the plan embedded, and ImageJ stacks exported at the end.
+    """
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text() + '\n[output]\nformat = "ome-zarr"\nexport_imagej = true\n'
+    )
+    run_pyclm(yml_experiment_dir, dry=True)
+
+    import pyclm.io as pio
+
+    stores = sorted(yml_experiment_dir.glob("*.zarr"))
+    assert [s.name for s in stores] == ["bar025.00.zarr", "bar10.00.zarr"]
+    assert not list(yml_experiment_dir.glob("*.hdf5"))
+    assert (yml_experiment_dir / "frames.parquet").exists()
+
+    for store in stores:
+        with pio.open(store) as exp:
+            assert exp.format == 2
+            g = exp.groups["imaging"]
+            assert g.every_t == _IMAGING_EVERY_T
+            assert g.acquired() == list(range(_STEPS // _IMAGING_EVERY_T))
+            assert g.frame(0, "545").shape == _CAMERA_SHAPE
+            assert exp.current_t == _STEPS - 1
+            assert exp.pattern_at(_STEPS - 1).shape == _SLM_SHAPE
+        assert (yml_experiment_dir / f"{store.stem}_imaging.tif").exists()
+
+
 def test_dry_run_tif_names(tif_name_experiment_dir):
     """
     TIF-filename fallback: no position list or dry_run.yml present.

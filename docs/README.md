@@ -14,6 +14,7 @@ built or published.
 | [known-issues.md](known-issues.md) | Concrete bugs, hazards, and smells found in the code, each with a file reference and a suggested fix. Numbers are stable (the assessment cites them). | An issue is fixed (collapse it to a one-line **Fixed** note, keep the number) or a new one is found (append). |
 | [assessment-2026-09.md](assessment-2026-09.md) | The September 2026 architecture assessment: what works, what limits the five planned features (tracking, runtime edits, z-stacks, grids, interactive setup), and a staged refactor roadmap. | Roadmap decisions change. Keep as a dated record; write a new dated file for a later assessment rather than rewriting history. |
 | [stage1-plan-design.md](stage1-plan-design.md) | Stage 1 evaluation: can useq's `MDASequence` be PyCLM's acquisition plan (yes, with a thin wrapper), what was verified, the proposed `AcquisitionPlan` design, and decisions to confirm. | Stage 1 decisions are made or the plan class lands. |
+| [stage2-storage-options.md](stage2-storage-options.md) | Stage 2 options for data storage rated against a usability bar (Fiji, napari, plain Python, durability, live append), a recommendation (OME-Zarr primary, OME-TIFF export, `pyclm.io` reader for all formats), a staged path, and decisions to confirm. | Storage decisions change; the format default flips to ome-zarr (step 2d). |
 | [spikes/](spikes/) | Runnable spike scripts and their artefacts. Not part of the package, not tested. | A spike is superseded (delete it) or a new one is run. |
 
 Conventions for this folder:

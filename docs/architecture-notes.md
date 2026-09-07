@@ -24,7 +24,7 @@ processes**, despite the naming. All processes share one `threading.Event`
 |---|---|---|---|
 | Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the other processes. | **No** (own loop) |
 | Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. | Yes, but overrides `process()` with its own loop (per-message error guard; aborts after `max_consecutive_errors`, default 10) |
-| Outbox | `MicroscopeOutbox`, `core/manager.py:124` | Writes frames to per-experiment HDF5 files (SWMR) **and** fans frames out to Segmentation and Pattern. | Yes (via `DataPassingProcess`) |
+| Outbox | `MicroscopeOutbox`, `core/manager.py` | Hands frames to the configured `FrameWriter` (`core/storage/`: HDF5 format 1 or OME-Zarr format 2) **and** fans them out to Segmentation and Pattern. | Yes (via `DataPassingProcess`) |
 | SLM buffer | `SLMBuffer`, `core/manager.py:486` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | Yes (via `DataPassingProcess`) |
 | Segmentation | `SegmentationProcess`, `core/segmentation_process.py:17` | Runs a `SegmentationMethod` per experiment on frames flagged for segmentation. | Yes |
 | Pattern | `PatternProcess`, `core/pattern_process.py:24` | Collects the raw/seg frames a `PatternMethod` declared it needs, runs `generate()`, sends the result to the SLM buffer. | Yes |
@@ -317,7 +317,35 @@ method instance (e.g. `BounceModel.down`, `EmbryoSegmentationMethod.cached_resul
 
 ---
 
-## 7. HDF5 layout (one file per experiment/position)
+## 7. Storage layouts
+
+Selected by `[output] format` in `pyclm_config.toml` (`hdf5`, the default, or
+`ome-zarr`). `MicroscopeOutbox` owns a `FrameWriter` (`core/storage/base.py`)
+with `open(plan, core, base_path, affine, slm_shape)`, `write_frame`,
+`write_labels`, `close`. Both writers read the same plan; `pyclm.io.open()`
+reads both layouts behind one API (`ExperimentData`, `GroupData`), and
+`pyclm.io.export_imagej()` writes ImageJ hyperstacks from either.
+
+### OME-Zarr (format 2, `core/storage/ome_zarr.py`)
+
+One NGFF 0.4 / zarr v2 store per experiment, `<experiment>.zarr/`. Channels
+are grouped by cadence (`cadence_groups()`): each group is an NGFF image
+`<group>/0` shaped `(T, C, Y, X)` uint16 with a **compact** time axis (one
+slot per acquisition of that group; `every_t` and `t_delay` in the group's
+`pyclm` attrs and as the NGFF time-scale transform), chunks `(1, 1, Y, X)`,
+zstd. In the common configuration there is one group, `imaging`; a saved
+stimulation frame joins the group of its cadence (last channel) or forms
+`stim`. `<group>/labels/segmentation/0` holds label images when
+`segmentation.save` is set. `patterns/dmd/0` is `(N, H_slm, W_slm)` uint8 with
+one entry per distinct `pattern_id` (`pattern_policy = on_change`; `all` keeps
+one per stimulation event). Root attrs `pyclm`: format, plan YAML, experiment
+and schedule metadata, affine transform, SLM shape, groups, `current_t`.
+`frames.parquet` (rewritten on every write) and `frames.csv` (at close) in
+the experiment directory hold one row per frame and per stimulation event
+(`kind`, `t`, group, `local_index`, channel, timestamps, position,
+`pattern_id`, `pattern_index`). Skipped timepoints are never written.
+
+### HDF5 (format 1, `core/storage/hdf5_v1.py`, one file per experiment/position)
 
 Root attributes: `schedule_metadata` (JSON of `ExperimentSchedule.as_dict()`),
 `experiment_metadata` (JSON of `Experiment.as_dict()`), `plan` (the
@@ -356,9 +384,11 @@ Consumers of this layout: `MicroscopeOutbox._timepoint_complete`, the GUI
 (`gui/gui_controller.py`), `convert_hdf5s.py`, `PatternReview`, `tests/test_dry_run.py`.
 
 Other outputs in the experiment directory: `plan.useq.yaml` (the acquisition
-plan, also embedded in every HDF5 file), `log.log` (file handler at INFO,
-console at WARNING), `all_layers.txt` (JSON: `{"t": t_gcd, "all_layers":
-["path:channel_x", ...]}`).
+plan, also embedded in every output), `<experiment>_<group>.tif` ImageJ
+hyperstacks when `[output] export_imagej` is on (default), `log.log` (file
+handler at INFO, console at WARNING), `all_layers.txt` (JSON: `{"t": t_gcd,
+"all_layers": ["path:layer", ...]}` where `layer` is `group/channel` for
+zarr or `channel_x` / `stim_aq` for HDF5).
 
 ---
 
@@ -423,13 +453,14 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 104 tests, ~65 s, all passing after Stage 1
+`uv run --group test pytest` — 114 tests, ~80 s, all passing after Stage 2
 (2026-09-06). The dry-run integration tests take almost all of that time.
 
 | File | Covers |
 |---|---|
 | `test_dry_run.py` | Whole pipeline against the simulated core for each position-list / discovery mode; HDF5 dataset inventory, shapes, dtypes. |
-| `test_swmr.py` | Outbox init + write + `convert_hdf5s.make_tif`. |
+| `test_swmr.py` | Outbox init + write + `convert_hdf5s.make_tif` (HDF5 format 1). |
+| `test_storage.py` | Cadence grouping, the OME-Zarr writer end to end (layout, NGFF attrs, compact T, labels, pattern policies, chunks only for acquired frames, frames table), `pyclm.io` readers for both formats, ImageJ export, outbox delegating to the writer. |
 | `test_base_process.py` | Poll loop, stop paths, handler error counting. |
 | `test_plan.py` | `AcquisitionPlan` enumeration against the scheduling rules over 54 `every_t`/`t_delay`/`t_stop`/stim-cadence combinations, event order and offsets, routing flags, YAML round trip, index → path, stimulation naming, PFS offset recorded not executed, z-readiness of the structure, timing budget, validation. |
 | `test_manager_scheduling.py` | Which messages the Manager emits at which `t` from a plan, request/event index agreement, per-timepoint ordering, close fan-out, z-update handling, wait loop not spinning, stop event. |

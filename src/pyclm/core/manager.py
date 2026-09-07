@@ -53,8 +53,9 @@ from .messages import (
     UpdateZPositionMessage,
 )
 from .patterns import AcquiredImageRequest
-from .plan import PLAN_FORMAT, AcquisitionPlan, PlannedEvent
+from .plan import AcquisitionPlan, PlannedEvent
 from .queues import AllQueues
+from .storage import FrameWriter, HDF5WriterV1
 
 logger = logging.getLogger(__name__)
 
@@ -114,21 +115,19 @@ class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
                 raise ValueError(f"Unexpected message: {msg}")
 
 
-def get_image_shape(core: MicroscopeCoreInterface, binning: int = 1) -> tuple[int, int]:
-    roi = core.getROI()
-    h, w = roi[3], roi[2]
-    # return (h, w)
-    return (h // binning, w // binning)
-
-
 class MicroscopeOutbox(DataPassingProcess):
-    # grabs data from microscope, writes data to disk
+    """
+    Receives every frame the microscope produces, hands it to the configured
+    FrameWriter for persistence, and routes it on to segmentation and pattern
+    generation according to the event's flags.
+    """
 
     def __init__(
         self,
         aq: AllQueues,
         base_path: Path | None = None,
         stop_event: Event | None = None,
+        writer: FrameWriter | None = None,
     ):
         super().__init__(aq, stop_event)
         self.name = "microscope outbox"
@@ -146,133 +145,47 @@ class MicroscopeOutbox(DataPassingProcess):
         self.pattern_queue = aq.outbox_to_pattern
 
         self.base_path = base_path
-
-        self.open_files = {}  # Map experiment name to open h5py File object
-        self.experiments = {}
+        self.writer: FrameWriter = writer if writer is not None else HDF5WriterV1()
         self.plan: AcquisitionPlan | None = None
-
-        # frames that could not be written because no dataset was pre-allocated
-        self.dropped_frames = 0
 
         self.initialize_queues()
 
+    @property
+    def open_files(self) -> dict:
+        """Open HDF5 handles when the HDF5 writer is in use (empty otherwise)."""
+        return getattr(self.writer, "open_files", {})
+
+    @property
+    def dropped_frames(self) -> int:
+        return getattr(self.writer, "dropped_frames", 0)
+
     def process(self):
-        """Run the poll loop and close the HDF5 files however the loop exits."""
+        """Run the poll loop and close the outputs however the loop exits."""
         try:
             super().process()
         finally:
             self.close_files()
 
-    def initialize(self, plan: AcquisitionPlan, core: MicroscopeCoreInterface):
-        """
-        Initialize the output files for the plan.
-        Opens files in SWMR mode and writes metadata, and pre-allocates one
-        dataset per frame the plan will produce.
-        """
+    def initialize(
+        self,
+        plan: AcquisitionPlan,
+        core: MicroscopeCoreInterface,
+        affine_transform=None,
+        slm_shape=None,
+    ):
+        """Create the outputs for the plan. Returns the (path, layer) pairs for the GUI."""
         self.plan = plan
-        schedule = plan.schedule
-        metadata = schedule.as_dict()
-        plan_yaml = plan.yaml_str()
-
-        try:
-            for exp_name in plan.experiments:
-                filepath = self.base_path / f"{exp_name}.hdf5"
-                filepath.parent.mkdir(parents=True, exist_ok=True)
-                if filepath.exists():
-                    raise FileExistsError(
-                        f"HDF5 file with this name already exists: {filepath}"
-                    )
-
-                f = File(filepath, "w", libver="latest")
-
-                experiment = schedule.experiments[exp_name]
-                self.experiments[exp_name] = experiment
-
-                f.attrs["schedule_metadata"] = json.dumps(metadata, default=str)
-                f.attrs["experiment_metadata"] = json.dumps(
-                    experiment.as_dict(), default=str
-                )
-                f.attrs["plan"] = plan_yaml
-                f.attrs["plan_format"] = PLAN_FORMAT
-
-                # Create t_index tracker
-                f.create_dataset("current_t_index", data=np.int32(-1))
-
-                # Store every_t per storage group, plus the experiment's window
-                stim_name = plan.stim_channel(exp_name)
-                every_t_map = {
-                    storage_group(c, c == stim_name): plan.every_t(exp_name, c)
-                    for c in plan.channels(exp_name)
-                }
-                f.attrs["every_t"] = json.dumps(every_t_map)
-                f.attrs["t_delay"] = experiment.t_delay
-                f.attrs["t_stop"] = experiment.t_stop
-                f.attrs["t_count"] = plan.timepoints
-
-                self.open_files[exp_name] = f
-
-            slm_device = core.getSLMDevice()
-            slm_shape = None
-            if slm_device:
-                slm_shape = (
-                    core.getSLMHeight(slm_device),
-                    core.getSLMWidth(slm_device),
-                )
-
-            for ds in plan.expected_datasets():
-                f = self.open_files[ds.experiment]
-                experiment = self.experiments[ds.experiment]
-                shape = get_image_shape(core, ds.config.binning)
-                prefix = f"{ds.t:05d}/{ds.group}"
-
-                self._create_frame_dataset(
-                    f, f"{prefix}/data", shape, np.uint16, ds.config
-                )
-                if experiment.segmentation.save:
-                    self._create_frame_dataset(
-                        f, f"{prefix}/seg", shape, np.uint16, ds.config
-                    )
-                if ds.is_stim and slm_shape is not None:
-                    self._create_frame_dataset(
-                        f, f"{prefix}/dmd", slm_shape, np.uint8, ds.config
-                    )
-
-            # Enable SWMR only after all datasets exist
-            for exp_name, f in self.open_files.items():
-                f.swmr_mode = True
-                logger.info(f"Initialized HDF5 file for {exp_name} in SWMR mode.")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize outbox files: {e}", exc_info=True)
-            self.close_files()
-            raise e
-
-        all_layers = []
-        for exp_name, experiment in schedule.experiments.items():
-            filepath = str((self.base_path / f"{exp_name}.hdf5").resolve())
-            for channel_name in experiment.channels:
-                all_layers.append((filepath, f"channel_{channel_name}"))
-
-            if experiment.stimulation.save:
-                all_layers.append((filepath, "stim_aq"))
-
-        return all_layers
-
-    def _create_frame_dataset(self, f, path, maxshape, dtype, config: ImagingConfig):
-        dset = f.create_dataset(
-            path, shape=(0, 0), maxshape=maxshape, dtype=dtype, chunks=True
-        )
-        self._preallocate_attrs(dset, config)
+        return self.writer.open(plan, core, self.base_path, affine_transform, slm_shape)
 
     def close_files(self):
-        """Close all open HDF5 files."""
-        for name, f in self.open_files.items():
-            try:
-                f.close()
-                logger.info(f"Closed HDF5 file for {name}")
-            except Exception as e:
-                logger.error(f"Error closing file for {name}: {e}")
-        self.open_files.clear()
+        """Finalise and close all outputs (idempotent)."""
+        self.writer.close()
+
+    def write_data(self, data: AcquisitionData):
+        if isinstance(data, SegmentationData):
+            self.writer.write_labels(data)
+        else:
+            self.writer.write_frame(data)
 
     def handle_data(self, data):
         aq_event = data.event
@@ -303,11 +216,8 @@ class MicroscopeOutbox(DataPassingProcess):
                     logger.info(
                         "Outbox received stream_close from Microscope. Propagating to seg/pattern."
                     )
-                    close_msg = StreamCloseMessage()
-                    self.seg_queue.put(close_msg)
-
-                    close_msg = StreamCloseMessage()
-                    self.pattern_queue.put(close_msg)
+                    self.seg_queue.put(StreamCloseMessage())
+                    self.pattern_queue.put(StreamCloseMessage())
 
                 elif self.stream_count == 2:
                     logger.info("Outbox received stream_close from Segmentation.")
@@ -320,122 +230,6 @@ class MicroscopeOutbox(DataPassingProcess):
             return True
 
         return False
-
-    def _preallocate_attrs(self, dset, channel: ImagingConfig):
-        dset.attrs["id"] = ""
-        dset.attrs["position"] = [("", "")]
-        dset.attrs["experiment_name"] = ""
-        dset.attrs["time_scheduled"] = ""
-        dset.attrs["time_since_start"] = ""
-        dset.attrs["time_completed"] = ""
-        dset.attrs["complete"] = False
-        dset.attrs["exposure_time_ms"] = 0.0
-        dset.attrs["needs_slm"] = False
-        dset.attrs["binning"] = 1
-        dset.attrs["index"] = ""
-        dset.attrs["save_output"] = False
-        dset.attrs["segment"] = False
-        dset.attrs["seg_method"] = ""
-        dset.attrs["save_seg"] = False
-        dset.attrs["raw_goes_to_pattern"] = False
-        dset.attrs["seg_goes_to_pattern"] = False
-        dset.attrs["channel_id"] = ""
-        dset.attrs["pattern_method"] = ""
-        dset.attrs["save_pattern"] = False
-        dset.attrs["pixel_width_um"] = ""
-        dset.attrs["pattern_id"] = ""
-
-        for cg in channel.get_config_groups():
-            dset.attrs[f"config_groups: {cg.group}"] = ""
-        for dp in channel.get_device_properties():
-            dset.attrs[f"devices: {dp.device}-{dp.property}"] = ""
-
-    def _timepoint_complete(self, f, t_index: int, exp_name: str) -> bool:
-        """Whether every saved frame the plan expects at ``t_index`` has been written."""
-        for ds in self.plan.datasets_at(exp_name, t_index):
-            if not ds.save:
-                continue
-            path = f"{ds.t:05d}/{ds.group}/data"
-            try:
-                if f[path].shape == (0, 0):
-                    return False
-            except KeyError:
-                return False
-
-        return True
-
-    def write_data(self, data: AcquisitionData):
-        aq_event = data.event
-        relpath = aq_event.get_rel_path()
-
-        # acquisition is saved as "data", its segmentation is saved as "seg"
-        dset_name = "data"
-        if isinstance(data, SegmentationData):
-            dset_name = "seg"
-
-        try:
-            # Retrieve open file handle
-            exp_name = aq_event.experiment_name
-
-            if exp_name in self.open_files:
-                f = self.open_files[exp_name]
-
-                if aq_event.save_output:
-                    if (relpath + dset_name) not in f:
-                        self.dropped_frames += 1
-                        logger.error(
-                            f"no pre-allocated dataset {relpath + dset_name} in "
-                            f"{exp_name}.hdf5; frame dropped "
-                            f"({self.dropped_frames} dropped so far)"
-                        )
-                        return
-
-                    dset = f[relpath + dset_name]
-                    if dset.shape != data.data.shape:
-                        dset.resize(data.data.shape)
-                    for _attempt in range(3):
-                        try:
-                            dset[...] = data.data
-                            aq_event.write_attrs(dset)
-                            f.flush()
-                            break
-                        except PermissionError:
-                            sleep(0.05)
-
-                if isinstance(data, StimulationData):
-                    if aq_event.save_stim and (relpath + "dmd") in f:
-                        dset = f[relpath + "dmd"]
-                        if dset.shape != data.dmd_pattern.shape:
-                            dset.resize(data.dmd_pattern.shape)
-                        for _attempt in range(3):
-                            try:
-                                dset[...] = data.dmd_pattern
-                                dset.attrs["pattern_id"] = str(data.pattern_id)
-                                aq_event.write_attrs(dset)
-                                f.flush()
-                                break
-                            except PermissionError:
-                                sleep(0.05)
-
-                # Update t_index if this timepoint is newer and all scheduled channels are written
-                t_index = aq_event.t_index
-                if f["current_t_index"][()] < t_index and self._timepoint_complete(
-                    f, t_index, exp_name
-                ):
-                    for _attempt in range(3):
-                        try:
-                            f["current_t_index"][...] = np.int32(t_index)
-                            f.flush()
-                            break
-                        except PermissionError:
-                            sleep(0.05)
-
-            else:
-                logger.warning(f"No open file found for experiment: {exp_name}")
-
-        except Exception as e:
-            self.error_count += 1
-            logger.error(f"Failed to write data: {e}", exc_info=True)
 
 
 class SLMBuffer(DataPassingProcess):

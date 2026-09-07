@@ -10,6 +10,7 @@ PyCLM is a python-based closed-loop microscopy software designed for running man
    installation
    first_time_setup
    usage
+   data_format
    experiment_tomls
    custom_pattern_methods
    method_zoo

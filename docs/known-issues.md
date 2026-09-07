@@ -50,11 +50,10 @@ and `Controller.run` calls `close_files()` in its own `finally`
 
 ### 6. A frame whose dataset was not pre-allocated is dropped (bug, partly addressed)
 
-`MicroscopeOutbox.write_data` now checks for the dataset, logs an error and
-counts the loss in `dropped_frames` instead of raising into the blanket
-handler. The frame is still lost and nothing upstream (Manager, GUI) is told;
-surfacing counters is Stage 4 (control plane) work, and create-on-demand
-depends on the Stage 2 storage layout.
+The HDF5 writer counts the loss in `dropped_frames` and logs an error; the
+OME-Zarr writer (Stage 2) has no pre-allocation problem for planned frames,
+since arrays are sized from the plan and chunks are written on demand.
+Nothing upstream (Manager, GUI) is told yet; surfacing counters is Stage 4.
 
 ---
 
@@ -133,10 +132,8 @@ replaces per-dataset attributes with a frames table.
 
 ### 16. Helper functions copied between modules
 
-`get_binning_from_metadata` and `find_affine_transform` exist in both
-`gui/gui_controller.py` and `convert_hdf5s.py`. A small `pyclm.io` module for
-reading PyCLM HDF5 files would absorb them and give analysis notebooks a
-supported entry point (Stage 2).
+**Fixed in Stage 2.** `pyclm.io` reads both layouts; the GUI and
+`convert_hdf5s` use it, and the duplicated helpers are gone.
 
 ### 17. Shutdown counts encode the topology
 

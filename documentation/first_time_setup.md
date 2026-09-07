@@ -67,7 +67,24 @@ focus_device = "ZDrive"
 # Optional. Seconds to wait after the hardware reports ready, before each snap.
 # Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
 settle_time_seconds = 1.0
+
+# Optional. How data is stored and exported.
+[output]
+format = "hdf5"              # "hdf5" (default, PyCLM's original layout) or "ome-zarr"
+pattern_policy = "on_change" # ome-zarr only: store each distinct DMD pattern once ("on_change"),
+                             # every stimulation event ("all"), or not at all ("none")
+export_imagej = true         # write ImageJ hyperstacks next to the data when the run finishes
 ```
+
+With `format = "ome-zarr"` each experiment is written as an
+[OME-Zarr](https://ngff.openmicroscopy.org/) store (`<experiment>.zarr/`) that
+Fiji, napari, QuPath and plain Python (`zarr`, `dask`) open directly, with one
+image per acquisition cadence so channels imaged every N timepoints never show
+blank frames, segmentation as NGFF labels, DMD patterns stored once per
+distinct pattern, and a `frames.parquet`/`frames.csv` table of every frame and
+stimulation event. Whichever format is used, `pyclm.io.open(path)` reads it
+and `convert_hdf5s` (or the automatic export) produces ImageJ stacks. See
+[Data format and export](data_format.md) for the full description.
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.
 
@@ -265,10 +282,12 @@ PyCLM writes output files alongside the configuration files:
 
 ```
 experiment_dir/
-├── feedback_ctrl.pos1.hdf5
+├── feedback_ctrl.pos1.hdf5        # or feedback_ctrl.pos1.zarr/ with format = "ome-zarr"
 ├── feedback_ctrl.pos2.hdf5
 ├── open_loop.pos1.hdf5
-├── plan.useq.yaml         # the acquisition plan PyCLM derived from your files
+├── feedback_ctrl.pos1_imaging.tif # ImageJ hyperstacks, exported when the run ends
+├── frames.parquet / frames.csv    # (ome-zarr) one row per frame and stimulation event
+├── plan.useq.yaml                 # the acquisition plan PyCLM derived from your files
 └── log.log
 ```
 

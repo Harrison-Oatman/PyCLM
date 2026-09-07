@@ -38,7 +38,7 @@ def build_pipeline(tmp_path, stop):
     schedule = make_schedule([exp], steps=2)
     slm.initialize((8, 8), IDENTITY, ["exp.00"])
     outbox.initialize(make_plan(schedule), core)
-    assert outbox.open_files
+    assert outbox.writer.is_open
 
     return aq, [microscope, outbox, slm, seg, pattern], outbox
 
@@ -65,7 +65,7 @@ def test_graceful_drain_after_manager_close(tmp_path):
 
     assert not not_done, "some processes did not exit after close"
     assert all(f.exception() is None for f in futures)
-    assert outbox.open_files == {}
+    assert not outbox.writer.is_open
     assert not stop.is_set()
     assert all(p.error_count == 0 for p in processes)
 
@@ -82,4 +82,4 @@ def test_forced_stop_closes_files(tmp_path):
 
     assert not not_done, "some processes did not exit after stop_event"
     assert all(f.exception() is None for f in futures)
-    assert outbox.open_files == {}
+    assert not outbox.writer.is_open

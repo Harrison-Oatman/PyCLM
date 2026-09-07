@@ -20,6 +20,9 @@ Once a directory for the multi-experiment has been set up, close out of all exis
 - Experiment progress can be monitored through the experiment log, or in real time using the `--gui` flag, which opens a live Napari viewer that updates as images are acquired.
 
 ## 3. Analyzing a completed multi-experiment
-Data is exported into separate .hdf5 files for each experiment, which alongside acquired images contain important metadata about timing and imaging configurations. These files also track the light pattern applied at each timepoint and the segmentation generated, if applicable.
-- These .hdf5 files can be converted to .tif stacks, with or without pattern/segmentation overlay by running the `convert_to_tifs.py` script.
+Each experiment (position) is written to its own output as the run proceeds, either an OME-Zarr store or an HDF5 file depending on `[output] format` in `pyclm_config.toml`. Alongside the images the output holds the acquisition plan, per-frame timing and position, the segmentation masks, and the DMD pattern in force at every stimulation.
+
+- When the run finishes, ImageJ hyperstacks are exported next to the data (raw channels, segmentation labels, and the pattern warped into camera space). Re-run the export at any time with `uv run convert_hdf5s <experiment_dir>`.
+- Open any output in Python with `pyclm.io.open(path)`; OME-Zarr outputs also open directly in Fiji, napari, and `zarr`.
+- See [Data format and export](data_format.md) for the layouts, the frames table, and the export options.
 - For convenience, a script for simple tracking (or segmentation and tracking) is also available.

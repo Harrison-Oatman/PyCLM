@@ -27,6 +27,7 @@ from .core import (
 from .core.plan import PLAN_FILENAME, AcquisitionPlan
 from .core.position_mover import PositionMover
 from .core.real_core import RealMicroscopeCore
+from .core.storage import make_writer
 from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ class Controller:
         position_mover: PositionMover | None = None,
         dry_image_source: Path | None = None,
         settle_time_s: float = 1.0,
+        storage_format: str = "hdf5",
+        pattern_policy: str = "on_change",
     ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
@@ -63,7 +66,11 @@ class Controller:
             settle_time_s=settle_time_s,
         )
         self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
-        self.outbox = MicroscopeOutbox(aq=self.all_queues, stop_event=self.stop_event)
+        self.outbox = MicroscopeOutbox(
+            aq=self.all_queues,
+            stop_event=self.stop_event,
+            writer=make_writer(storage_format, pattern_policy),
+        )
         self.slm_buffer = SLMBuffer(aq=self.all_queues, stop_event=self.stop_event)
         self.segmentation = SegmentationProcess(
             aq=self.all_queues, stop_event=self.stop_event
@@ -99,17 +106,14 @@ class Controller:
         affine_transform: np.ndarray,
         out_path: Path,
     ):
-        # refuse to run before any models are loaded if output files already exist
+        # refuse to run before any models are loaded if outputs already exist
         out_path = Path(out_path)
-        existing = [
-            out_path / f"{name}.hdf5"
-            for name in schedule.experiment_names
-            if (out_path / f"{name}.hdf5").exists()
-        ]
+        planned = self.outbox.writer.planned_paths(schedule.experiment_names, out_path)
+        existing = [path for path in planned.values() if path.exists()]
         if existing:
             raise FileExistsError(
-                "HDF5 output already exists; move or delete before re-running: "
-                + ", ".join(str(p) for p in existing)
+                "output already exists; move or delete before re-running: "
+                + ", ".join(str(path) for path in existing)
             )
 
         if isinstance(self.core, SimulatedMicroscopeCore):
@@ -174,7 +178,9 @@ class Controller:
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
-        all_layers = self.outbox.initialize(plan, self.core)
+        all_layers = self.outbox.initialize(
+            plan, self.core, affine_transform, slm_shape
+        )
 
         self.all_layers = all_layers
 

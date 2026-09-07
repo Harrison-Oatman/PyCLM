@@ -15,3 +15,4 @@ float32 array in ``[0, 1]`` with shape equal to the camera ROI.
    wave_patterns
    static_patterns
    fbc_cell_movement
+   io

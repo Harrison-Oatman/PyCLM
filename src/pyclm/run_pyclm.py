@@ -21,6 +21,8 @@ _PYCLM_HANDLER_FLAG = "_pyclm_run_handler"
 
 DEFAULT_FOCUS_DEVICE = "ZDrive"
 DEFAULT_SETTLE_TIME_S = 1.0
+DEFAULT_STORAGE_FORMAT = "hdf5"
+DEFAULT_PATTERN_POLICY = "on_change"
 
 
 def remove_pyclm_log_handlers():
@@ -149,6 +151,13 @@ def run_pyclm(
     focus_device = config.get("focus_device", DEFAULT_FOCUS_DEVICE)
     settle_time_s = float(config.get("settle_time_seconds", DEFAULT_SETTLE_TIME_S))
 
+    # [output] section: storage format, pattern policy, automatic ImageJ export
+    output_cfg = config.get("output", {})
+    storage_format = output_cfg.get("format", DEFAULT_STORAGE_FORMAT)
+    pattern_policy = output_cfg.get("pattern_policy", DEFAULT_PATTERN_POLICY)
+    export_imagej = bool(output_cfg.get("export_imagej", True))
+    logger.info(f"output format {storage_format}, pattern policy {pattern_policy}")
+
     base_path = experiment_directory
 
     # For dry runs without an explicit image source, discover the schedule and
@@ -164,6 +173,8 @@ def run_pyclm(
         position_mover=position_mover,
         dry_image_source=dry_image_source,
         settle_time_s=settle_time_s,
+        storage_format=storage_format,
+        pattern_policy=pattern_policy,
     )
 
     # register any custom methods
@@ -212,3 +223,24 @@ def run_pyclm(
         logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
     c.run()
+
+    if export_imagej:
+        export_outputs(c.outbox.writer.output_paths().values())
+
+
+def export_outputs(paths) -> list[Path]:
+    """Write ImageJ hyperstacks next to each finished output; failures are logged, not raised."""
+    from . import io as pyclm_io
+
+    written = []
+    for path in paths:
+        try:
+            with pyclm_io.open(path) as exp:
+                written += pyclm_io.export_imagej(exp)
+        except Exception as e:
+            logger.error(f"ImageJ export of {path} failed: {e}", exc_info=True)
+    if written:
+        print(
+            f"exported {len(written)} ImageJ stack(s): {', '.join(p.name for p in written)}"
+        )
+    return written

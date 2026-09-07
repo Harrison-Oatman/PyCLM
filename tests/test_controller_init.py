@@ -30,7 +30,7 @@ def test_existing_output_is_rejected_before_models_load(tmp_path):
         controller.initialize(schedule, (8, 8), IDENTITY, tmp_path)
 
     assert controller.pattern.models == {}
-    assert controller.outbox.open_files == {}
+    assert not controller.outbox.writer.is_open
 
 
 def test_unused_segmentation_method_warns(tmp_path, caplog):

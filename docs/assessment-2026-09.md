@@ -4,6 +4,8 @@
 > `Stage0-hygiene` on 2026-09-06; see [known-issues.md](known-issues.md) for
 > what each fix covered and what remains. Stage 1 (acquisition plan on
 > useq-schema) is implemented; see [stage1-plan-design.md](stage1-plan-design.md).
+> Stage 2 (storage: `FrameWriter`, OME-Zarr format 2, `pyclm.io`) is
+> implemented; see [stage2-storage-options.md](stage2-storage-options.md).
 
 Scope: the core modules (Manager, MicroscopeProcess, MicroscopeOutbox,
 SLMBuffer, SegmentationProcess, PatternProcess) and the code that feeds them
