@@ -114,20 +114,22 @@ reference, `empty()`/`get_nowait()` are reliable, and the unused
 
 ## Smells that will resist the planned features
 
-### 14. "Is channel X scheduled at t?" is implemented four times
+### 14. "Is channel X scheduled at t?" was implemented four times
 
-`Manager.process`, `MicroscopeOutbox.initialize`,
-`MicroscopeOutbox._timepoint_complete` (all `core/manager.py`), and the GUI's
-`ChannelSchedule.is_scheduled_at` (`gui/gui_controller.py`). They agree today;
-any axis added (z, grid) or any runtime edit has to be made in all four.
-Stage 1 (plan) removes this.
+**Mostly fixed in Stage 1.** `Manager.process`, `MicroscopeOutbox.initialize`
+and `_timepoint_complete` now all derive from `AcquisitionPlan`
+(`is_scheduled`, `events_at`, `datasets_at`). The GUI's
+`ChannelSchedule.is_scheduled_at` (`gui/gui_controller.py`) is the remaining
+copy; it reads the same `every_t`/`t_delay`/`t_stop` attributes the plan
+writes, and Stage 2 hands it the plan via the file.
 
 ### 15. The HDF5 attribute schema is written twice
 
 `AcquisitionEvent.as_attrs` (`core/events.py`; Stage 0 merged `write_attrs`
 and `__repr__` onto it) and `MicroscopeOutbox._preallocate_attrs`
-(`core/manager.py`), which must list the same keys so SWMR readers see them.
-Stage 2 (storage v2) replaces per-dataset attributes with a frames table.
+(`core/manager.py`), which must list the same keys so SWMR readers see them
+(Stage 1 replaced `sub_axes` with `index` in both). Stage 2 (storage v2)
+replaces per-dataset attributes with a frames table.
 
 ### 16. Helper functions copied between modules
 
@@ -143,13 +145,15 @@ supported entry point (Stage 2).
 Adding a consumer (tracking) means auditing every count. Stage 3 (router)
 derives fan-in from the subscription table.
 
-### 18. Routing is baked into `AcquisitionEvent` by the Manager
+### 18. Routing is baked into `AcquisitionEvent`
 
-`Manager.get_kwargs` (`core/manager.py`) decides `segment`, `save_seg`,
-`raw_goes_to_pattern`, `seg_goes_to_pattern` from the pattern's
-`AcquiredImageRequest`s; the Outbox and Segmentation processes read the flags.
-A new consumer needs a new flag, a new `get_kwargs` branch, a new branch in
-the Outbox, and a new attribute in the HDF5 schema (#15). Stage 3.
+`AcquisitionPlan._routing` (`core/plan.py`; moved there from
+`Manager.get_kwargs` in Stage 1) decides `segment`, `save_seg`,
+`raw_to_pattern`, `seg_to_pattern` from the pattern's
+`AcquiredImageRequest`s, and `Manager.dispatch` copies them onto the event;
+the Outbox and Segmentation processes read the flags. A new consumer still
+needs a new flag, a new branch in the Outbox, and a new attribute in the HDF5
+schema (#15). Stage 3.
 
 ### 19. `pattern_shape` became a float tuple after binning
 
@@ -177,6 +181,10 @@ registry per instance (`tests/test_pattern_process.py::test_registration_is_per_
 channel of every experiment even with no segmentation method.
 `tests/test_dry_run.py` codifies the empty datasets as expected output.
 Change with the Stage 2 layout, not before (it alters the file format).
+Stage 1 fixed a consequence: `convert_hdf5s.make_tif` crashed with "all
+input arrays must have the same shape" when it stacked one of these empty
+`seg` datasets next to a real frame; it now treats a `seg` dataset whose
+shape differs from the frame as absent (`tests/test_swmr.py` covers it).
 
 ### 23. Segmentation only exists if a pattern asks for it
 

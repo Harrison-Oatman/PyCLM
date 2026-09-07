@@ -2,8 +2,8 @@
 
 > **Status.** Plan approved. Stage 0 (hygiene) implemented on branch
 > `Stage0-hygiene` on 2026-09-06; see [known-issues.md](known-issues.md) for
-> what each fix covered and what remains. Stages 1–5 are pending; the
-> useq-schema spike is the next step.
+> what each fix covered and what remains. Stage 1 (acquisition plan on
+> useq-schema) is implemented; see [stage1-plan-design.md](stage1-plan-design.md).
 
 Scope: the core modules (Manager, MicroscopeProcess, MicroscopeOutbox,
 SLMBuffer, SegmentationProcess, PatternProcess) and the code that feeds them

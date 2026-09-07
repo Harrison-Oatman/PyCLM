@@ -10,7 +10,7 @@ from threading import Event
 from time import sleep
 
 import numpy as np
-from helpers import FakeImageSource, make_experiment, make_schedule
+from helpers import FakeImageSource, make_experiment, make_plan, make_schedule
 
 from pyclm.core.manager import MicroscopeOutbox, SLMBuffer
 from pyclm.core.messages import CloseMessage
@@ -37,7 +37,7 @@ def build_pipeline(tmp_path, stop):
     exp = make_experiment("exp.00")
     schedule = make_schedule([exp], steps=2)
     slm.initialize((8, 8), IDENTITY, ["exp.00"])
-    outbox.initialize(schedule, core)
+    outbox.initialize(make_plan(schedule), core)
     assert outbox.open_files
 
     return aq, [microscope, outbox, slm, seg, pattern], outbox

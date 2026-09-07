@@ -127,8 +127,8 @@ class PatternProcess(BaseProcess):
                 )
             )
 
-    def dock_string(self, experiment_name, t):
-        return f"{experiment_name}_{t:05d}"
+    def dock_key(self, experiment_name, t) -> tuple[str, int]:
+        return (experiment_name, int(t))
 
     def check(self, experiment_name, dockname):
         dock: DataDock = self.docks.get(dockname)
@@ -160,7 +160,7 @@ class PatternProcess(BaseProcess):
                 t_index = message.t_index
 
                 dock = DataDock(t_sec, req)
-                dockname = self.dock_string(name, t_index)
+                dockname = self.dock_key(name, t_index)
 
                 logger.debug(f"pattern request {dockname}")
 
@@ -187,7 +187,7 @@ class PatternProcess(BaseProcess):
             name = data.event.experiment_name
             t_index = data.event.t_index
 
-            dockname = self.dock_string(name, t_index)
+            dockname = self.dock_key(name, t_index)
 
             dock = self.docks.get(dockname)
             if dock is None:
@@ -211,7 +211,7 @@ class PatternProcess(BaseProcess):
             name = data.event.experiment_name
             t_index = data.event.t_index
 
-            dockname = self.dock_string(name, t_index)
+            dockname = self.dock_key(name, t_index)
 
             dock = self.docks.get(dockname)
             if dock is None:

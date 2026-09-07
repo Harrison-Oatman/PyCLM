@@ -16,6 +16,7 @@ from pyclm.core.experiments import (
     PatternConfig,
     SegmentationConfig,
 )
+from pyclm.core.plan import AcquisitionPlan
 
 
 class FakeImageSource:
@@ -92,6 +93,10 @@ def make_schedule(
         t_setup=setup,
         t_between=between,
     )
+
+
+def make_plan(schedule, requirements=None) -> AcquisitionPlan:
+    return AcquisitionPlan.from_schedule(schedule, requirements)
 
 
 def drain(queue) -> list:

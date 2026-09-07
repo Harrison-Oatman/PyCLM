@@ -268,8 +268,15 @@ experiment_dir/
 ├── feedback_ctrl.pos1.hdf5
 ├── feedback_ctrl.pos2.hdf5
 ├── open_loop.pos1.hdf5
+├── plan.useq.yaml         # the acquisition plan PyCLM derived from your files
 └── log.log
 ```
+
+`plan.useq.yaml` is a [useq-schema](https://pymmcore-plus.github.io/useq-schema/)
+`MDASequence` describing every position, channel, exposure and the timing,
+plus PyCLM's own settings under `metadata.pyclm`. It is also stored inside
+each HDF5 file. Keep it with the data: it is the exact record of what was
+scheduled.
 
 ---
 

@@ -46,8 +46,7 @@ def make_raw(exp, t_index):
         exp.experiment_name,
         MicroscopePosition(0.0, 0.0, 0.0, label=exp.experiment_name),
         exp.channels["545"].channel_id,
-        t_index=t_index,
-        sub_axes=[f"{t_index:05d}", "channel_545"],
+        index={"t": t_index, "p": exp.experiment_name, "c": "545"},
         raw_goes_to_pattern=True,
     )
     return AcquisitionData(event, np.zeros((48, 64), dtype=np.uint16))
@@ -68,7 +67,7 @@ def test_data_with_matching_absolute_index_triggers_generate():
 
     # the manager sends the absolute timepoint in both the request and the event
     pp.handle_message(RequestPattern(5, 42.0, "exp.00", requirements))
-    assert "exp.00_00005" in pp.docks
+    assert ("exp.00", 5) in pp.docks
 
     pp.handle_from_raw(make_raw(exp, t_index=5))
 
@@ -80,7 +79,7 @@ def test_data_with_matching_absolute_index_triggers_generate():
     model = pp.models["exp.00"]
     assert len(model.contexts) == 1
     assert model.contexts[0].time == 42.0
-    assert "exp.00_00005" not in pp.docks
+    assert ("exp.00", 5) not in pp.docks
 
 
 def test_data_without_request_is_dropped_with_warning(caplog):

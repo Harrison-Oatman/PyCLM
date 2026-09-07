@@ -9,7 +9,7 @@ import threading
 from time import perf_counter, process_time
 
 import pytest
-from helpers import drain, make_experiment, make_schedule
+from helpers import drain, make_experiment, make_plan, make_schedule
 
 from pyclm.core.manager import Manager
 from pyclm.core.messages import (
@@ -27,7 +27,7 @@ from pyclm.core.queues import AllQueues
 def run_manager(schedule, requirements):
     aq = AllQueues()
     manager = Manager(aq, threading.Event())
-    manager.initialize(schedule, requirements)
+    manager.initialize(make_plan(schedule, requirements))
     manager.process()
     return aq, manager
 
@@ -68,7 +68,7 @@ def test_pattern_cadence_follows_lcm_of_required_channels():
 
     aq, manager = run_manager(schedule, {"exp.00": raw_requirement(exp)})
 
-    assert manager.pattern_lcms["exp.00"] == 2
+    assert manager.plan.pattern_lcm("exp.00") == 2
     requests = [
         m for m in drain(aq.manager_to_pattern) if isinstance(m, RequestPattern)
     ]
@@ -139,7 +139,7 @@ def test_z_update_from_microscope_is_applied():
     schedule = make_schedule([exp], steps=1)
     aq = AllQueues()
     manager = Manager(aq, threading.Event())
-    manager.initialize(schedule, {"exp.00": []})
+    manager.initialize(make_plan(schedule))
 
     aq.microscope_to_manager.put(UpdateZPositionMessage(12.5, "exp.00"))
 
@@ -167,7 +167,7 @@ def test_stop_event_interrupts_wait():
     aq = AllQueues()
     stop = threading.Event()
     manager = Manager(aq, stop)
-    manager.initialize(schedule, {"exp.00": []})
+    manager.initialize(make_plan(schedule))
 
     thread = threading.Thread(target=manager.process)
     start = perf_counter()

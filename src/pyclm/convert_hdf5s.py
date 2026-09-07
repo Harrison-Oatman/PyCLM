@@ -151,8 +151,11 @@ def make_tif(fp, at, chan="channel_638", binning_override=None):
 
             patterned_stack = [data]
 
-            if "seg" in f[t_val][channel_key].keys():
-                patterned_stack.append(f[t_val][channel_key]["seg"])
+            # seg datasets are pre-allocated for every channel; an unwritten one
+            # stays (0, 0) and must be treated as absent
+            seg = f[t_val][channel_key].get("seg")
+            if seg is not None and seg.shape == data.shape:
+                patterned_stack.append(seg)
                 seg_seen = True
 
             elif seg_seen:

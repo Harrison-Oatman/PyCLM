@@ -1,7 +1,7 @@
 # PyCLM architecture notes
 
-Factual reference for the runtime as of the Stage 0 hygiene changes on branch
-`Stage0-hygiene` (September 2026; the pre-Stage-0 state was `7af035a`). Opinions and recommendations live in
+Factual reference for the runtime as of Stage 1 (acquisition plan) on branch
+`Stage0-hygiene` (September 2026; the pre-refactor state was `7af035a`). Opinions and recommendations live in
 [assessment-2026-09.md](assessment-2026-09.md); bugs live in
 [known-issues.md](known-issues.md).
 
@@ -22,7 +22,7 @@ processes**, despite the naming. All processes share one `threading.Event`
 
 | Process | Class / file | Role | Inherits `BaseProcess`? |
 |---|---|---|---|
-| Manager | `Manager`, `core/manager.py:620` | Walks the schedule, emits acquisition / SLM / position events on a timer, requests patterns. | **No** (own loop) |
+| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the other processes. | **No** (own loop) |
 | Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. | Yes, but overrides `process()` with its own loop (per-message error guard; aborts after `max_consecutive_errors`, default 10) |
 | Outbox | `MicroscopeOutbox`, `core/manager.py:124` | Writes frames to per-experiment HDF5 files (SWMR) **and** fans frames out to Segmentation and Pattern. | Yes (via `DataPassingProcess`) |
 | SLM buffer | `SLMBuffer`, `core/manager.py:486` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | Yes (via `DataPassingProcess`) |
@@ -73,12 +73,17 @@ into `aq.<name>` in its constructor. There is no registry or routing table.
 - **Events** (`core/events.py`) describe *intent*:
   - `AcquisitionEvent` — one snap. Carries experiment name, a
     `MicroscopePosition`, `channel_id` (UUID of the `ImagingConfig`),
-    scheduled wall time, `t_index`, exposure, binning, `config_groups`,
-    `devices`, `needs_slm`, `sub_axes` (list used to build the HDF5 path), and
-    a block of **routing/persistence booleans** (`save_output`, `save_stim`,
-    `segment`, `save_seg`, `raw_goes_to_pattern`, `seg_goes_to_pattern`) plus
-    method names. It is mutated by the microscope after the snap
+    scheduled wall time, `index` (`{"t", "p", "c"}`; `t_index` is a property
+    on it, and `get_rel_path()` derives the HDF5 path from it), exposure,
+    binning, `config_groups`, `devices`, `needs_slm`, and a block of
+    **routing/persistence booleans** (`save_output`, `save_stim`, `segment`,
+    `save_seg`, `raw_goes_to_pattern`, `seg_goes_to_pattern`) plus method
+    names. It is mutated by the microscope after the snap
     (`completed_time`, `pixel_width_um`).
+  - `PlannedEvent` (`core/plan.py`) — what the plan hands the Manager: `kind`
+    (`request_pattern` / `position` / `update_pattern` / `acquire`), `t`,
+    `experiment`, `index`, `scheduled_offset_s`, and the resolved routing
+    flags. The Manager's `dispatch()` maps each one onto the messages above.
   - `UpdatePatternEvent` — "put this experiment's current pattern on the SLM".
   - `UpdateStagePositionEvent` — "move to this position".
   - `RequestPattern` (`pattern_process.py`) — a message, not an event: tells
@@ -91,10 +96,12 @@ into `aq.<name>` in its constructor. There is no registry or routing table.
 
 ---
 
-## 3. Configuration → schedule
+## 3. Configuration → schedule → plan
 
 `directories.py:schedule_from_directory()` builds an `ExperimentSchedule`
-(`core/experiments.py:254`) from an experiment directory:
+(`core/experiments.py`) from an experiment directory, and
+`AcquisitionPlan.from_schedule()` (`core/plan.py`) turns that into the plan
+the pipeline runs from (see the end of this section).
 
 1. Every `*.toml` in the directory is a candidate experiment config, keyed by
    file stem.
@@ -128,6 +135,29 @@ between events, data, pattern requirements, and docks. There is no schema
 validation; missing keys surface as `KeyError`, unknown keys are passed on as
 method kwargs.
 
+### The acquisition plan (`core/plan.py`)
+
+`AcquisitionPlan` is the single place scheduling logic lives. It holds a
+`useq.MDASequence` (time plan; one `Position` per experiment with a
+sub-sequence listing its channels, stimulation first with `do_stack=False`;
+an `AxesBasedAF` carrying the PFS offset for provenance only) plus the
+`ExperimentSchedule` for hardware detail. Everything useq cannot express is
+under `metadata["pyclm"]`: `t_delay`, `t_stop`, per-channel `every_t`,
+`pattern_every_t`, the stimulation channel's name (its preset in the channel
+group, e.g. `DMD`, else `stimulation`), binning, and the pattern's
+requirements. The wrapper, not useq's iterator, decides *when*: cadence is
+experiment-relative (`(t - t_delay) % every_t == 0`), and
+`Channel.acquire_every` is deliberately left at 1.
+
+Queries: `events_at(t)` (ordered `PlannedEvent`s: per active experiment a
+`request_pattern` when `(t - t_delay) % lcm == 0`, a `position`, then
+`update_pattern` + `acquire` for stimulation and `acquire` per imaging
+channel; nothing when no frame is due), `is_scheduled(experiment, channel,
+t)`, `datasets_at()` / `expected_datasets()`, `imaging_config()`,
+`estimate_timepoint_s()` / `over_budget()`, `to_yaml()` / `from_yaml()`.
+`structure(experiment)` exposes useq's own per-timepoint events for a
+position, which is where z and grid axes will appear.
+
 Dry runs use `dry_schedule_from_directory()`, which additionally resolves a
 TIF per position (priority: `dry_run.yml`, then position list + TIF name
 matching, then TIF file names as positions) and builds a
@@ -155,14 +185,15 @@ matching, then TIF file names as positions) and builds a
 6. `PatternProcess.initialize_models()` → `configure_system()` on each method
    injects camera properties and the experiment reference and applies the
    stimulation binning to `pattern_shape` / `pixel_size_um`.
-7. `Manager.initialize(schedule, requirements)` precomputes, per experiment, the
-   LCM of `every_t` over the required channels plus `pattern.every_t` → a
-   pattern is generated only at `this_t % lcm == 0`.
+7. `AcquisitionPlan.from_schedule(schedule, requirements)` is built and
+   written to `plan.useq.yaml` in the experiment directory; if
+   `plan.over_budget(settle_s)` finds timepoints whose estimated duration
+   exceeds the interval, a warning names the worst one. `Manager.initialize(plan)`.
 8. `SLMBuffer.initialize(slm_shape, affine, names)` → blank pattern per
    experiment; `MicroscopeProcess.declare_slm()`.
-9. `MicroscopeOutbox.initialize(schedule, core)` creates every HDF5 file and
-   **pre-allocates every dataset for every timepoint** (see §7), then enables
-   SWMR. Returns the `(file, channel)` layer list that is written to
+9. `MicroscopeOutbox.initialize(plan, core)` creates every HDF5 file, embeds
+   the plan YAML in its root attributes, and **pre-allocates one dataset per
+   `plan.expected_datasets()` entry** (see §7), then enables SWMR. Returns the `(file, channel)` layer list that is written to
    `all_layers.txt` (JSON) for the GUI subprocess.
 
 `run_pyclm()` (`run_pyclm.py`) is the front door: finds `pyclm_config.toml`
@@ -179,24 +210,22 @@ spawns the GUI as a **separate OS process** (`subprocess.Popen` of
 ## 5. Timing model (`Manager.process`, `manager.py:778`)
 
 ```
-start = now + times.setup
-for t in range(times.count):
-    wait until (now - start) >= t*interval - setup        # drains microscope_to_manager, sleeps 10 ms
-    for i, experiment in enumerate(experiments):
-        scheduled = start + t*interval + i*between
-        skip if t < t_delay or (t_stop and t - t_delay >= t_stop)
-        this_t = t - t_delay
-        maybe send RequestPattern(t_index=t, ...)          # if this_t % lcm == 0
-        if this_t % stim.every_t == 0:
-            send UpdateStagePositionEvent (once per experiment per t)
-            if stim.exposure > 0:
-                send UpdatePatternEvent to slm_buffer AND microscope
-                send AcquisitionEvent(needs_slm=True, t_index=t, sub_axes=[t, "stim_aq"])
-        for each channel with this_t % channel.every_t == 0:
-            send UpdateStagePositionEvent if not yet sent this t
-            send AcquisitionEvent(t_index=t, sub_axes=[t, f"channel_{name}"])
-send "close" to all five outboxes
+start = now + plan.setup_s
+for t in range(plan.timepoints):
+    wait until (now - start) >= plan.time_offset_s(t) - setup   # drains microscope_to_manager, sleeps 10 ms
+    for ev in plan.events_at(t):                                # per active experiment, in order:
+        dispatch(ev)                                            #   request_pattern? position,
+                                                                #   [update_pattern, acquire(stim)], acquire(channel)...
+send CloseMessage to all five outboxes
 ```
+
+`plan.events_at(t)` applies the rules that used to be inline here: skip an
+experiment when `t < t_delay` or past `t_stop`; a channel (or stimulation) is
+acquired when `(t - t_delay) % every_t == 0`; a pattern request is sent when
+`(t - t_delay) % lcm(pattern.every_t, every_t of the required channels) == 0`,
+and only then do the required channels' events carry routing flags; a
+position event is sent only when at least one frame is acquired. Each
+event's `scheduled_offset_s` is `t * interval + p_index * between`.
 
 Key properties:
 
@@ -262,7 +291,7 @@ SegmentationProcess.handle_segment_data
   → seg_to_pattern.put(seg)           (always)
   → seg_to_outbox.put(seg)            (if event.save_seg)  → Outbox writes ".../seg"
 PatternProcess
-  → RequestPattern creates DataDock(time_sec, requirements) keyed "{experiment}_{t_index:05d}"
+  → RequestPattern creates DataDock(time_sec, requirements) keyed (experiment, t)
   → raw/seg arrivals fill the dock (data for a timepoint with no dock is dropped with a warning);
     when complete: docks.pop(), PatternContext(dock, experiment),
     model.generate(context) → CameraPattern(experiment, pattern, slm_coords, binning) → pattern_to_slm
@@ -273,11 +302,12 @@ SLMBuffer on UpdatePatternEvent → EventSLMPattern(event.id, slm_image, pattern
 MicroscopeProcess.handle_update_pattern_event → core.setSLMImage(); remembers pattern + id for the next StimulationData
 ```
 
-Who decides routing: `Manager.get_kwargs()` (`manager.py:668`) looks up the
-channel's `AcquiredImageRequest` and sets `do_segmentation`, `save_segmentation`,
-`raw_goes_to_pattern`, `segmentation_goes_to_pattern` on the event, but only
-when a pattern is being generated this timepoint. The Outbox and Segmentation
-processes just read those flags.
+Who decides routing: `AcquisitionPlan._routing()` resolves the pattern's
+`AcquiredImageRequest`s to channel names and sets `segment`, `save_seg`,
+`raw_to_pattern`, `seg_to_pattern` on the `PlannedEvent`, but only when a
+pattern is being generated this timepoint; `Manager.dispatch()` copies them
+onto the `AcquisitionEvent`. The Outbox and Segmentation processes just read
+those flags.
 
 What a pattern method sees: `PatternContext` (`patterns/pattern.py:92`) exposes
 `.time` (seconds since start, scheduled), `.raw(name)`, `.segmentation(name)`,
@@ -290,7 +320,8 @@ method instance (e.g. `BounceModel.down`, `EmbryoSegmentationMethod.cached_resul
 ## 7. HDF5 layout (one file per experiment/position)
 
 Root attributes: `schedule_metadata` (JSON of `ExperimentSchedule.as_dict()`),
-`experiment_metadata` (JSON of `Experiment.as_dict()`), `every_t` (JSON map
+`experiment_metadata` (JSON of `Experiment.as_dict()`), `plan` (the
+`plan.useq.yaml` text), `plan_format` (1), `every_t` (JSON map
 `channel_<name>`/`stim_aq` → int), `t_delay`, `t_stop`, `t_count`.
 
 Root dataset `current_t_index` (int32 scalar, starts −1): the highest
@@ -311,9 +342,10 @@ experiment is active):
 All datasets are created with shape `(0, 0)` and chunks before `swmr_mode =
 True`, and resized to the actual frame shape on write. Never-written datasets
 stay `(0, 0)`; readers treat that as "absent". Each dataset has a fixed set of
-attributes pre-created by `_preallocate_attrs` (`manager.py:353`) and
-overwritten by `AcquisitionEvent.write_attrs` (`events.py:160`); `dmd` also
-gets `pattern_id`. Position is stored as a list of `(key, str(value))` pairs.
+attributes pre-created by `_preallocate_attrs` and overwritten by
+`AcquisitionEvent.write_attrs` (`as_attrs()`), including `index` (JSON of the
+frame index); `dmd` also gets `pattern_id`. Position is stored as a list of
+`(key, str(value))` pairs.
 
 Why pre-allocate: SWMR readers are only guaranteed to see objects that existed
 when they opened the file. (Empirically, h5py 3.14 / HDF5 1.14.6 does *not*
@@ -323,7 +355,8 @@ constraint is about reader visibility, not writer errors.)
 Consumers of this layout: `MicroscopeOutbox._timepoint_complete`, the GUI
 (`gui/gui_controller.py`), `convert_hdf5s.py`, `PatternReview`, `tests/test_dry_run.py`.
 
-Other outputs in the experiment directory: `log.log` (file handler at INFO,
+Other outputs in the experiment directory: `plan.useq.yaml` (the acquisition
+plan, also embedded in every HDF5 file), `log.log` (file handler at INFO,
 console at WARNING), `all_layers.txt` (JSON: `{"t": t_gcd, "all_layers":
 ["path:channel_x", ...]}`).
 
@@ -390,7 +423,7 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 40 tests, ~65 s, all passing after Stage 0
+`uv run --group test pytest` — 104 tests, ~65 s, all passing after Stage 1
 (2026-09-06). The dry-run integration tests take almost all of that time.
 
 | File | Covers |
@@ -398,7 +431,8 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 | `test_dry_run.py` | Whole pipeline against the simulated core for each position-list / discovery mode; HDF5 dataset inventory, shapes, dtypes. |
 | `test_swmr.py` | Outbox init + write + `convert_hdf5s.make_tif`. |
 | `test_base_process.py` | Poll loop, stop paths, handler error counting. |
-| `test_manager_scheduling.py` | Which events the Manager emits at which `t` (`t_delay`, `t_stop`, `every_t`/lcm cadence), request/event index agreement, per-timepoint ordering, close fan-out, z-update handling, wait loop not spinning, stop event. |
+| `test_plan.py` | `AcquisitionPlan` enumeration against the scheduling rules over 54 `every_t`/`t_delay`/`t_stop`/stim-cadence combinations, event order and offsets, routing flags, YAML round trip, index → path, stimulation naming, PFS offset recorded not executed, z-readiness of the structure, timing budget, validation. |
+| `test_manager_scheduling.py` | Which messages the Manager emits at which `t` from a plan, request/event index agreement, per-timepoint ordering, close fan-out, z-update handling, wait loop not spinning, stop event. |
 | `test_pattern_process.py` | Dock keyed by absolute `t`, unrequested data dropped with a warning, per-instance registries. |
 | `test_microscope_process.py` | Frame delivery, settle time, error guard and abort threshold, SLM handshake (stale replies, timeout), z-correction message. |
 | `test_shutdown.py` | Graceful drain of the five workers after `CloseMessage`; forced stop; HDF5 files closed on both paths. |
@@ -407,6 +441,6 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 | `test_pattern_method.py` | Integral `pattern_shape` under binning; `PatternReview` constructible from TOML kwargs. |
 
 `tests/helpers.py` holds the builders (`make_experiment`, `make_schedule`,
-`FakeImageSource`, `drain`) used by the unit tests. Still untested: `SLMBuffer`
+`make_plan`, `FakeImageSource`, `drain`) used by the unit tests. Still untested: `SLMBuffer`
 transforms, `DataDock` completeness with mixed raw/seg requirements, the
 built-in pattern methods (exercised only by the docs zoo).

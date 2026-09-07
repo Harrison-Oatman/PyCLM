@@ -21,6 +21,7 @@ dependencies = [
     "scikit-image>=0.25.2",
     "tifffile>=2025.9.20",
     "toml>=0.10.2",
+    "useq-schema>=0.8.1",
 ]
 
 [project.optional-dependencies]

@@ -1,4 +1,5 @@
 import datetime
+import json
 from uuid import UUID, uuid4
 
 from h5py import Dataset
@@ -10,6 +11,18 @@ from .experiments import (
     PositionBase,
     PositionWithAutoFocus,
 )
+
+STIM_GROUP = "stim_aq"
+
+
+def storage_group(channel: str, is_stim: bool) -> str:
+    """HDF5 group for a channel: ``stim_aq`` for stimulation, ``channel_<name>`` otherwise."""
+    return STIM_GROUP if is_stim else f"channel_{channel}"
+
+
+def rel_path(index: dict, is_stim: bool) -> str:
+    """Dataset path within the HDF5 file for a frame index, e.g. ``00012/channel_545/``."""
+    return f"{index['t']:05d}/{storage_group(index['c'], is_stim)}/"
 
 
 class UpdatePatternEvent:
@@ -48,12 +61,11 @@ class AcquisitionEvent:
         experiment,
         position: MicroscopePosition,
         channel_id: UUID,
+        index: dict | None = None,
         scheduled_time=0,
         scheduled_time_since_start=0,
         exposure_time_ms=10,
         needs_slm=False,
-        sub_axes=None,
-        t_index=0,
         config_groups: list[ConfigGroup] | None = None,
         devices: list[DeviceProperty] | None = None,
         save_output=True,
@@ -79,15 +91,14 @@ class AcquisitionEvent:
         self.time_since_start = scheduled_time_since_start
         self.complete = False
         self.completed_time = None
-        self.t_index = t_index
+
+        # frame identity from the plan: {"t": timepoint, "p": experiment, "c": channel}
+        self.index: dict = dict(index) if index else {}
 
         # acquisition details
         self.exposure_time_ms = exposure_time_ms
         self.needs_slm = needs_slm
         self.binning = binning
-
-        # sub-axes (determines folder within hdf5_file), e.g. [f"{t:05d}", "channel_GFP"]
-        self.sub_axes = sub_axes
 
         # config group config-preset pairs
         self.config_groups = config_groups
@@ -112,26 +123,17 @@ class AcquisitionEvent:
 
         self.pixel_width_um = None
 
-    def get_rel_path(self, leading=3) -> str:
+    @property
+    def t_index(self) -> int:
+        return int(self.index.get("t", 0))
+
+    def get_rel_path(self) -> str:
         """
         Returns dset path within the hdf5 structure
         """
-
-        dset = ""
-
-        if self.sub_axes is not None:
-            for _ax, val in enumerate(self.sub_axes):
-                if isinstance(val, int):
-                    val = str(val).zfill(leading)
-
-                dset += f"{val}/"
-
-            dset.rstrip("/")
-
-        else:
-            dset = "UNNAMED_DATA"
-
-        return dset
+        if "t" not in self.index or "c" not in self.index:
+            return "UNNAMED_DATA/"
+        return rel_path(self.index, self.needs_slm)
 
     def _fmt_time(self, timestamp) -> str:
         if timestamp is None:
@@ -162,8 +164,7 @@ class AcquisitionEvent:
         attrs["needs_slm"] = self.needs_slm
         attrs["binning"] = self.binning
 
-        if self.sub_axes is not None:
-            attrs["sub_axes"] = [str(a) for a in self.sub_axes]
+        attrs["index"] = json.dumps(self.index)
 
         if self.config_groups is not None:
             for cg in self.config_groups:
@@ -175,14 +176,17 @@ class AcquisitionEvent:
 
         attrs["save_output"] = self.save_output
         attrs["segment"] = self.segment
-        attrs["seg_method"] = self.seg_method
+        # HDF5 attributes cannot hold None
+        attrs["seg_method"] = "" if self.seg_method is None else str(self.seg_method)
         attrs["save_seg"] = self.save_seg
 
         attrs["raw_goes_to_pattern"] = self.raw_goes_to_pattern
         attrs["seg_goes_to_pattern"] = self.seg_goes_to_pattern
         attrs["channel_id"] = str(self.channel_id)
 
-        attrs["pattern_method"] = self.pattern_method
+        attrs["pattern_method"] = (
+            "" if self.pattern_method is None else str(self.pattern_method)
+        )
         attrs["save_pattern"] = self.save_pattern
 
         attrs["pixel_width_um"] = str(self.pixel_width_um)

@@ -24,6 +24,7 @@ from .core import (
     SegmentationProcess,
     SLMBuffer,
 )
+from .core.plan import PLAN_FILENAME, AcquisitionPlan
 from .core.position_mover import PositionMover
 from .core.real_core import RealMicroscopeCore
 from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
@@ -79,7 +80,9 @@ class Controller:
         ]
 
         self.camera_properties = None
+        self.settle_time_s = settle_time_s
 
+        self.plan: AcquisitionPlan | None = None
         self.all_layers = None
         self.t_gcd = 1
 
@@ -149,13 +152,29 @@ class Controller:
 
         self.pattern.initialize_models()
 
-        self.manager.initialize(schedule, pattern_requirements)
+        # the plan is the single description of what is acquired when
+        plan = AcquisitionPlan.from_schedule(schedule, pattern_requirements)
+        self.plan = plan
+        plan_path = plan.to_yaml(out_path / PLAN_FILENAME)
+        logger.info(f"wrote acquisition plan to {plan_path}: {plan}")
+
+        over = plan.over_budget(settle_s=self.settle_time_s)
+        if over:
+            worst_t, worst = max(over, key=lambda item: item[1])
+            logger.warning(
+                f"{len(over)} of {plan.timepoints} timepoints are estimated to take "
+                f"longer than the {plan.interval_s:.1f}s interval (worst: t={worst_t}, "
+                f"{worst:.1f}s with settle time {self.settle_time_s}s); acquisitions "
+                "will run late"
+            )
+
+        self.manager.initialize(plan)
         self.slm_buffer.initialize(
             slm_shape, affine_transform, schedule.experiment_names
         )
         self.microscope.declare_slm()
         self.outbox.base_path = out_path
-        all_layers = self.outbox.initialize(schedule, self.core)
+        all_layers = self.outbox.initialize(plan, self.core)
 
         self.all_layers = all_layers
 

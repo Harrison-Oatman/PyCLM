@@ -50,10 +50,9 @@ def make_event(t_index=0, devices=None):
         EXP.experiment_name,
         MicroscopePosition(0.0, 0.0, 0.0, label="exp.00"),
         EXP.channels["545"].channel_id,
-        t_index=t_index,
+        index={"t": t_index, "p": "exp.00", "c": "545"},
         exposure_time_ms=5,
         devices=devices,
-        sub_axes=[f"{t_index:05d}", "channel_545"],
     )
 
 

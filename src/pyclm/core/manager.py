@@ -35,6 +35,7 @@ from .events import (
     AcquisitionEvent,
     UpdatePatternEvent,
     UpdateStagePositionEvent,
+    storage_group,
 )
 from .experiments import (
     Experiment,
@@ -52,6 +53,7 @@ from .messages import (
     UpdateZPositionMessage,
 )
 from .patterns import AcquiredImageRequest
+from .plan import PLAN_FORMAT, AcquisitionPlan, PlannedEvent
 from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
@@ -147,6 +149,7 @@ class MicroscopeOutbox(DataPassingProcess):
 
         self.open_files = {}  # Map experiment name to open h5py File object
         self.experiments = {}
+        self.plan: AcquisitionPlan | None = None
 
         # frames that could not be written because no dataset was pre-allocated
         self.dropped_frames = 0
@@ -160,16 +163,19 @@ class MicroscopeOutbox(DataPassingProcess):
         finally:
             self.close_files()
 
-    def initialize(self, schedule: ExperimentSchedule, core: MicroscopeCoreInterface):
+    def initialize(self, plan: AcquisitionPlan, core: MicroscopeCoreInterface):
         """
-        Initialize the output files for the experiment schedule.
-        Opens files in SWMR mode and writes metadata.
+        Initialize the output files for the plan.
+        Opens files in SWMR mode and writes metadata, and pre-allocates one
+        dataset per frame the plan will produce.
         """
-
+        self.plan = plan
+        schedule = plan.schedule
         metadata = schedule.as_dict()
+        plan_yaml = plan.yaml_str()
 
         try:
-            for exp_name in schedule.experiment_names:
+            for exp_name in plan.experiments:
                 filepath = self.base_path / f"{exp_name}.hdf5"
                 filepath.parent.mkdir(parents=True, exist_ok=True)
                 if filepath.exists():
@@ -179,105 +185,61 @@ class MicroscopeOutbox(DataPassingProcess):
 
                 f = File(filepath, "w", libver="latest")
 
-                f.attrs["schedule_metadata"] = json.dumps(metadata, default=str)
+                experiment = schedule.experiments[exp_name]
+                self.experiments[exp_name] = experiment
 
-                if exp_name in schedule.experiments:
-                    exp_config = schedule.experiments[exp_name]
-                    f.attrs["experiment_metadata"] = json.dumps(
-                        exp_config.as_dict(), default=str
+                f.attrs["schedule_metadata"] = json.dumps(metadata, default=str)
+                f.attrs["experiment_metadata"] = json.dumps(
+                    experiment.as_dict(), default=str
+                )
+                f.attrs["plan"] = plan_yaml
+                f.attrs["plan_format"] = PLAN_FORMAT
+
+                # Create t_index tracker
+                f.create_dataset("current_t_index", data=np.int32(-1))
+
+                # Store every_t per storage group, plus the experiment's window
+                stim_name = plan.stim_channel(exp_name)
+                every_t_map = {
+                    storage_group(c, c == stim_name): plan.every_t(exp_name, c)
+                    for c in plan.channels(exp_name)
+                }
+                f.attrs["every_t"] = json.dumps(every_t_map)
+                f.attrs["t_delay"] = experiment.t_delay
+                f.attrs["t_stop"] = experiment.t_stop
+                f.attrs["t_count"] = plan.timepoints
+
+                self.open_files[exp_name] = f
+
+            slm_device = core.getSLMDevice()
+            slm_shape = None
+            if slm_device:
+                slm_shape = (
+                    core.getSLMHeight(slm_device),
+                    core.getSLMWidth(slm_device),
+                )
+
+            for ds in plan.expected_datasets():
+                f = self.open_files[ds.experiment]
+                experiment = self.experiments[ds.experiment]
+                shape = get_image_shape(core, ds.config.binning)
+                prefix = f"{ds.t:05d}/{ds.group}"
+
+                self._create_frame_dataset(
+                    f, f"{prefix}/data", shape, np.uint16, ds.config
+                )
+                if experiment.segmentation.save:
+                    self._create_frame_dataset(
+                        f, f"{prefix}/seg", shape, np.uint16, ds.config
+                    )
+                if ds.is_stim and slm_shape is not None:
+                    self._create_frame_dataset(
+                        f, f"{prefix}/dmd", slm_shape, np.uint8, ds.config
                     )
 
-                    # Create t_index tracker
-                    f.create_dataset("current_t_index", data=np.int32(-1))
-
-                    experiment = schedule.experiments[exp_name]
-                    self.experiments[exp_name] = experiment
-                    t_count = schedule.times.count
-
-                    for t in range(t_count):
-                        t_str = f"{t:05d}"
-                        this_t = t - experiment.t_delay
-
-                        if t < experiment.t_delay:
-                            continue
-                        if experiment.t_stop > 0 and this_t >= experiment.t_stop:
-                            continue
-
-                        # Stimulation channel
-                        stim = experiment.stimulation
-                        if stim.exposure > 0 and this_t % stim.every_t == 0:
-                            stim_shape = get_image_shape(core, stim.binning)
-                            dset = f.create_dataset(
-                                f"{t_str}/stim_aq/data",
-                                shape=(0, 0),
-                                maxshape=stim_shape,
-                                dtype=np.uint16,
-                                chunks=True,
-                            )
-                            self._preallocate_attrs(dset, stim)
-                            if experiment.segmentation.save:
-                                dset = f.create_dataset(
-                                    f"{t_str}/stim_aq/seg",
-                                    shape=(0, 0),
-                                    maxshape=stim_shape,
-                                    dtype=np.uint16,
-                                    chunks=True,
-                                )
-                                self._preallocate_attrs(dset, stim)
-                            slm_device = core.getSLMDevice()
-                            if slm_device:
-                                slm_shape = (
-                                    core.getSLMHeight(slm_device),
-                                    core.getSLMWidth(slm_device),
-                                )
-                                dset = f.create_dataset(
-                                    f"{t_str}/stim_aq/dmd",
-                                    shape=(0, 0),
-                                    maxshape=slm_shape,
-                                    dtype=np.uint8,
-                                    chunks=True,
-                                )
-                                self._preallocate_attrs(dset, stim)
-
-                        # Imaging channels
-                        for channel_name, channel in experiment.channels.items():
-                            if this_t % channel.every_t == 0:
-                                channel_shape = get_image_shape(core, channel.binning)
-                                dset = f.create_dataset(
-                                    f"{t_str}/channel_{channel_name}/data",
-                                    shape=(0, 0),
-                                    maxshape=channel_shape,
-                                    dtype=np.uint16,
-                                    chunks=True,
-                                )
-                                self._preallocate_attrs(dset, channel)
-                                if experiment.segmentation.save:
-                                    dset = f.create_dataset(
-                                        f"{t_str}/channel_{channel_name}/seg",
-                                        shape=(0, 0),
-                                        maxshape=channel_shape,
-                                        dtype=np.uint16,
-                                        chunks=True,
-                                    )
-                                    self._preallocate_attrs(dset, channel)
-
-                    # Store every_t per channel
-                    every_t_map = {}
-                    for channel_name, channel in experiment.channels.items():
-                        every_t_map[f"channel_{channel_name}"] = channel.every_t
-                    stim = experiment.stimulation
-                    if stim.exposure > 0:
-                        every_t_map["stim_aq"] = stim.every_t
-                    f.attrs["every_t"] = json.dumps(every_t_map)
-
-                    # Store t_delay
-                    f.attrs["t_delay"] = experiment.t_delay
-                    f.attrs["t_stop"] = experiment.t_stop
-                    f.attrs["t_count"] = t_count
-
-                # Enable SWMR only after all datasets exist
+            # Enable SWMR only after all datasets exist
+            for exp_name, f in self.open_files.items():
                 f.swmr_mode = True
-                self.open_files[exp_name] = f
                 logger.info(f"Initialized HDF5 file for {exp_name} in SWMR mode.")
 
         except Exception as e:
@@ -295,6 +257,12 @@ class MicroscopeOutbox(DataPassingProcess):
                 all_layers.append((filepath, "stim_aq"))
 
         return all_layers
+
+    def _create_frame_dataset(self, f, path, maxshape, dtype, config: ImagingConfig):
+        dset = f.create_dataset(
+            path, shape=(0, 0), maxshape=maxshape, dtype=dtype, chunks=True
+        )
+        self._preallocate_attrs(dset, config)
 
     def close_files(self):
         """Close all open HDF5 files."""
@@ -364,7 +332,7 @@ class MicroscopeOutbox(DataPassingProcess):
         dset.attrs["exposure_time_ms"] = 0.0
         dset.attrs["needs_slm"] = False
         dset.attrs["binning"] = 1
-        dset.attrs["sub_axes"] = [""]
+        dset.attrs["index"] = ""
         dset.attrs["save_output"] = False
         dset.attrs["segment"] = False
         dset.attrs["seg_method"] = ""
@@ -383,42 +351,16 @@ class MicroscopeOutbox(DataPassingProcess):
             dset.attrs[f"devices: {dp.device}-{dp.property}"] = ""
 
     def _timepoint_complete(self, f, t_index: int, exp_name: str) -> bool:
-        t_str = f"{t_index:05d}"
-        experiment = self.experiments[exp_name]
-
-        t_delay = experiment.t_delay
-        t_stop = experiment.t_stop
-
-        if t_index < t_delay:
-            return True
-
-        this_t = t_index - t_delay
-
-        if t_stop > 0 and this_t >= t_stop:
-            return True
-
-        # Stimulation channel
-        stim = experiment.stimulation
-        if stim.exposure > 0 and stim.save:
-            if this_t % stim.every_t == 0:
-                path = f"{t_str}/stim_aq/data"
-                try:
-                    if f[path].shape == (0, 0):
-                        return False
-                except KeyError:
-                    return False
-
-        # Imaging channels
-        for channel_name, channel in experiment.channels.items():
-            if not channel.save:
+        """Whether every saved frame the plan expects at ``t_index`` has been written."""
+        for ds in self.plan.datasets_at(exp_name, t_index):
+            if not ds.save:
                 continue
-            if this_t % channel.every_t == 0:
-                path = f"{t_str}/channel_{channel_name}/data"
-                try:
-                    if f[path].shape == (0, 0):
-                        return False
-                except KeyError:
+            path = f"{ds.t:05d}/{ds.group}/data"
+            try:
+                if f[path].shape == (0, 0):
                     return False
+            except KeyError:
+                return False
 
         return True
 
@@ -619,6 +561,11 @@ class SLMBuffer(DataPassingProcess):
 
 
 class Manager:
+    """
+    Walks the acquisition plan: waits for each timepoint, then turns the plan's
+    events for that timepoint into messages for the other processes.
+    """
+
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         self.stop_event = stop_event
         self.msgout = {
@@ -637,77 +584,20 @@ class Manager:
         self.sleep_interval = 0.01
 
         self.initialized = False
+        self.plan: AcquisitionPlan | None = None
         self.schedule = None
         self.experiments = None
         self.times = None
         self.positions = None
 
-        self.pattern_lcms = None
-        self.pattern_requirements = None
-
-    def initialize(
-        self,
-        schedule: ExperimentSchedule,
-        requirements: dict[str, list[AcquiredImageRequest]],
-    ):
-        self.schedule = schedule
-        self.experiments: dict[str, Experiment] = schedule.experiments
-        self.positions = schedule.positions
-        self.times = schedule.times
-
-        self.pattern_requirements = requirements
-
-        self.pattern_lcms = {}
-        for name in self.experiments:
-            self.pattern_lcms[name] = self.get_pattern_lcm(
-                self.experiments[name], requirements[name]
-            )
+    def initialize(self, plan: AcquisitionPlan):
+        self.plan = plan
+        self.schedule = plan.schedule
+        self.experiments: dict[str, Experiment] = plan.schedule.experiments
+        self.positions = plan.schedule.positions
+        self.times = plan.schedule.times
 
         self.initialized = True
-
-    def get_kwargs(
-        self, experiment: Experiment, channel: ImagingConfig, make_pattern: bool
-    ):
-        kwargs = {
-            "save_output": channel.save,
-            "segmentation_method": experiment.segmentation.method_name,
-            "pattern_method": experiment.pattern.method_name,
-            "binning": channel.binning,
-            "do_segmentation": False,
-            "save_segmentation": False,
-            "raw_goes_to_pattern": False,
-            "segmentation_goes_to_pattern": False,
-        }
-
-        requirements = self.pattern_requirements[experiment.experiment_name]
-        channel_id = channel.channel_id
-
-        if not make_pattern:
-            return kwargs
-
-        value = None
-
-        for air in requirements:
-            air: AcquiredImageRequest
-
-            if channel_id == air.id:
-                value = air
-
-        if value is None:
-            return kwargs
-
-        value: AcquiredImageRequest
-
-        kwargs.update(
-            {
-                "do_segmentation": value.needs_seg,
-                "save_segmentation": experiment.segmentation.save,
-                "raw_goes_to_pattern": value.needs_raw,
-                "segmentation_goes_to_pattern": value.needs_seg,
-            }
-        )
-
-        return kwargs
 
     def handle_message(self, msg: Message):
         match msg.message:
@@ -737,73 +627,83 @@ class Manager:
 
         return handled
 
-    @staticmethod
-    def get_pattern_lcm(
-        experiment: Experiment, requirements: list[AcquiredImageRequest]
-    ):
-        pattern_required_channels = [r.id for r in requirements]
-
-        t_vals = [
-            c.every_t
-            for c in experiment.channels.values()
-            if c.channel_id in pattern_required_channels
-        ]
-
-        stim = experiment.stimulation
-        if stim.channel_id in pattern_required_channels:
-            t_vals.append(stim.every_t)
-
-        t_vals.append(experiment.pattern.every_t)
-
-        return np.lcm.reduce(np.array(t_vals, dtype=int))
-
     def construct_position_event_message(self, position, name):
         self.msgout["microscope"].put(
             UpdatePositionEventMessage(UpdateStagePositionEvent(position, name))
         )
 
-    def send_make_pattern_request(self, this_t, t, experiment_name, time_sec):
-        """
-        Decide whether a pattern is generated at this timepoint and, if so,
-        tell the pattern process to expect the required data.
+    def dispatch(self, ev: PlannedEvent, start_time: float):
+        """Turn one planned event into the message(s) the other processes expect."""
+        name = ev.experiment
+        scheduled_time = start_time + ev.scheduled_offset_s
+        since_start = ev.scheduled_offset_s
 
-        :param this_t: experiment-relative timepoint (t - t_delay); sets the cadence
-        :param t: absolute timepoint; must match AcquisitionEvent.t_index so the
-                  pattern process can pair incoming data with this request
-        :param experiment_name: name of experiment
-        :param time_sec: scheduled time of pattern (used by pattern generation module)
-        :return: whether a pattern is generated at this timepoint
-        """
-        make_pattern = (this_t % self.pattern_lcms[experiment_name]) == 0
+        match ev.kind:
+            case "request_pattern":
+                self.msgout["pattern"].put(
+                    RequestPattern(
+                        ev.t, since_start, name, self.plan.requirements.get(name, [])
+                    )
+                )
 
-        if make_pattern:
-            pattern_request = RequestPattern(
-                t,
-                time_sec,
-                experiment_name,
-                self.pattern_requirements[experiment_name],
-            )
+            case "position":
+                self.construct_position_event_message(self.positions[name], name)
 
-            self.msgout["pattern"].put(pattern_request)
+            case "update_pattern":
+                cfg = self.plan.imaging_config(name, ev.channel)
+                upmsg = UpdatePatternEventMessage(
+                    UpdatePatternEvent(
+                        name, cfg.get_config_groups(), cfg.get_device_properties()
+                    )
+                )
+                self.msgout["slm_buffer"].put(upmsg)
+                self.msgout["microscope"].put(upmsg)
 
-        return make_pattern
+            case "acquire":
+                experiment = self.experiments[name]
+                cfg = self.plan.imaging_config(name, ev.channel)
+                event = AcquisitionEvent(
+                    name,
+                    self.positions[name],
+                    cfg.channel_id,
+                    index=ev.index,
+                    scheduled_time=scheduled_time,
+                    scheduled_time_since_start=since_start,
+                    exposure_time_ms=cfg.exposure,
+                    needs_slm=ev.is_stim,
+                    config_groups=cfg.get_config_groups(),
+                    devices=cfg.get_device_properties(),
+                    save_output=ev.save,
+                    segmentation_method=experiment.segmentation.method_name,
+                    pattern_method=experiment.pattern.method_name,
+                    binning=cfg.binning,
+                    do_segmentation=ev.segment,
+                    save_segmentation=ev.save_seg,
+                    raw_goes_to_pattern=ev.raw_to_pattern,
+                    segmentation_goes_to_pattern=ev.seg_to_pattern,
+                )
+                self.msgout["microscope"].put(AcquisitionEventMessage(event))
+
+            case _:
+                raise ValueError(f"unknown planned event kind {ev.kind!r}")
 
     def process(self):
         assert self.initialized, (
-            "manager must be initialized with an experiment schedule to start"
+            "manager must be initialized with an acquisition plan to start"
         )
 
-        times: TimeCourse = self.times
-        start_time = time() + times.setup
+        plan = self.plan
+        setup = plan.setup_s
+        start_time = time() + setup
 
         # time iter loop
-        for t in range(times.count):
+        for t in range(plan.timepoints):
             # operator-facing progress line (the console log handler only shows warnings)
             print(f"t = {t}: {(time() - start_time) / 60: 0.1f} minutes")
 
             # wait until preparatory phase
             # todo: check if we are behind schedule
-            while (time() - start_time) < (t * times.interval) - times.setup:
+            while (time() - start_time) < plan.time_offset_s(t) - setup:
                 if self.stop_event and self.stop_event.is_set():
                     logger.info("force stopping manager process")
                     return
@@ -811,98 +711,8 @@ class Manager:
                 if not self.drain_inboxes():
                     sleep(self.sleep_interval)
 
-            # iterate through each experiment
-            for i, (name, experiment) in enumerate(self.experiments.items()):
-                scheduled_time = start_time + (t * times.interval) + (i * times.between)
-
-                # account for scheduled delay if applicable
-                t_delay = experiment.t_delay  # 0 unless specified
-                if t < t_delay:
-                    continue
-
-                this_t = t - t_delay
-
-                # check if stop early
-                if experiment.t_stop > 0:
-                    if this_t >= experiment.t_stop:
-                        continue
-
-                # determine and send if new pattern should be generated
-                make_pattern = self.send_make_pattern_request(
-                    this_t, t, name, scheduled_time - start_time
-                )
-
-                # tracks when to send update position message
-                position_passed = False
-
-                """Stimulation Event"""
-                stim = experiment.stimulation
-                if this_t % stim.every_t == 0:
-                    # create update position event if first imaging condition in loop
-                    if not position_passed:
-                        self.construct_position_event_message(
-                            self.positions[name], name
-                        )
-                        position_passed = True
-
-                    if stim.exposure > 0:
-                        # create update pattern and acquisition event
-                        channel_kwargs = self.get_kwargs(experiment, stim, make_pattern)
-                        update_pattern = UpdatePatternEvent(
-                            name, stim.get_config_groups(), stim.get_device_properties()
-                        )
-                        pattern_acquisition = AcquisitionEvent(
-                            name,
-                            self.positions[name],
-                            stim.channel_id,
-                            scheduled_time=scheduled_time,
-                            scheduled_time_since_start=scheduled_time - start_time,
-                            exposure_time_ms=stim.exposure,
-                            needs_slm=True,
-                            config_groups=stim.get_config_groups(),
-                            devices=stim.get_device_properties(),
-                            sub_axes=[f"{t:05d}", "stim_aq"],
-                            t_index=t,
-                            **channel_kwargs,
-                        )
-
-                        upmsg = UpdatePatternEventMessage(update_pattern)
-                        aqmsg = AcquisitionEventMessage(pattern_acquisition)
-
-                        self.msgout["slm_buffer"].put(upmsg)
-                        self.msgout["microscope"].put(upmsg)
-                        self.msgout["microscope"].put(aqmsg)
-
-                """Image Acquisition Events (each channel)"""
-                for channel_name, channel in experiment.channels.items():
-                    if this_t % channel.every_t == 0:
-                        # create update position event if first imaging condition in loop
-                        if not position_passed:
-                            self.construct_position_event_message(
-                                self.positions[name], name
-                            )
-                            position_passed = True
-
-                        # create acquisition event
-                        channel_kwargs = self.get_kwargs(
-                            experiment, channel, make_pattern
-                        )
-                        channel_acquisition = AcquisitionEvent(
-                            name,
-                            self.positions[name],
-                            channel.channel_id,
-                            scheduled_time=scheduled_time,
-                            scheduled_time_since_start=scheduled_time - start_time,
-                            exposure_time_ms=channel.exposure,
-                            config_groups=channel.get_config_groups(),
-                            devices=channel.get_device_properties(),
-                            sub_axes=[f"{t:05d}", f"channel_{channel_name}"],
-                            t_index=t,
-                            **channel_kwargs,
-                        )
-
-                        aqmsg = AcquisitionEventMessage(channel_acquisition)
-                        self.msgout["microscope"].put(aqmsg)
+            for ev in plan.events_at(t):
+                self.dispatch(ev, start_time)
 
         print("DONE")
         logger.info("Manager finished the schedule; sending close to all processes")
