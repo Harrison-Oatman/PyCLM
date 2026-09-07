@@ -11,11 +11,12 @@ import json
 import logging
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
+from queue import Empty
+from threading import Event
 from time import sleep, time
 from typing import Any
 
 import numpy as np
-import tifffile
 from cv2 import warpAffine
 from h5py import File
 
@@ -43,6 +44,7 @@ from .experiments import (
 )
 from .messages import (
     AcquisitionEventMessage,
+    CloseMessage,
     Message,
     StreamCloseMessage,
     UpdatePatternEventMessage,
@@ -55,8 +57,6 @@ from .queues import AllQueues
 logger = logging.getLogger(__name__)
 
 
-from threading import Event
-
 from .base_process import BaseProcess
 
 
@@ -64,8 +64,6 @@ class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="data passing process")
         self.all_queues = aq
-
-        self.message_history = []
 
         # Subclasses should set these or register queues manually
         self.from_manager = None
@@ -90,7 +88,9 @@ class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
     def handle_data_wrapper(self, data):
         """Wrapper to handle data or message in data channel"""
         if isinstance(data, Message):
-            print(self.name, data.message)
+            logger.debug(
+                f"{self.name} received message on data channel: {data.message}"
+            )
             return self.handle_message(data)
 
         assert isinstance(data, GenericData), (
@@ -104,8 +104,6 @@ class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
         pass
 
     def handle_message(self, msg):
-        self.message_history.append(msg)
-
         match msg.message:
             case "close":
                 return True
@@ -139,8 +137,6 @@ class MicroscopeOutbox(DataPassingProcess):
         self.from_manager = aq.manager_to_outbox
         self.data_in = [aq.acquisition_outbox, aq.seg_to_outbox]
 
-        self.manager = aq.outbox_to_manager
-
         self.manager_done = False
         self.stream_count = 0
 
@@ -152,7 +148,17 @@ class MicroscopeOutbox(DataPassingProcess):
         self.open_files = {}  # Map experiment name to open h5py File object
         self.experiments = {}
 
+        # frames that could not be written because no dataset was pre-allocated
+        self.dropped_frames = 0
+
         self.initialize_queues()
+
+    def process(self):
+        """Run the poll loop and close the HDF5 files however the loop exits."""
+        try:
+            super().process()
+        finally:
+            self.close_files()
 
     def initialize(self, schedule: ExperimentSchedule, core: MicroscopeCoreInterface):
         """
@@ -315,7 +321,6 @@ class MicroscopeOutbox(DataPassingProcess):
             self.pattern_queue.put(data)
 
     def handle_message(self, msg):
-        self.message_history.append(msg)
         logger.info(msg)
 
         match msg.message:
@@ -324,8 +329,6 @@ class MicroscopeOutbox(DataPassingProcess):
 
             case "stream_close":
                 self.stream_count += 1
-
-                print("outbox received stream_close")
 
                 # First stream close (Microscope)
                 if self.stream_count == 1:
@@ -436,6 +439,15 @@ class MicroscopeOutbox(DataPassingProcess):
                 f = self.open_files[exp_name]
 
                 if aq_event.save_output:
+                    if (relpath + dset_name) not in f:
+                        self.dropped_frames += 1
+                        logger.error(
+                            f"no pre-allocated dataset {relpath + dset_name} in "
+                            f"{exp_name}.hdf5; frame dropped "
+                            f"({self.dropped_frames} dropped so far)"
+                        )
+                        return
+
                     dset = f[relpath + dset_name]
                     if dset.shape != data.data.shape:
                         dset.resize(data.data.shape)
@@ -480,6 +492,7 @@ class MicroscopeOutbox(DataPassingProcess):
                 logger.warning(f"No open file found for experiment: {exp_name}")
 
         except Exception as e:
+            self.error_count += 1
             logger.error(f"Failed to write data: {e}", exc_info=True)
 
 
@@ -490,8 +503,6 @@ class SLMBuffer(DataPassingProcess):
 
         self.from_manager = aq.manager_to_slm_buffer
         self.data_in = [aq.pattern_to_slm]
-
-        self.manager = aq.slm_buffer_to_manager
 
         self.to_microscope = aq.slm_to_microscope
 
@@ -569,8 +580,8 @@ class SLMBuffer(DataPassingProcess):
             # set the current pattern and id
             self.slm_patterns[experiment_name] = (pattern_id, slm_pattern)
         else:
-            print(
-                f"Warning: Experiment name '{experiment_name}' not found in SLM patterns."
+            logger.warning(
+                f"Experiment name '{experiment_name}' not found in SLM patterns."
             )
 
     def handle_message(self, msg):
@@ -579,22 +590,12 @@ class SLMBuffer(DataPassingProcess):
         :param msg: Message object
         :return: bool indicating whether to close the process
         """
-        self.message_history.append(msg)
-
         match msg.message:
             case "close":
                 self.manager_done = True
 
             case "stream_close":
                 self.pattern_done = True
-
-            case "initialize_slm_queue":
-                # Initialize the SLM buffer with provided parameters
-                shape = msg.shape
-                affine_transform = msg.affine_transform
-                experiment_names = msg.experiment_names
-
-                self.initialize(shape, affine_transform, experiment_names)
 
             case "update_pattern_event":
                 event = msg.event
@@ -630,11 +631,10 @@ class Manager:
 
         self.msgin = {
             "microscope": aq.microscope_to_manager,
-            "outbox": aq.outbox_to_manager,
-            "slm_buffer": aq.slm_buffer_to_manager,
-            "seg": aq.seg_to_manager,
-            "pattern": aq.pattern_to_manager,
         }
+
+        # seconds to sleep between inbox checks while waiting for the next timepoint
+        self.sleep_interval = 0.01
 
         self.initialized = False
         self.schedule = None
@@ -679,8 +679,6 @@ class Manager:
             "segmentation_goes_to_pattern": False,
         }
 
-        print(f"channel {channel}")
-
         requirements = self.pattern_requirements[experiment.experiment_name]
         channel_id = channel.channel_id
 
@@ -691,8 +689,6 @@ class Manager:
 
         for air in requirements:
             air: AcquiredImageRequest
-
-            print(f"air: {air}")
 
             if channel_id == air.id:
                 value = air
@@ -725,6 +721,22 @@ class Manager:
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
+    def drain_inboxes(self) -> bool:
+        """Handle every pending inbound message. Returns True if any was handled."""
+        handled = False
+
+        for inbox in self.msgin.values():
+            while True:
+                try:
+                    msg = inbox.get_nowait()
+                except Empty:
+                    break
+
+                self.handle_message(msg)
+                handled = True
+
+        return handled
+
     @staticmethod
     def get_pattern_lcm(
         experiment: Experiment, requirements: list[AcquiredImageRequest]
@@ -750,22 +762,23 @@ class Manager:
             UpdatePositionEventMessage(UpdateStagePositionEvent(position, name))
         )
 
-    def send_make_pattern_request(self, loop_iter, experiment_name, time_sec):
+    def send_make_pattern_request(self, this_t, t, experiment_name, time_sec):
         """
+        Decide whether a pattern is generated at this timepoint and, if so,
+        tell the pattern process to expect the required data.
 
-        :param loop_iter: current loop
+        :param this_t: experiment-relative timepoint (t - t_delay); sets the cadence
+        :param t: absolute timepoint; must match AcquisitionEvent.t_index so the
+                  pattern process can pair incoming data with this request
         :param experiment_name: name of experiment
         :param time_sec: scheduled time of pattern (used by pattern generation module)
-        :return:
+        :return: whether a pattern is generated at this timepoint
         """
-        print(experiment_name, self.pattern_lcms[experiment_name])
-        make_pattern = (loop_iter % self.pattern_lcms[experiment_name]) == 0
-
-        print(f"pattern_requirements: {self.pattern_requirements[experiment_name]}")
+        make_pattern = (this_t % self.pattern_lcms[experiment_name]) == 0
 
         if make_pattern:
             pattern_request = RequestPattern(
-                loop_iter,
+                t,
                 time_sec,
                 experiment_name,
                 self.pattern_requirements[experiment_name],
@@ -785,19 +798,18 @@ class Manager:
 
         # time iter loop
         for t in range(times.count):
+            # operator-facing progress line (the console log handler only shows warnings)
             print(f"t = {t}: {(time() - start_time) / 60: 0.1f} minutes")
 
             # wait until preparatory phase
             # todo: check if we are behind schedule
             while (time() - start_time) < (t * times.interval) - times.setup:
-                for _source, inbox in self.msgin.items():
-                    while not inbox.empty():
-                        msg = inbox.get()
-                        self.handle_message(msg)
-
                 if self.stop_event and self.stop_event.is_set():
-                    print("force stopping manager process")
+                    logger.info("force stopping manager process")
                     return
+
+                if not self.drain_inboxes():
+                    sleep(self.sleep_interval)
 
             # iterate through each experiment
             for i, (name, experiment) in enumerate(self.experiments.items()):
@@ -817,7 +829,7 @@ class Manager:
 
                 # determine and send if new pattern should be generated
                 make_pattern = self.send_make_pattern_request(
-                    this_t, name, scheduled_time - start_time
+                    this_t, t, name, scheduled_time - start_time
                 )
 
                 # tracks when to send update position message
@@ -893,8 +905,7 @@ class Manager:
                         self.msgout["microscope"].put(aqmsg)
 
         print("DONE")
+        logger.info("Manager finished the schedule; sending close to all processes")
 
         for box in self.msgout:
-            msg = Message()
-            msg.message = "close"
-            self.msgout[box].put(msg)
+            self.msgout[box].put(CloseMessage())

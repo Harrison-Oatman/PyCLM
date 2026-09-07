@@ -60,6 +60,13 @@ slm_shape_w = 912
 # This is a 2x3 matrix [[a, b, tx], [c, d, ty]].
 # Obtain it by running the MicroManager Projector plugin calibration.
 affine_transform = [[-0.29, -0.002, 939.9], [0.004, -0.579, 1505.2]]
+
+# Optional. MicroManager focus (Z) device selected at startup. Default "ZDrive".
+focus_device = "ZDrive"
+
+# Optional. Seconds to wait after the hardware reports ready, before each snap.
+# Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
+settle_time_seconds = 1.0
 ```
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.

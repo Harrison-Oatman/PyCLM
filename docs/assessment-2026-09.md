@@ -1,5 +1,10 @@
 # PyCLM core architecture assessment — September 2026
 
+> **Status.** Plan approved. Stage 0 (hygiene) implemented on branch
+> `Stage0-hygiene` on 2026-09-06; see [known-issues.md](known-issues.md) for
+> what each fix covered and what remains. Stages 1–5 are pending; the
+> useq-schema spike is the next step.
+
 Scope: the core modules (Manager, MicroscopeProcess, MicroscopeOutbox,
 SLMBuffer, SegmentationProcess, PatternProcess) and the code that feeds them
 (`controller.py`, `directories.py`, `core/events.py`, `core/datatypes.py`,

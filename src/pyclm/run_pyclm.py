@@ -1,26 +1,49 @@
+import json
 import logging
 import os
 import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from threading import Thread
-import json
 
 import numpy as np
 from toml import load
-
-logger = logging.getLogger(__name__)
 
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .core.position_mover import PositionMover
 from .directories import dry_schedule_from_directory, schedule_from_directory
 
+logger = logging.getLogger(__name__)
+
+# marks the handlers installed by set_logging so a later call can replace them
+_PYCLM_HANDLER_FLAG = "_pyclm_run_handler"
+
+DEFAULT_FOCUS_DEVICE = "ZDrive"
+DEFAULT_SETTLE_TIME_S = 1.0
+
+
+def remove_pyclm_log_handlers():
+    """Detach and close the handlers installed by a previous ``set_logging`` call."""
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if getattr(handler, _PYCLM_HANDLER_FLAG, False):
+            root.removeHandler(handler)
+            handler.close()
+
 
 def set_logging(experiment_directory: Path):
+    """
+    Route logging for one run: WARNING and above to the console, INFO and above
+    to ``<experiment_directory>/log.log``.
+
+    Handlers from a previous call are removed first, so successive runs in the
+    same interpreter each log to their own experiment directory.
+    """
+    remove_pyclm_log_handlers()
+
     console_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(experiment_directory / "log.log")
+    file_handler = logging.FileHandler(Path(experiment_directory) / "log.log")
 
     # Set levels for handlers
     console_handler.setLevel(logging.WARNING)
@@ -36,7 +59,13 @@ def set_logging(experiment_directory: Path):
     console_handler.setFormatter(console_format)
     file_handler.setFormatter(file_format)
 
-    logging.basicConfig(handlers=[console_handler, file_handler])
+    root = logging.getLogger()
+    for handler in (console_handler, file_handler):
+        setattr(handler, _PYCLM_HANDLER_FLAG, True)
+        root.addHandler(handler)
+
+    if root.level > logging.INFO:
+        root.setLevel(logging.INFO)
 
 
 def launch_gui_process(
@@ -112,6 +141,14 @@ def run_pyclm(
     config = load(config_path)
     logger.info(f"loaded config from {config_path}")
 
+    # hardware timing / device options with backwards-compatible defaults
+    if "focus_device" not in config:
+        logger.info(
+            f"pyclm_config.toml has no 'focus_device'; using '{DEFAULT_FOCUS_DEVICE}'"
+        )
+    focus_device = config.get("focus_device", DEFAULT_FOCUS_DEVICE)
+    settle_time_s = float(config.get("settle_time_seconds", DEFAULT_SETTLE_TIME_S))
+
     base_path = experiment_directory
 
     # For dry runs without an explicit image source, discover the schedule and
@@ -126,6 +163,7 @@ def run_pyclm(
         dry,
         position_mover=position_mover,
         dry_image_source=dry_image_source,
+        settle_time_s=settle_time_s,
     )
 
     # register any custom methods
@@ -140,7 +178,9 @@ def run_pyclm(
     core = c.core
     core.describe()
 
-    core.setFocusDevice("ZDrive")
+    if focus_device:
+        core.setFocusDevice(focus_device)
+        logger.info(f"focus device set to '{focus_device}'")
 
     print("---listing available config groups---")
     for group in core.getAvailableConfigGroups():
@@ -157,7 +197,7 @@ def run_pyclm(
 
     all_layers_output = {
         "t": t_gcd,
-        "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers]
+        "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers],
     }
 
     with open(f"{base_path}/all_layers.txt", "w") as file:

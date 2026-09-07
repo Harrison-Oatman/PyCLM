@@ -30,8 +30,6 @@ class CirclePattern(PatternMethod):
 
         xx, yy = self.get_um_meshgrid()
 
-        print(h, w)
-
         return (((xx - center_x) ** 2 + (yy - center_y) ** 2) < (self.rad**2)).astype(
             np.float16
         )

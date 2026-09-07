@@ -1,31 +1,41 @@
 import logging
+from queue import Empty
 from threading import Event
 from time import sleep, time
 
 import numpy as np
-from pymmcore_plus import CMMCorePlus
 
+from .base_process import BaseProcess
 from .core_interface import MicroscopeCoreInterface
 from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
-from .experiments import ConfigGroup, DeviceProperty, MicroscopePosition
-from .messages import UpdateZPositionMessage
+from .experiments import ConfigGroup, DeviceProperty
+from .messages import Message, StreamCloseMessage, UpdateZPositionMessage
 from .position_mover import BasicPositionMover, PositionMover
 from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
 
 
-from .base_process import BaseProcess
-
-
 class MicroscopeProcess(BaseProcess):
+    """
+    Executes acquisition, stage and SLM events against a MicroscopeCoreInterface.
+
+    An error while handling one message is logged and counted, and the process
+    moves on to the next message, so a single failed event does not end the
+    experiment. After ``max_consecutive_errors`` failures in a row the error is
+    re-raised, which makes the Controller abort the run.
+    """
+
     def __init__(
         self,
         core: MicroscopeCoreInterface,
         aq: AllQueues,
         position_mover: PositionMover | None = None,
         stop_event: Event | None = None,
+        settle_time_s: float = 1.0,
+        slm_await_s: float = 5.0,
+        max_consecutive_errors: int = 10,
     ):
         super().__init__(stop_event, name="microscope")
         self.core = core
@@ -37,6 +47,16 @@ class MicroscopeProcess(BaseProcess):
         self.manager = aq.microscope_to_manager  # send messages to manager
         self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
         self.slm_queue = aq.slm_to_microscope  # receives SLM updates
+
+        # seconds to wait after waitForSystem() before snapping
+        self.settle_time_s = settle_time_s
+        # seconds to wait for the SLM buffer to answer an update_pattern_event
+        self.slm_await_s = slm_await_s
+        self.max_consecutive_errors = max_consecutive_errors
+        self.consecutive_errors = 0
+
+        # how long inbox.get() blocks before the stop event is re-checked
+        self.poll_interval = 0.05
 
         self.slm_initialized = False
         self.slm_device = None
@@ -70,7 +90,7 @@ class MicroscopeProcess(BaseProcess):
 
         self.slm_initialized = True
 
-    def process(self, event_await_s=0, slm_await_s=5):
+    def process(self, event_await_s=0, slm_await_s=None):
         logger.debug(f"started MicroscopeProcess on {self.core}")
         self.start = time()
 
@@ -78,50 +98,70 @@ class MicroscopeProcess(BaseProcess):
 
         while True:
             if self.stop_event and self.stop_event.is_set():
-                print("force stopping microscope process")
+                logger.info("force stopping microscope process")
                 break
 
-            if self.inbox.empty():
-                # check for timeout
-                if (event_await_s != 0) & (time() - event_await_start > event_await_s):
+            try:
+                msg = self.inbox.get(timeout=self.poll_interval)
+            except Empty:
+                if (event_await_s != 0) and (
+                    time() - event_await_start > event_await_s
+                ):
                     raise TimeoutError(
                         f"No events in queue for {time() - event_await_start: .3f}s"
-                    )
-
-                # Sleep briefly to be nice
-                sleep(self.sleep_interval)
+                    ) from None
                 continue
 
-            msg = self.inbox.get()
-
-            match msg.message:
-                case "update_pattern_event":
-                    self.handle_update_pattern_event(msg.event, slm_await_s)
-
-                case "acquisition_event":
-                    self.handle_acquisition_event(msg.event)
-
-                case "update_position_event":
-                    self.handle_update_position_event(msg.event)
-
-                case "close":
-                    # Send stream close to outbox
-                    from .messages import StreamCloseMessage
-
-                    msg = StreamCloseMessage()
-                    self.outbox.put(msg)
+            try:
+                should_stop = self.handle_message(msg, slm_await_s)
+            except Exception:
+                self.error_count += 1
+                self.consecutive_errors += 1
+                logger.error(
+                    f"Error handling {msg} in microscope process "
+                    f"({self.consecutive_errors} consecutive, {self.error_count} total)",
+                    exc_info=True,
+                )
+                if self.consecutive_errors >= self.max_consecutive_errors:
+                    logger.critical(
+                        f"{self.consecutive_errors} consecutive microscope errors; "
+                        "aborting run"
+                    )
+                    raise
+            else:
+                self.consecutive_errors = 0
+                if should_stop:
                     return 0
 
-                case _:
-                    raise NotImplementedError(f"Unknown message type: {msg.message}")
-
             event_await_start = time()
+
+    def handle_message(self, msg: Message, slm_await_s: float | None = None) -> bool:
+        """Dispatch one message from the manager. Returns True when the process should exit."""
+        match msg.message:
+            case "update_pattern_event":
+                self.handle_update_pattern_event(msg.event, slm_await_s)
+
+            case "acquisition_event":
+                self.handle_acquisition_event(msg.event)
+
+            case "update_position_event":
+                self.handle_update_position_event(msg.event)
+
+            case "close":
+                # Send stream close to outbox
+                self.outbox.put(StreamCloseMessage())
+                return True
+
+            case _:
+                raise NotImplementedError(f"Unknown message type: {msg.message}")
+
+        return False
 
     def handle_config_update(self, config_groups: list[ConfigGroup]):
         if config_groups is None:
             return 0
 
-        logger.info(f"setting config groups:")
+        logger.info("setting config groups:")
 
         for group, config in config_groups:
             self.core.setConfig(group, config)
@@ -134,7 +174,7 @@ class MicroscopeProcess(BaseProcess):
         if devices is None:
             return 0
 
-        logger.info(f"setting device properties:")
+        logger.info("setting device properties:")
 
         for label, name, value, t in devices:
             t_func = {
@@ -156,7 +196,7 @@ class MicroscopeProcess(BaseProcess):
 
         try:
             allowed = core.getAllowedPropertyValues(camera, "Binning")
-        except:
+        except Exception:
             return None
 
         binning_str = f"{binning}x{binning}"
@@ -188,20 +228,62 @@ class MicroscopeProcess(BaseProcess):
                     UpdateZPositionMessage(z_new_position, up_event.experiment_name)
                 )
 
-    def handle_update_pattern_event(self, up_event: UpdatePatternEvent, slm_await_s):
+    def _await_slm_pattern(self, event_id, timeout_s: float) -> EventSLMPattern | None:
+        """
+        Wait for the SLM buffer's reply to ``event_id``.
+
+        Replies for other events (left over from an earlier timeout) are
+        discarded. Returns None if no matching reply arrives within ``timeout_s``.
+        """
+        deadline = time() + timeout_s
+
+        while True:
+            remaining = deadline - time()
+            if remaining <= 0:
+                return None
+
+            try:
+                pattern_data = self.slm_queue.get(True, remaining)
+            except Empty:
+                return None
+
+            if not isinstance(pattern_data, EventSLMPattern):
+                logger.warning(
+                    f"discarding unexpected item on slm queue: {type(pattern_data)}"
+                )
+                continue
+
+            if pattern_data.event_id != event_id:
+                logger.warning(
+                    f"discarding stale SLM pattern for event {pattern_data.event_id}"
+                )
+                continue
+
+            return pattern_data
+
+    def handle_update_pattern_event(
+        self, up_event: UpdatePatternEvent, slm_await_s: float | None = None
+    ):
+        if slm_await_s is None:
+            slm_await_s = self.slm_await_s
+
         event_id = up_event.id
         logger.debug(f"handling update pattern event {event_id}")
 
-        assert self.slm_initialized, (
-            "slm not declared to microscope process, run declare_slm first"
-        )
+        if not self.slm_initialized:
+            raise RuntimeError(
+                "slm not declared to microscope process, run declare_slm first"
+            )
 
-        pattern_data = self.slm_queue.get(True, slm_await_s)
+        pattern_data = self._await_slm_pattern(event_id, slm_await_s)
 
-        assert isinstance(pattern_data, EventSLMPattern), (
-            f"received pattern data of unknown type: {type(pattern_data)}"
-        )
-        assert pattern_data.event_id == event_id, f"event mismatch"
+        if pattern_data is None:
+            logger.warning(
+                f"experiment {up_event.experiment_name}: SLM buffer did not answer "
+                f"within {slm_await_s}s; keeping the current pattern "
+                f"(id {self.current_pattern_id})"
+            )
+            return 0
 
         pattern = pattern_data.pattern
 
@@ -240,7 +322,8 @@ class MicroscopeProcess(BaseProcess):
         self.core.waitForSystem()
         logger.debug(f"took {time() - wait_time: .3f}s")
 
-        sleep(1.0)
+        if self.settle_time_s > 0:
+            sleep(self.settle_time_s)
 
         logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
         image = self.snap()

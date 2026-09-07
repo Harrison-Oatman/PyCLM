@@ -1,8 +1,8 @@
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, NamedTuple, Union
-from uuid import UUID, uuid4
+from typing import NamedTuple
+from uuid import UUID
 
 import numpy as np
 from h5py import File
@@ -80,8 +80,6 @@ class DataDock:
             for img in self.data[channel]:
                 if self.data[channel][img] is None:
                     awaiting.append((channel, img))
-
-        print(awaiting)
 
         return awaiting
 
@@ -245,13 +243,15 @@ class PatternMethod:
         raise NotImplementedError
 
     def update_binning(self, binning: int):
+        binning = int(binning)
         binning_rescale = binning / self.binning
 
         self.pixel_size_um = self.pixel_size_um * binning_rescale
-        self.pattern_shape = (
-            self.pattern_shape[0] // binning_rescale,
-            self.pattern_shape[1] // binning_rescale,
-        )
+
+        # recover the unbinned shape, then rebin, keeping the shape integral
+        h_unbinned = round(self.pattern_shape[0] * self.binning)
+        w_unbinned = round(self.pattern_shape[1] * self.binning)
+        self.pattern_shape = (h_unbinned // binning, w_unbinned // binning)
 
         logger.info(
             f"model {self.name} updated pixel size (um) to {self.pixel_size_um}"
@@ -266,17 +266,20 @@ class PatternMethodReturnsSLM(PatternMethod):
 
 
 class PatternReview(PatternMethodReturnsSLM):
+    """
+    Replays the DMD patterns recorded in an earlier experiment's HDF5 file,
+    one per call to ``generate``.
+    """
+
     name = "pattern_review"
 
     def __init__(
         self,
-        experiment_name,
-        camera_properties,
         h5fp: str | Path | None = None,
         channel="545",
         **kwargs,
     ):
-        super().__init__(experiment_name, camera_properties)
+        super().__init__(**kwargs)
 
         if h5fp is None:
             raise ValueError(
@@ -294,7 +297,7 @@ class PatternReview(PatternMethodReturnsSLM):
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
         return []
 
-    def generate(self, data_dock: DataDock) -> np.ndarray:
+    def generate(self, context) -> np.ndarray:
         with File(str(self.fp), "r") as f:
             while len(self.keys) > 0:
                 key = self.keys.pop(0)
@@ -303,11 +306,3 @@ class PatternReview(PatternMethodReturnsSLM):
                     return np.array(f[key]["stim_aq"]["dmd"])
 
         return np.array([])
-
-
-if __name__ == "__main__":
-    print(type(PatternMethod))
-    air = AcquiredImageRequest(uuid4(), True, False)
-    print(air)
-
-# todo: handle raw and segmentation input

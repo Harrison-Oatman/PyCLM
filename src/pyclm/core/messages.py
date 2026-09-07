@@ -5,9 +5,7 @@ These messages are allowed to contain small bits of information, but
 should not pass numpy arrays (see datatypes.py)
 """
 
-from abc import ABC
-
-from .events import *
+from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
 
 
 class Message:
@@ -16,6 +14,12 @@ class Message:
 
     def __repr__(self):
         return f"message: {self.message}"
+
+
+class CloseMessage(Message):
+    """Sent by the manager to every process once the schedule is complete."""
+
+    message = "close"
 
 
 class AcquisitionEventMessage(Message):

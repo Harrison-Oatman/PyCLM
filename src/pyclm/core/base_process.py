@@ -1,7 +1,6 @@
 import logging
 from collections.abc import Callable
-from multiprocessing import Queue
-from queue import Empty
+from queue import Empty, Queue
 from threading import Event
 from time import sleep
 from typing import Any, NamedTuple
@@ -11,13 +10,16 @@ logger = logging.getLogger(__name__)
 
 class QueueHandler(NamedTuple):
     queue: Queue
-    handler: Callable[[Any], None]
+    handler: Callable[[Any], bool | None]
 
 
 class BaseProcess:
     """
     Base class for processes that poll queues.
     Eliminates busy waiting by sleeping when all queues are empty.
+
+    An exception raised by a handler is logged with its traceback and counted
+    in ``error_count``; the process keeps running.
     """
 
     def __init__(self, stop_event: Event | None = None, name: str = "process"):
@@ -25,11 +27,12 @@ class BaseProcess:
         self.name = name
         self.queues: list[QueueHandler] = []
         self.sleep_interval = 0.001
+        self.error_count = 0
 
     def register_queue(self, queue: Queue, handler: Callable[[Any], bool | None]):
         """
         Register a queue to be polled.
-        :param queue: The multiprocessing Queue to poll.
+        :param queue: The queue to poll.
         :param handler: A callable that takes the item from the queue.
                         It can optionally return True to signal the process loop to break (stop).
         """
@@ -50,28 +53,27 @@ class BaseProcess:
             did_work = False
 
             for q_handler in self.queues:
-                queue = q_handler.queue
-                handler = q_handler.handler
+                try:
+                    item = q_handler.queue.get_nowait()
+                except Empty:
+                    continue
 
-                if not queue.empty():
-                    try:
-                        item = queue.get_nowait()
+                did_work = True
 
-                        should_stop = handler(item)
-                        if should_stop:
-                            logger.info(
-                                f"{self.name} received stop signal from handler"
-                            )
-                            return
+                try:
+                    should_stop = q_handler.handler(item)
+                except Exception:
+                    self.error_count += 1
+                    logger.error(
+                        f"Error handling item in {self.name} "
+                        f"({self.error_count} total)",
+                        exc_info=True,
+                    )
+                    continue
 
-                        did_work = True
-                    except Empty:
-                        # Race condition handling: empty() said False but get_nowait() raised Empty
-                        pass
-                    except Exception as e:
-                        logger.error(
-                            f"Error handling item in {self.name}: {e}", exc_info=True
-                        )
+                if should_stop:
+                    logger.info(f"{self.name} received stop signal from handler")
+                    return
 
             # If no queues had items, sleep briefly to avoid 100% CPU
             if not did_work:

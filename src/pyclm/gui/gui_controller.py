@@ -148,7 +148,11 @@ def _upsample_to_absolute(
 
 class LiveHDF5Layer:
     def __init__(
-        self, viewer: napari.Viewer, spec: LayerSpec, at: np.ndarray | None = None, every_t: int = 1,
+        self,
+        viewer: napari.Viewer,
+        spec: LayerSpec,
+        at: np.ndarray | None = None,
+        every_t: int = 1,
     ):
         self.viewer = viewer
         self.spec = spec
@@ -237,7 +241,11 @@ class LiveHDF5Layer:
 
         self._last_frame = frames[-1]
         stack = _upsample_to_absolute(
-            frames, acquired_at, np.arange(0, current_t + 1, self.every_t), self.frame_shape, hold=self._hold
+            frames,
+            acquired_at,
+            np.arange(0, current_t + 1, self.every_t),
+            self.frame_shape,
+            hold=self._hold,
         )
         self._stack = stack
         return stack
@@ -349,9 +357,13 @@ class LiveHDF5Layer:
 
 
 class HDF5LayerViewerApp:
-    def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None, every_t: int = 1):
+    def __init__(
+        self, specs: Sequence[LayerSpec], at: np.ndarray | None = None, every_t: int = 1
+    ):
         self.viewer = napari.Viewer()
-        self.layers = [LiveHDF5Layer(self.viewer, s, at=at, every_t=every_t) for s in specs[::-1]]
+        self.layers = [
+            LiveHDF5Layer(self.viewer, s, at=at, every_t=every_t) for s in specs[::-1]
+        ]
         self.every_t = every_t
 
         self._poll_timer = QtCore.QTimer()
@@ -432,7 +444,6 @@ def _parse_src(s: str) -> tuple[str, str]:
 
 
 def _parse_all_layers(s: Path) -> tuple[list[tuple[str, str]], int]:
-
     with open(s) as file:
         all_layers_json = json.load(file)
 
@@ -497,7 +508,9 @@ def main(argv: list[str] | None = None) -> int:
         required=False,
         help='Repeatable: "file.hdf5:channel_638"',
     )
-    p.add_argument("--every_t", default=0, type=int, help="which multiple of frames to show")
+    p.add_argument(
+        "--every_t", default=0, type=int, help="which multiple of frames to show"
+    )
     p.add_argument("--config", help="path to pyclm_config.toml file", default=None)
     args = p.parse_args(argv)
     experiment_dir = Path(args.experiment)
@@ -510,9 +523,13 @@ def main(argv: list[str] | None = None) -> int:
 
         layers, every_t = _parse_all_layers(all_layers_path)
 
-        app = launch_hdf5_layer_viewer(layers, experiment_dir=experiment_dir, at=at, every_t=every_t)
+        app = launch_hdf5_layer_viewer(
+            layers, experiment_dir=experiment_dir, at=at, every_t=every_t
+        )
     else:
-        app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at, every_t=args.every_t)
+        app = launch_hdf5_layer_viewer(
+            args.src, experiment_dir=experiment_dir, at=at, every_t=args.every_t
+        )
     app.run()
     return 0
 

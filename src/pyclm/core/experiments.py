@@ -2,9 +2,11 @@
 Defines the Experiment class and related data structures for managing imaging experiments.
 """
 
+import logging
 from collections import namedtuple
-from typing import Optional
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
@@ -109,7 +111,7 @@ class MethodBasedConfig:
         self.save = save_output
         self.every_t = every_t
 
-        print(f"method kwargs: {kwargs}")
+        logger.debug(f"method {method_name} kwargs: {kwargs}")
 
         self.kwargs = kwargs
 
@@ -334,7 +336,3 @@ def get_device_properties(toml_dict, key):
         device_properties.append(DeviceProperty(dev, prop, v, t))
 
     return device_properties
-
-
-# todo: generate positions from micromanager output
-# todo: make grid-based acquisition

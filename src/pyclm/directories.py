@@ -1,4 +1,5 @@
 import json
+import logging
 from copy import deepcopy
 from pathlib import Path
 from xml.etree import ElementTree
@@ -19,6 +20,8 @@ from .core.experiments import (
     get_device_properties,
 )
 from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
+
+logger = logging.getLogger(__name__)
 
 
 def experiment_from_toml(toml_path, name="SampleExperiment"):
@@ -107,8 +110,8 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         get_device_properties(toml_data["stimulation"], "device_properties")
     )
 
-    # make segmentation config
-    segmentation = toml_data.get("segmentation", None)
+    # make segmentation config (copy so the parsed toml is left intact)
+    segmentation = dict(toml_data.get("segmentation") or {})
 
     no_seg = False
 
@@ -126,8 +129,8 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     if no_seg:
         segmentation_config = SegmentationConfig("none")
 
-    # make pattern config
-    pattern = toml_data["pattern"]
+    # make pattern config (copy so the parsed toml is left intact)
+    pattern = dict(toml_data["pattern"])
     method = pattern.pop("method")
     pattern_config = PatternConfig(method, **pattern)
 
@@ -274,7 +277,10 @@ def schedule_from_directory(experiment_dir: Path):
         experiment_path = tomls.get(exp_stem)
 
         if experiment_path is None:
-            print(f"could not find {exp_stem} in {list(tomls.keys())}")
+            logger.warning(
+                f"position '{name}': no experiment toml named '{exp_stem}' in "
+                f"{sorted(tomls)}; position skipped"
+            )
             continue
 
         positions[name] = position

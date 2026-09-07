@@ -5,7 +5,7 @@ from typing import ClassVar
 from .base_process import BaseProcess
 from .datatypes import AcquisitionData, SegmentationData
 from .experiments import Experiment
-from .messages import Message
+from .messages import Message, StreamCloseMessage
 from .queues import AllQueues
 from .segmentation import SegmentationMethod
 from .segmentation.cellpose_segmentation import (
@@ -13,9 +13,11 @@ from .segmentation.cellpose_segmentation import (
     EmbryoSegmentationMethod,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class SegmentationProcess(BaseProcess):
-    known_models: ClassVar = {
+    default_models: ClassVar[dict[str, type[SegmentationMethod]]] = {
         "cellpose": CellposeSegmentationMethod,
         "embryo_resizing": EmbryoSegmentationMethod,
     }
@@ -23,8 +25,12 @@ class SegmentationProcess(BaseProcess):
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="segmentation")
 
+        # per-instance copy so registrations do not leak between controllers
+        self.known_models: dict[str, type[SegmentationMethod]] = dict(
+            self.default_models
+        )
+
         self.inbox = aq.manager_to_seg
-        self.manager = aq.seg_to_manager
 
         self.from_raw = aq.outbox_to_seg
         self.to_outbox = aq.seg_to_outbox
@@ -54,7 +60,7 @@ class SegmentationProcess(BaseProcess):
             model_name = name
 
         if model_name in self.known_models:
-            logging.warning(f"overwriting known model {model_name}")
+            logger.warning(f"overwriting known model {model_name}")
 
         self.known_models[model_name] = method
 
@@ -90,11 +96,11 @@ class SegmentationProcess(BaseProcess):
                 preexisting_resource = accommodated_resource_request.request_id
 
         if preexisting_resource:
-            print("using existing resource")
+            logger.info("using existing shared segmentation resource")
             model.provide_resource(self.shared_resources[preexisting_resource])
 
         else:
-            print("creating new resource")
+            logger.info("creating new shared segmentation resource")
             # initialize the resource
             resource_class = request.resource
             kwargs = request.init_kwargs
@@ -113,9 +119,6 @@ class SegmentationProcess(BaseProcess):
     def run_model(self, experiment_name, aq_data: AcquisitionData) -> SegmentationData:
         model = self.models.get(experiment_name, None)
 
-        # print(self.models)
-        # print(self.models[experiment_name])
-
         assert isinstance(model, SegmentationMethod), (
             f"self.models[{experiment_name}] is not a SegmentationModel"
         )
@@ -132,7 +135,7 @@ class SegmentationProcess(BaseProcess):
         event = aq_data.event
         name = event.experiment_name
 
-        print(f"segmenting {name}: t = {event.t_index}")
+        logger.debug(f"segmenting {name}: t = {event.t_index}")
 
         # pass data to pattern process for pattern gen
         seg_data = self.run_model(name, aq_data)
@@ -150,10 +153,9 @@ class SegmentationProcess(BaseProcess):
                 return False
 
             case "stream_close":
-                logging.info(
+                logger.info(
                     "segmentation process received stream close from outbox. Sending to outbox and pattern"
                 )
-                from .messages import StreamCloseMessage
 
                 close_msg = StreamCloseMessage()
                 self.to_pattern.put(close_msg)
@@ -168,7 +170,7 @@ class SegmentationProcess(BaseProcess):
     def handle_from_raw(self, data):
         if isinstance(data, Message):
             if self.handle_message(data):
-                print("segmentation process closing")
+                logger.info("segmentation process closing")
                 return True
         else:
             assert isinstance(data, AcquisitionData)

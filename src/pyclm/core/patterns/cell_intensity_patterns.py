@@ -119,8 +119,6 @@ class CenteredImageModel(NucleusControlMethod):
             padded_img * (self.max_intensity - self.min_intensity)
         ) + self.min_intensity
 
-        print(padded_img.shape)
-
         self.target_image = padded_img
 
     def get_target_intensity(self, prop):

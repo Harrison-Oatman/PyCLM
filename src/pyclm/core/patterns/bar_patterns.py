@@ -19,7 +19,6 @@ class BarPatternBase(PatternMethod):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print(f"Initializing {self.__class__.__name__}")
 
 
 class StationaryBarPattern(BarPatternBase):
@@ -124,8 +123,6 @@ class SawToothMethod(PatternMethod):
             val = 1 - val
 
         pattern_out = (is_on * val).astype(np.float16)
-
-        print(np.min(pattern_out), np.max(pattern_out))
 
         return pattern_out
 

@@ -1,19 +1,16 @@
 import logging
-import traceback
 import math
+import traceback
 from concurrent.futures import (
     ALL_COMPLETED,
     FIRST_COMPLETED,
     ThreadPoolExecutor,
-    as_completed,
     wait,
 )
 from pathlib import Path
-from threading import Event, active_count
-from time import sleep
+from threading import Event
 
 import numpy as np
-from pymmcore_plus import CMMCorePlus
 
 from .core import (
     ROI,
@@ -41,6 +38,7 @@ class Controller:
         dry=False,
         position_mover: PositionMover | None = None,
         dry_image_source: Path | None = None,
+        settle_time_s: float = 1.0,
     ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
@@ -61,6 +59,7 @@ class Controller:
             aq=self.all_queues,
             position_mover=position_mover,
             stop_event=self.stop_event,
+            settle_time_s=settle_time_s,
         )
         self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
         self.outbox = MicroscopeOutbox(aq=self.all_queues, stop_event=self.stop_event)
@@ -84,25 +83,6 @@ class Controller:
         self.all_layers = None
         self.t_gcd = 1
 
-    def set_binning(self, binning: int):
-        core = self.core
-        camera = self.core.getCameraDevice()
-
-        try:
-            allowed = core.getAllowedPropertyValues(camera, "Binning")
-        except:
-            return None
-
-        binning_str = f"{binning}x{binning}"
-
-        if binning_str in allowed:
-            core.setProperty(camera, "Binning", binning_str)
-
-        else:
-            logger.warning(
-                f"attempted set binning {binning_str}, allowed binnings {allowed}"
-            )
-
     def register_pattern_method(self, name: str, method: type):
         self.pattern.register_method(method, name)
 
@@ -116,10 +96,23 @@ class Controller:
         affine_transform: np.ndarray,
         out_path: Path,
     ):
+        # refuse to run before any models are loaded if output files already exist
+        out_path = Path(out_path)
+        existing = [
+            out_path / f"{name}.hdf5"
+            for name in schedule.experiment_names
+            if (out_path / f"{name}.hdf5").exists()
+        ]
+        if existing:
+            raise FileExistsError(
+                "HDF5 output already exists; move or delete before re-running: "
+                + ", ".join(str(p) for p in existing)
+            )
+
         if isinstance(self.core, SimulatedMicroscopeCore):
             self.core._slm_h, self.core._slm_w = int(slm_shape[0]), int(slm_shape[1])
 
-        self.set_binning(1)
+        self.microscope.set_binning(1)
 
         camera_roi = ROI(*self.core.getROI())
         camera_resolution = self.core.getPixelSizeUm()
@@ -135,8 +128,15 @@ class Controller:
         for name, experiment in schedule.experiments.items():
             pattern_requirements[name] = self.pattern.request_method(experiment)
 
-            if any([req.needs_seg for req in pattern_requirements[name]]):
+            if any(req.needs_seg for req in pattern_requirements[name]):
                 self.segmentation.request_method(experiment)
+            elif experiment.segmentation.method_name != "none":
+                logger.warning(
+                    f"experiment {name}: segmentation method "
+                    f"'{experiment.segmentation.method_name}' is configured but the "
+                    f"pattern method '{experiment.pattern.method_name}' does not "
+                    "request segmentation, so no segmentation will run"
+                )
 
             for channel in experiment.channels.values():
                 t_seen.add(channel.every_t)
@@ -146,7 +146,6 @@ class Controller:
 
         elif len(t_seen) > 1:
             self.t_gcd = math.gcd(*t_seen)
-
 
         self.pattern.initialize_models()
 
@@ -159,7 +158,6 @@ class Controller:
         all_layers = self.outbox.initialize(schedule, self.core)
 
         self.all_layers = all_layers
-
 
     def run(self):
         with ThreadPoolExecutor() as executor:
@@ -237,6 +235,9 @@ class Controller:
                     for f in future_to_process:
                         f.cancel()
 
+                # the outbox closes its own files when its loop exits; this covers
+                # the case where the outbox thread never ran
+                self.outbox.close_files()
                 self.all_queues.close()
 
                 logger.info("Controller run finished.")

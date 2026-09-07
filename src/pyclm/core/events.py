@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 from uuid import UUID, uuid4
 
 from h5py import Dataset
@@ -41,28 +40,6 @@ class UpdateStagePositionEvent:
 class UpdatePositionWithAutoFocusEvent(UpdateStagePositionEvent):
     def __init__(self, position: PositionWithAutoFocus, experiment_name):
         super().__init__(position, experiment_name)
-
-
-class GeneratePatternEvent:
-    def __init__(
-        self,
-        experiment,
-        model,
-        uses_acquisition=False,
-        acquisition_event_id=None,
-        uses_segmentation=False,
-        segmentation_event_id=None,
-        save_output=True,
-        **kwargs,
-    ):
-        self.id = uuid4()
-
-        self.experiment_name = experiment
-        self.model = model
-        self.uses_acquisition = uses_acquisition
-        self.acquisition_event_id = acquisition_event_id
-        self.save_output = save_output
-        self.kwargs = kwargs
 
 
 class AcquisitionEvent:
@@ -109,8 +86,7 @@ class AcquisitionEvent:
         self.needs_slm = needs_slm
         self.binning = binning
 
-        # axis-name, axis-value pairs
-        # sub-axes (determines folder within hdf5_file)
+        # sub-axes (determines folder within hdf5_file), e.g. [f"{t:05d}", "channel_GFP"]
         self.sub_axes = sub_axes
 
         # config group config-preset pairs
@@ -157,109 +133,65 @@ class AcquisitionEvent:
 
         return dset
 
-    def write_attrs(self, dset: Dataset):
-        dset.attrs["id"] = str(self.id)
-        dset.attrs["position"] = [
-            (k, str(v)) for k, v in self.position.as_dict().items()
-        ]
+    def _fmt_time(self, timestamp) -> str:
+        if timestamp is None:
+            return ""
+        return datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
-        dset.attrs["experiment_name"] = self.experiment_name
+    def as_attrs(self) -> dict:
+        """
+        Flat, HDF5-attribute-compatible description of this event.
 
-        value = datetime.datetime.fromtimestamp(self.scheduled_time)
-        dset.attrs["time_scheduled"] = value.strftime("%Y-%m-%d %H:%M:%S")
-        dset.attrs["time_since_start"] = str(
+        Used both to annotate datasets (``write_attrs``) and for ``repr``.
+        """
+        attrs = {}
+
+        attrs["id"] = str(self.id)
+        attrs["position"] = [(k, str(v)) for k, v in self.position.as_dict().items()]
+
+        attrs["experiment_name"] = self.experiment_name
+
+        attrs["time_scheduled"] = self._fmt_time(self.scheduled_time)
+        attrs["time_since_start"] = str(
             datetime.timedelta(seconds=self.time_since_start)
         )
-        dset.attrs["time_completed"] = datetime.datetime.fromtimestamp(
-            self.completed_time
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        dset.attrs["complete"] = self.complete
+        attrs["time_completed"] = self._fmt_time(self.completed_time)
+        attrs["complete"] = self.complete
 
-        dset.attrs["exposure_time_ms"] = self.exposure_time_ms
-        dset.attrs["needs_slm"] = self.needs_slm
-        dset.attrs["binning"] = self.binning
+        attrs["exposure_time_ms"] = self.exposure_time_ms
+        attrs["needs_slm"] = self.needs_slm
+        attrs["binning"] = self.binning
 
         if self.sub_axes is not None:
-            dset.attrs["sub_axes"] = [str(a) for a in self.sub_axes]
+            attrs["sub_axes"] = [str(a) for a in self.sub_axes]
 
         if self.config_groups is not None:
             for cg in self.config_groups:
-                dset.attrs[f"config_groups: {cg.group}"] = str(cg.config)
+                attrs[f"config_groups: {cg.group}"] = str(cg.config)
 
         if self.devices is not None:
             for dp in self.devices:
-                dset.attrs[f"devices: {dp.device}-{dp.property}"] = str(dp.value)
+                attrs[f"devices: {dp.device}-{dp.property}"] = str(dp.value)
 
-        dset.attrs["save_output"] = self.save_output
-        dset.attrs["segment"] = self.segment
-        dset.attrs["seg_method"] = self.seg_method
-        dset.attrs["save_seg"] = self.save_seg
+        attrs["save_output"] = self.save_output
+        attrs["segment"] = self.segment
+        attrs["seg_method"] = self.seg_method
+        attrs["save_seg"] = self.save_seg
 
-        dset.attrs["raw_goes_to_pattern"] = self.raw_goes_to_pattern
-        dset.attrs["seg_goes_to_pattern"] = self.seg_goes_to_pattern
-        dset.attrs["channel_id"] = str(self.channel_id)
+        attrs["raw_goes_to_pattern"] = self.raw_goes_to_pattern
+        attrs["seg_goes_to_pattern"] = self.seg_goes_to_pattern
+        attrs["channel_id"] = str(self.channel_id)
 
-        dset.attrs["pattern_method"] = self.pattern_method
-        dset.attrs["save_pattern"] = self.save_pattern
+        attrs["pattern_method"] = self.pattern_method
+        attrs["save_pattern"] = self.save_pattern
 
-        dset.attrs["pixel_width_um"] = str(self.pixel_width_um)
+        attrs["pixel_width_um"] = str(self.pixel_width_um)
+
+        return attrs
+
+    def write_attrs(self, dset: Dataset):
+        for key, value in self.as_attrs().items():
+            dset.attrs[key] = value
 
     def __repr__(self):
-        repr_out = {}
-
-        repr_out["id"] = str(self.id)
-        repr_out["position"] = [(k, str(v)) for k, v in self.position.as_dict().items()]
-
-        repr_out["experiment_name"] = self.experiment_name
-
-        value = datetime.datetime.fromtimestamp(self.scheduled_time)
-        repr_out["time_scheduled"] = value.strftime("%Y-%m-%d %H:%M:%S")
-        repr_out["time_since_start"] = str(
-            datetime.timedelta(seconds=self.time_since_start)
-        )
-        repr_out["time_completed"] = datetime.datetime.fromtimestamp(
-            self.completed_time
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        repr_out["complete"] = self.complete
-
-        repr_out["exposure_time_ms"] = self.exposure_time_ms
-        repr_out["needs_slm"] = self.needs_slm
-        repr_out["binning"] = self.binning
-
-        if self.sub_axes is not None:
-            repr_out["sub_axes"] = [str(a) for a in self.sub_axes]
-
-        if self.config_groups is not None:
-            for cg in self.config_groups:
-                repr_out[f"config_groups: {cg.group}"] = str(cg.config)
-
-        if self.devices is not None:
-            for dp in self.devices:
-                repr_out[f"devices: {dp.device}-{dp.property}"] = str(dp.value)
-
-        repr_out["save_output"] = self.save_output
-        repr_out["segment"] = self.segment
-        repr_out["seg_method"] = self.seg_method
-        repr_out["save_seg"] = self.save_seg
-
-        repr_out["raw_goes_to_pattern"] = self.raw_goes_to_pattern
-        repr_out["seg_goes_to_pattern"] = self.seg_goes_to_pattern
-        repr_out["channel_id"] = str(self.channel_id)
-
-        repr_out["pattern_method"] = self.pattern_method
-        repr_out["save_pattern"] = self.save_pattern
-
-        repr_out["pixel_width_um"] = str(self.pixel_width_um)
-
-        return repr(repr_out)
-
-
-# class PositionGrid:
-#     """
-#     Contains a single grid of xy(z) positions
-#     """
-#
-#     def __init__(self, label):
-#         self.label = label
-#
-#     def add_positions(self, positions):
+        return repr(self.as_attrs())

@@ -19,7 +19,6 @@ class WavePatternBase(PatternMethod):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        print(f"Initializing {self.__class__.__name__}")
 
 
 class StationaryWavePattern(WavePatternBase):

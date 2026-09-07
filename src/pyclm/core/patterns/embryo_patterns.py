@@ -1,8 +1,12 @@
+import logging
+
 import numpy as np
 from skimage.measure import label, regionprops
 
 from .pattern import PatternContext, PatternMethod
 from .zoo import ZooMeta
+
+logger = logging.getLogger(__name__)
 
 
 class PatternAlongAxis(PatternMethod):
@@ -22,7 +26,7 @@ class PatternAlongAxis(PatternMethod):
         props = regionprops(labeled_mask)
 
         if len(props) == 0:
-            print(f"No props segmented: {self.experiment_name}")
+            logger.warning(f"No props segmented: {self.experiment_name}")
             return np.zeros_like(mask)
 
         biggest_prop_area = 0

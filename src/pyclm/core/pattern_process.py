@@ -1,15 +1,10 @@
 import logging
 from threading import Event
-from typing import ClassVar
 
+from .base_process import BaseProcess
 from .datatypes import AcquisitionData, CameraPattern, SegmentationData
 from .experiments import Experiment
 from .messages import Message, StreamCloseMessage
-from .queues import AllQueues
-
-logger = logging.getLogger(__name__)
-
-from .base_process import BaseProcess
 from .patterns import (
     AcquiredImageRequest,
     CameraProperties,
@@ -19,16 +14,19 @@ from .patterns import (
     PatternMethodReturnsSLM,
     known_models,
 )
+from .queues import AllQueues
+
+logger = logging.getLogger(__name__)
 
 
 class PatternProcess(BaseProcess):
-    known_models: ClassVar = known_models
-
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="pattern")
 
+        # per-instance copy so registrations do not leak between controllers
+        self.known_models: dict[str, type[PatternMethod]] = dict(known_models)
+
         self.inbox = aq.manager_to_pattern
-        self.manager = aq.pattern_to_manager
         self.slm = aq.pattern_to_slm
 
         self.from_seg = aq.seg_to_pattern
@@ -66,7 +64,7 @@ class PatternProcess(BaseProcess):
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.pattern.kwargs
-        print(method_kwargs)
+        logger.debug(f"{experiment_name}: {method_name} kwargs {method_kwargs}")
 
         model = model_class(**method_kwargs)
 
@@ -93,7 +91,7 @@ class PatternProcess(BaseProcess):
             model_name = name
 
         if model_name in self.known_models:
-            logging.warning(f"overwriting known model {model_name}")
+            logger.warning(f"overwriting known model {model_name}")
 
         self.known_models[model_name] = model
 
@@ -144,7 +142,7 @@ class PatternProcess(BaseProcess):
                 return False
 
             case "stream_close":
-                print("pattern received stream close")
+                logger.info("pattern process received stream close")
 
                 self.stream_count += 1
                 if self.stream_count >= 2:
@@ -164,7 +162,7 @@ class PatternProcess(BaseProcess):
                 dock = DataDock(t_sec, req)
                 dockname = self.dock_string(name, t_index)
 
-                print(f"pattern request {dockname}")
+                logger.debug(f"pattern request {dockname}")
 
                 self.docks[dockname] = dock
 
@@ -191,7 +189,15 @@ class PatternProcess(BaseProcess):
 
             dockname = self.dock_string(name, t_index)
 
-            self.docks[dockname].add_raw(data)
+            dock = self.docks.get(dockname)
+            if dock is None:
+                logger.warning(
+                    f"received raw data for {dockname} but no pattern was "
+                    "requested for that timepoint; dropping it"
+                )
+                return False
+
+            dock.add_raw(data)
 
             self.check(name, dockname)
         return False
@@ -207,9 +213,15 @@ class PatternProcess(BaseProcess):
 
             dockname = self.dock_string(name, t_index)
 
-            print(f"seg found {dockname}")
+            dock = self.docks.get(dockname)
+            if dock is None:
+                logger.warning(
+                    f"received segmentation for {dockname} but no pattern was "
+                    "requested for that timepoint; dropping it"
+                )
+                return False
 
-            self.docks[dockname].add_seg(data)
+            dock.add_seg(data)
 
             self.check(name, dockname)
         return False
@@ -231,6 +243,7 @@ class RequestPattern(Message):
         experiment_name: str,
         requirements: list[AcquiredImageRequest],
     ):
+        # absolute timepoint, matching AcquisitionEvent.t_index of the data expected
         self.t_index = t_index
         self.time_sec = time_sec
         self.experiment_name = experiment_name

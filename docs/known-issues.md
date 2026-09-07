@@ -1,8 +1,11 @@
 # Known issues
 
 Concrete bugs, hazards, and smells found while tracing data flow through the
-core (branch `core-refactor`, HEAD `7af035a`, September 2026). Line numbers
-are from that revision. Delete an entry when it is fixed.
+core (assessment of `7af035a`, September 2026). Numbers are stable because
+[assessment-2026-09.md](assessment-2026-09.md) cites them; an entry that has
+been fixed is collapsed to a one-line **Fixed** note rather than deleted.
+Line numbers in open entries refer to the post-Stage-0 code on
+`Stage0-hygiene`.
 
 Severity: **bug** = wrong behaviour observed or provable; **hazard** = can
 crash, hang, or lose data under plausible conditions; **smell** = works, but
@@ -12,135 +15,100 @@ will resist the planned changes.
 
 ## Confirmed bugs
 
-### 1. `t_delay > 0` breaks pattern generation (bug, verified by dry run)
+### 1. `t_delay > 0` broke pattern generation
 
-`Manager` sends `RequestPattern` with the **experiment-relative** index
-(`this_t = t - t_delay`, `core/manager.py:811,819-821`) but stamps
-`AcquisitionEvent.t_index` with the **absolute** `t` (`manager.py:853,888`).
-`PatternProcess` keys its `DataDock` by `f"{experiment}_{t_index:05d}"` on both
-sides (`core/pattern_process.py:166` vs `:192,208`), so frames look for a dock
-that was created under a different name.
+**Fixed in Stage 0** (2026-09-06). `RequestPattern.t_index` is now the absolute
+timepoint, matching `AcquisitionEvent.t_index`; the cadence decision still
+uses the experiment-relative index. Covered by
+`tests/test_manager_scheduling.py::test_pattern_request_index_matches_acquisition_index`
+and `tests/test_pattern_process.py`. The original symptom: with `t_delay = 1`
+the last frame raised `KeyError` and earlier frames were paired with the next
+timepoint's request, so patterns were generated from the wrong data.
 
-Reproduced with a 4-step dry run, `t_delay = 1`, imaging `every_t = 1`, and a
-pattern method requiring raw `545`: `generate()` ran 2× instead of 3×, the
-last frame raised `KeyError: 'bar10.00_00003'` inside the pattern process, and
-because the request for timepoint *t+1* is created before the frame for *t*
-arrives, frames for *t* landed in the dock for *t+1*, i.e. patterns were
-generated from the wrong timepoint's data without any error. Script:
-`repro_tdelay.py` in the session scratchpad (recreate from the description).
+### 2. Manager wait loop spun at 100 %
 
-Fix: use one index everywhere. Short term, send `t` in `RequestPattern`. Long
-term, give each planned acquisition an identifier from the plan (see the
-assessment, seam A) and key docks by it.
+**Fixed in Stage 0.** `Manager.process` now drains its inbox and sleeps
+`sleep_interval` (10 ms) between checks. Regression test:
+`test_manager_scheduling.py::test_wait_loop_sleeps_instead_of_spinning`.
 
-### 2. Manager wait loop spins at 100 % (bug)
+### 3. Logging was set up once per interpreter
 
-`Manager.process` waits for the next timepoint with a `while` loop that
-drains inboxes and checks `stop_event` but never sleeps
-(`core/manager.py:792-800`). Between timepoints, which is most of an
-experiment, one thread burns a core and contends for the GIL with the
-segmentation and pattern threads. `BaseProcess` sleeps 1 ms when idle; the
-Manager should do the same.
+**Fixed in Stage 0.** `set_logging` removes the handlers it installed on a
+previous call, so each `run_pyclm()` logs to its own directory
+(`tests/test_logging_setup.py`).
 
-### 3. Logging is set up once per interpreter, not per run (bug)
+### 4. Forced shutdown never closed HDF5 files
 
-`set_logging()` calls `logging.basicConfig(handlers=[...])`
-(`run_pyclm.py:21-39`). `basicConfig` is a no-op when the root logger already
-has handlers, so a second `run_pyclm()` in the same process keeps writing to
-the first experiment directory's `log.log`. Affects tests, notebooks, and any
-future in-process GUI that launches runs. Fix: attach/detach a file handler
-explicitly per run.
+**Fixed in Stage 0.** `MicroscopeOutbox.process` closes files in a `finally`,
+and `Controller.run` calls `close_files()` in its own `finally`
+(`tests/test_shutdown.py::test_forced_stop_closes_files`).
 
-### 4. Forced shutdown never closes HDF5 files (bug, low impact)
+### 5. `PatternReview` could not be constructed through the normal path
 
-On `KeyboardInterrupt` or a crashed process, `Controller.run` sets
-`stop_event` and waits (`controller.py:216-240`); `BaseProcess.process` just
-breaks. `MicroscopeOutbox.close_files()` (`core/manager.py:293`) is only
-called on the graceful path. Data survives because every write is followed by
-`flush()`, but files are left to the garbage collector. Fix: `try/finally`
-around the outbox loop or call `close_files()` in `Controller.run`'s `finally`.
+**Fixed in Stage 0.** Constructor now takes only `h5fp`, `channel`, `**kwargs`
+(`tests/test_pattern_method.py`).
 
-### 5. `PatternReview` cannot be constructed through the normal path (bug)
+### 6. A frame whose dataset was not pre-allocated is dropped (bug, partly addressed)
 
-`PatternProcess.request_method` instantiates methods as
-`model_class(**experiment.pattern.kwargs)` (`core/pattern_process.py:71`), but
-`PatternReview.__init__` requires positional `experiment_name` and
-`camera_properties` (`core/patterns/pattern.py:271-278`). Registered as
-`"pattern_review"` in `known_models`, so a TOML that selects it fails at
-startup. Fix the signature or remove the class.
-
-### 6. A frame whose dataset was not pre-allocated is dropped silently (bug)
-
-`write_data` does `f[relpath + dset_name]` (`core/manager.py:439`); a missing
-key raises `KeyError`, caught by the blanket handler at `:482` and logged. The
-frame is gone and nothing upstream is told. This is the failure mode for any
-schedule/HDF5 mismatch (issue #1's cousin) and for future runtime schedule
-edits. Fix: create-on-demand where safe, and surface a counter/warning to the
-Manager and GUI.
+`MicroscopeOutbox.write_data` now checks for the dataset, logs an error and
+counts the loss in `dropped_frames` instead of raising into the blanket
+handler. The frame is still lost and nothing upstream (Manager, GUI) is told;
+surfacing counters is Stage 4 (control plane) work, and create-on-demand
+depends on the Stage 2 storage layout.
 
 ---
 
 ## Hazards
 
-### 7. Microscope thread has no exception guard; the SLM handshake can kill a run
+### 7. Microscope thread had no exception guard; SLM handshake could kill a run
 
-`MicroscopeProcess.process` (`core/microscope.py:74-119`) dispatches without a
-`try/except`, unlike `BaseProcess`. `handle_update_pattern_event` blocks on
-`slm_queue.get(True, 5)` and `assert`s the event id matches
-(`microscope.py:200-205`). A slow SLM buffer (>5 s) raises `queue.Empty`; a
-stale `EventSLMPattern` left in the queue by an earlier timeout raises
-`AssertionError`. Either kills the microscope future, and `Controller.run`
-aborts the whole experiment. A hardware error from pymmcore in any handler
-does the same. Decide per error class whether to skip the event, retry, or
-abort, and log rather than assert.
+**Fixed in Stage 0.** `MicroscopeProcess.process` catches per-message
+exceptions, counts them (`error_count`, `consecutive_errors`) and continues;
+after `max_consecutive_errors` (default 10) in a row it re-raises so the
+Controller aborts. The SLM handshake discards stale replies and, on timeout,
+keeps the current pattern with a warning (`tests/test_microscope_process.py`).
 
-### 8. `PFSPositionMover` can hang forever
+### 8. `PFSPositionMover` could hang forever
 
-The focus-lock wait is `while status != LOCKED: pass`
-(`core/position_mover.py:93-97`): no sleep, no timeout, no stop-event check.
-If PFS never locks (sample edge, air bubble), the run stalls with no message.
+**Fixed in Stage 0.** The focus-lock poll sleeps 10 ms per iteration and
+raises `TimeoutError` after `PFS_TIMEOUT_S` (30 s). With the microscope error
+guard, that means one logged error and an out-of-focus acquisition for that
+position rather than a stalled run. Not unit-tested against real PFS timing.
 
 ### 9. Fixed 1 s settle before every snap
 
-`microscope.py:243` sleeps 1.0 s unconditionally after `waitForSystem()`.
-With 2 channels + stim per position that is already 3 s of the per-position
-budget; z-stacks and grids multiply it. Make it configurable per channel or
-derive it from the plan.
+**Fixed in Stage 0.** `settle_time_seconds` in `pyclm_config.toml` (default
+1.0) → `Controller(settle_time_s=...)` → `MicroscopeProcess.settle_time_s`.
+Still a single global value; per-channel settle is a Stage 1 plan concern.
 
-### 10. Hardware names hard-coded in generic code
+### 10. Hardware names hard-coded in generic code (hazard, partly addressed)
 
-`core.setFocusDevice("ZDrive")` in `run_pyclm.py:143`; PFS device/property
-names as class attributes in `PFSPositionMover` (documented as overridable);
-y-axis negation in `position_mover.py:82`; dummy SLM `1140×900` in
-`microscope.py:61-62` (config says 912). Focus device belongs in
-`pyclm_config.toml`.
+The focus device is now `focus_device` in `pyclm_config.toml` (default
+`"ZDrive"` for backwards compatibility, logged at INFO when the key is
+absent). Still hard-coded: PFS device/property names as overridable class
+attributes on `PFSPositionMover`; the y-axis negation in
+`core/position_mover.py` (`PFSPositionMover.move_to`); the dummy SLM shape
+`1140×900` in `MicroscopeProcess.declare_slm` (config says 912).
 
-### 11. Swallowed handler exceptions have no health signal
+### 11. Swallowed handler exceptions have no health signal (hazard, partly addressed)
 
-`BaseProcess.process` logs and continues (`core/base_process.py:71-74`). A
-pattern method that throws every timepoint means the SLM keeps showing the
-last good pattern with no indication in the GUI or to the Manager. The
-`pattern_id` provenance makes this recoverable after the fact, but an
-experiment can run for hours in that state. Add a per-process error counter
-and a status message to the Manager (and eventually the GUI).
+Every `BaseProcess` and the microscope now count errors (`error_count`), and
+the outbox counts `dropped_frames`, but nothing reads those counters during a
+run. A pattern method that throws every timepoint still means the SLM keeps
+showing the last good pattern with no indication in the GUI or to the
+Manager. Surfacing this is Stage 4.
 
 ### 12. `multiprocessing.Queue` between threads
 
-`core/queues.py` uses `multiprocessing.Queue` while `Controller.run` uses a
-`ThreadPoolExecutor`. Every frame is pickled through a pipe (copy, ~7 ms per
-8 MB frame, measured), `empty()` is racy (a `put()` is invisible until the
-feeder thread runs), and `Manager.process` relies on `empty()` followed by a
-blocking `get()` (`manager.py:794-795`). Not a bottleneck today; it is a
-hedge between two concurrency models that pays the costs of both. Switch to
-`queue.Queue` unless a real move to processes is planned.
+**Fixed in Stage 0.** `AllQueues` uses `queue.Queue`; items are passed by
+reference, `empty()`/`get_nowait()` are reliable, and the unused
+`outbox/slm/seg/pattern → manager` queues were removed.
 
-### 13. Pre-existing output files are detected last
+### 13. Pre-existing output files were detected last
 
-`MicroscopeOutbox.initialize` raises `FileExistsError` (`core/manager.py:169-172`)
-after all methods and models (including Cellpose on GPU) have been built, and
-a run that crashes after initialisation leaves files that block the next run
-until deleted by hand. Check before heavy initialisation; consider an
-`--overwrite` flag or timestamped output directories.
+**Fixed in Stage 0.** `Controller.initialize` checks for existing
+`<experiment>.hdf5` files before any method or model is built
+(`tests/test_controller_init.py`). No `--overwrite` flag yet.
 
 ---
 
@@ -148,111 +116,104 @@ until deleted by hand. Check before heavy initialisation; consider an
 
 ### 14. "Is channel X scheduled at t?" is implemented four times
 
-`Manager.process` (`core/manager.py:803-816,828,866`), `MicroscopeOutbox.initialize`
-(`:189-198`), `MicroscopeOutbox._timepoint_complete` (`:382-420`), and the GUI's
-`ChannelSchedule.is_scheduled_at` (`gui/gui_controller.py:32-44`). They agree
-today; any axis added (z, grid) or any runtime edit has to be made in all four.
+`Manager.process`, `MicroscopeOutbox.initialize`,
+`MicroscopeOutbox._timepoint_complete` (all `core/manager.py`), and the GUI's
+`ChannelSchedule.is_scheduled_at` (`gui/gui_controller.py`). They agree today;
+any axis added (z, grid) or any runtime edit has to be made in all four.
+Stage 1 (plan) removes this.
 
-### 15. The HDF5 attribute schema is written three times
+### 15. The HDF5 attribute schema is written twice
 
-`AcquisitionEvent.write_attrs` (`core/events.py:160-205`),
-`AcquisitionEvent.__repr__` (`:207-254`, a copy), and
-`MicroscopeOutbox._preallocate_attrs` (`core/manager.py:353-380`).
+`AcquisitionEvent.as_attrs` (`core/events.py`; Stage 0 merged `write_attrs`
+and `__repr__` onto it) and `MicroscopeOutbox._preallocate_attrs`
+(`core/manager.py`), which must list the same keys so SWMR readers see them.
+Stage 2 (storage v2) replaces per-dataset attributes with a frames table.
 
 ### 16. Helper functions copied between modules
 
 `get_binning_from_metadata` and `find_affine_transform` exist in both
-`gui/gui_controller.py:447-485` and `convert_hdf5s.py:72-89,222-241`;
-`set_binning` in both `controller.py:87-103` and `core/microscope.py:153-175`.
-A small `pyclm.io` module for reading PyCLM HDF5 files would absorb the first
-two and give analysis notebooks a supported entry point.
+`gui/gui_controller.py` and `convert_hdf5s.py`. A small `pyclm.io` module for
+reading PyCLM HDF5 files would absorb them and give analysis notebooks a
+supported entry point (Stage 2).
 
 ### 17. Shutdown counts encode the topology
 
-`MicroscopeOutbox.handle_message` waits for `stream_count >= 2`
-(`core/manager.py:331-349`), `PatternProcess` for `>= 2`
-(`core/pattern_process.py:147-155`). Adding a consumer (tracking) means
-auditing every count.
+`MicroscopeOutbox.handle_message` waits for `stream_count >= 2`,
+`PatternProcess` for `>= 2` (`core/manager.py`, `core/pattern_process.py`).
+Adding a consumer (tracking) means auditing every count. Stage 3 (router)
+derives fan-in from the subscription table.
 
 ### 18. Routing is baked into `AcquisitionEvent` by the Manager
 
-`Manager.get_kwargs` (`core/manager.py:668-714`) decides `segment`,
-`save_seg`, `raw_goes_to_pattern`, `seg_goes_to_pattern` from the pattern's
+`Manager.get_kwargs` (`core/manager.py`) decides `segment`, `save_seg`,
+`raw_goes_to_pattern`, `seg_goes_to_pattern` from the pattern's
 `AcquiredImageRequest`s; the Outbox and Segmentation processes read the flags.
 A new consumer needs a new flag, a new `get_kwargs` branch, a new branch in
-the Outbox, and a new attribute in the HDF5 schema (#15).
+the Outbox, and a new attribute in the HDF5 schema (#15). Stage 3.
 
-### 19. `pattern_shape` becomes a float tuple after binning
+### 19. `pattern_shape` became a float tuple after binning
 
-`PatternMethod.update_binning` divides with `//` by a float ratio
-(`core/patterns/pattern.py:247-261`), so every built-in method casts with
-`int(h), int(w)`. Keep shapes integral.
+**Fixed in Stage 0.** `PatternMethod.update_binning` reconstructs the unbinned
+shape and rebins with integer division (`tests/test_pattern_method.py`).
 
 ### 20. Dead or vestigial code
 
-`GeneratePatternEvent` (`core/events.py:46`), the `"initialize_slm_queue"`
-message case (`core/manager.py:591-597`), the `PositionGrid` stub
-(`core/events.py:257-265`), the four unused `*_to_manager` queues,
-`DataPassingProcess.message_history` (unbounded list, `manager.py:68,107`),
-`PositionWithAutoFocus` (kept for XML import), the `todo` comments in
-`core/experiments.py:340-341`, unused imports (`Thread` in `run_pyclm.py`,
-`active_count`/`sleep`/`as_completed` in `controller.py`).
+**Fixed in Stage 0.** Removed `GeneratePatternEvent`, the
+`"initialize_slm_queue"` message case, the `PositionGrid` stub, the four
+unused `*_to_manager` queues, `DataPassingProcess.message_history`, stale
+`todo` comments, and unused imports (ruff `F401` clean).
+`PositionWithAutoFocus` stays because `positions_from_xml` uses it.
 
-### 21. Method registries are class-level
+### 21. Method registries were class-level
 
-`PatternProcess.known_models` and `SegmentationProcess.known_models` are
-`ClassVar` dicts mutated by `register_method` (`core/pattern_process.py:25,98`;
-`core/segmentation_process.py:18,63`), so registrations leak between
-`Controller` instances (tests, notebooks).
+**Fixed in Stage 0.** `PatternProcess` and `SegmentationProcess` copy their
+registry per instance (`tests/test_pattern_process.py::test_registration_is_per_instance`).
 
 ### 22. Empty `seg` datasets are always allocated
 
 `SegmentationConfig("none")` inherits `save_output=True`
-(`directories.py:127`, `core/experiments.py:108`), so
+(`directories.py`, `core/experiments.py:MethodBasedConfig`), so
 `MicroscopeOutbox.initialize` pre-allocates `.../seg` datasets for every
-channel of every experiment even with no segmentation method
-(`core/manager.py:212,248`). `tests/test_dry_run.py` codifies the empty
-datasets as expected output.
+channel of every experiment even with no segmentation method.
+`tests/test_dry_run.py` codifies the empty datasets as expected output.
+Change with the Stage 2 layout, not before (it alters the file format).
 
 ### 23. Segmentation only exists if a pattern asks for it
 
-`Controller.initialize` calls `SegmentationProcess.request_method` only when a
-pattern requirement has `needs_seg` (`controller.py:137-139`). A TOML with
-`[segmentation] save = true` and an open-loop pattern silently segments
-nothing. Reasonable as an optimisation, surprising as behaviour; at minimum
-warn.
+**Addressed in Stage 0.** Behaviour unchanged (it is a reasonable
+optimisation), but `Controller.initialize` now logs a warning when a
+segmentation method is configured and no pattern requirement uses it
+(`tests/test_controller_init.py::test_unused_segmentation_method_warns`).
 
 ### 24. Virtual microscope fidelity around binning
 
 `SimulatedMicroscopeCore.getROI` returns 4× the TIF size
-(`core/virtual_microscope/simulated_core.py:192`) and `snapImage` never bins
-(`:165-174`, commented out), so dry runs with `binning != 4` produce frames of
-a different size than a real camera would, and `maxshape` is silently larger
-than the data. The GUI's fallback layer is hard-coded `(1, 800, 800)`
-(`gui/gui_controller.py:173`).
+(`core/virtual_microscope/simulated_core.py`) and `snapImage` never bins
+(commented out), so dry runs with `binning != 4` produce frames of a different
+size than a real camera would, and `maxshape` is silently larger than the
+data. The GUI's fallback layer is hard-coded `(1, 800, 800)`
+(`gui/gui_controller.py`).
 
 ### 25. `print()` in per-timepoint hot paths
 
-`core/manager.py:682,695,761,764,788`, `core/patterns/pattern.py:84`
-(`DataDock.get_awaiting` prints on every completeness check),
-`core/pattern_process.py:168,211`, `core/segmentation_process.py:135`,
-`core/manager.py:93,328`. They bypass the log file and drown real warnings on
-the console. Use `logger.debug`.
+**Fixed in Stage 0.** Core modules log through module loggers. Deliberately
+kept as `print`: the operator progress line `t = N: M minutes` and `DONE` in
+`Manager.process`, the startup listing in `run_pyclm`, and
+`SimulatedMicroscopeCore.describe()`.
 
 ### 26. Manager inbox is only drained between timepoints
 
-`core/manager.py:792-796`. Fine for the z-correction message, but a control
-plane (pause, set position, update parameters) needs the Manager to process
-commands at defined points, and to acknowledge them.
+`Manager.drain_inboxes` runs inside the inter-timepoint wait loop
+(`core/manager.py`). Fine for the z-correction message, but a control plane
+(pause, set position, update parameters) needs the Manager to process
+commands at defined points and acknowledge them. Stage 4.
 
-### 27. `experiment_from_toml` mutates the parsed TOML
+### 27. `experiment_from_toml` mutated the parsed TOML
 
-`segmentation.pop("method")`, `pattern.pop("method")`
-(`directories.py:117,131`). Harmless, but it prevents re-serialising the
-parsed config verbatim and is a symptom of having no config model.
+**Fixed in Stage 0.** The `[segmentation]` and `[pattern]` tables are copied
+before `method` is popped.
 
-### 28. Lint debt on this branch
+### 28. Lint debt
 
-`run_pyclm.py` imports are out of order (`import json` after third-party
-imports; `logger` defined mid-import block), which ruff's `I` rule will flag
-when `pre-commit` runs.
+**Fixed in Stage 0.** `pre-commit run --all-files` (ruff format + check,
+nbstripout) passes.

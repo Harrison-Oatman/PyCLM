@@ -8,7 +8,7 @@ to run_pyclm().
 
 import logging
 from abc import ABC, abstractmethod
-from time import time
+from time import sleep, time
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class PFSPositionMover(PositionMover):
 
     Moves to XY/Z, applies an optional PFS offset stored in
     ``position.extras["PFSOffset"]``, then polls the PFS status property until
-    focus is confirmed locked.
+    focus is confirmed locked, raising ``TimeoutError`` after ``PFS_TIMEOUT_S``.
 
     The y-axis is negated on XY movement to match the Nikon stage convention.
     Override ``PFS_DEVICE``, ``PFS_MAINTENANCE_PROPERTY``, ``PFS_STATUS_PROPERTY``,
@@ -68,6 +68,8 @@ class PFSPositionMover(PositionMover):
     PFS_MAINTENANCE_PROPERTY = "FocusMaintenance"
     PFS_STATUS_PROPERTY = "PFS Status"
     PFS_LOCKED_VALUE = "0000001100001010"
+    PFS_TIMEOUT_S = 30.0
+    PFS_POLL_S = 0.01
 
     def move_to(self, position, core) -> tuple[bool, float]:
         start = time()
@@ -90,11 +92,17 @@ class PFSPositionMover(PositionMover):
 
         core.setProperty(self.PFS_DEVICE, self.PFS_MAINTENANCE_PROPERTY, "On")
 
+        lock_start = time()
         while (
             core.getProperty(self.PFS_DEVICE, self.PFS_STATUS_PROPERTY)
             != self.PFS_LOCKED_VALUE
         ):
-            pass
+            if time() - lock_start > self.PFS_TIMEOUT_S:
+                raise TimeoutError(
+                    f"PFS did not report focus lock within {self.PFS_TIMEOUT_S}s "
+                    f"at x={position.x}, y={position.y}, z={position.z}"
+                )
+            sleep(self.PFS_POLL_S)
 
         logger.info(f"move+focus took {time() - start:.3f}s")
         return True, core.getZPosition()

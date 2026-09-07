@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Sequence
+import logging
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
 from ..core_interface import MicroscopeCoreInterface
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -160,7 +163,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         frame = np.asarray(self._image_source.next_frame([self._x, self._y]))
         x, y, w, h = self._roi
         frame = frame[y : y + h, x : x + w, ...] if frame.ndim >= 2 else frame
-        print(f"Simulated image shape: {frame.shape}")
+        logger.debug(f"Simulated image shape: {frame.shape}")
 
         # binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
         # binning = int(binning_str.split("x")[0])

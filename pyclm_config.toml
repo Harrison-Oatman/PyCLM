@@ -5,3 +5,7 @@ config_path = "C:\\Program Files\\Micro-Manager-2.0\\Ti2MightexCrestSolaSpectra_
 affine_transform = [[-0.29, -0.002, 939.891], [0.004, -0.579, 1505.235]]
 slm_shape_h =  1140
 slm_shape_w =  912
+
+# Focus (Z) device selected at startup and settle time before each snap
+focus_device = "ZDrive"
+settle_time_seconds = 1.0
