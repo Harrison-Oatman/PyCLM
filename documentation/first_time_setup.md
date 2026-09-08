@@ -70,13 +70,13 @@ settle_time_seconds = 1.0
 
 # Optional. How data is stored and exported.
 [output]
-format = "hdf5"              # "hdf5" (default, PyCLM's original layout) or "ome-zarr"
+format = "ome-zarr"          # "ome-zarr" (default) or "hdf5" (PyCLM's original layout)
 pattern_policy = "on_change" # ome-zarr only: store each distinct DMD pattern once ("on_change"),
                              # every stimulation event ("all"), or not at all ("none")
 export_imagej = true         # write ImageJ hyperstacks next to the data when the run finishes
 ```
 
-With `format = "ome-zarr"` each experiment is written as an
+By default (`format = "ome-zarr"`) each experiment is written as an
 [OME-Zarr](https://ngff.openmicroscopy.org/) store (`<experiment>.zarr/`) that
 Fiji, napari, QuPath and plain Python (`zarr`, `dask`) open directly, with one
 image per acquisition cadence so channels imaged every N timepoints never show

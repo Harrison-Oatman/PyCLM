@@ -15,7 +15,7 @@ class NucleusControlMethod(PatternMethod):
         description="Subclass this method to apply per-cell intensity",
     )
 
-    def __init__(self, channel=None, **kwargs):
+    def __init__(self, channel=None, tracks=False, **kwargs):
         super().__init__(**kwargs)
 
         if channel is None:
@@ -25,13 +25,24 @@ class NucleusControlMethod(PatternMethod):
             )
 
         self.channel = channel
-        self.add_requirement(channel, raw=True, seg=True)
+        # with tracks = true the per-cell loop runs on tracked labels, so
+        # prop.label is a track id that persists across timepoints
+        self.use_tracks = bool(tracks)
+        self.add_requirement(
+            channel, raw=True, seg=not self.use_tracks, tracks=self.use_tracks
+        )
 
     def process_prop(self, prop):
         return prop.image
 
+    def cell_labels(self, context) -> np.ndarray:
+        """The label image the per-cell loop runs on: tracked labels with ``tracks = true``, else the segmentation."""
+        if self.use_tracks:
+            return context.tracks(self.channel).labels
+        return context.segmentation(self.channel)
+
     def generate(self, context) -> np.ndarray:
-        seg = context.segmentation(self.channel)
+        seg = self.cell_labels(context)
         raw = context.raw(self.channel)
 
         h, w = self.pattern_shape

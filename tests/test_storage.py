@@ -14,10 +14,9 @@ from helpers import FakeImageSource, make_experiment, make_plan, make_schedule
 import pyclm.io as pio
 from pyclm.core.datatypes import AcquisitionData, SegmentationData, StimulationData
 from pyclm.core.events import AcquisitionEvent
-from pyclm.core.manager import MicroscopeOutbox
-from pyclm.core.queues import AllQueues
 from pyclm.core.storage import HDF5WriterV1, OMEZarrWriter, cadence_groups, make_writer
 from pyclm.core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
+from pyclm.core.writer_process import WriterProcess
 
 AFFINE = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
 SLM = (12, 10)
@@ -38,7 +37,6 @@ def acquire(plan, name, t, channel, image, pattern=None, pattern_id=None):
         if e.kind == "acquire" and e.experiment == name and e.channel == channel
     )
     cfg = plan.imaging_config(name, channel)
-    exp = plan.schedule.experiments[name]
     event = AcquisitionEvent(
         name,
         plan.schedule.positions[name],
@@ -48,8 +46,6 @@ def acquire(plan, name, t, channel, image, pattern=None, pattern_id=None):
         exposure_time_ms=cfg.exposure,
         needs_slm=ev.is_stim,
         save_output=ev.save,
-        segmentation_method=exp.segmentation.method_name,
-        pattern_method=exp.pattern.method_name,
         binning=cfg.binning,
     )
     event.completed_time = 1_700_000_000 + t + 0.5
@@ -262,11 +258,10 @@ def test_hdf5_v1_reader_and_export(tmp_path):
     exp.close()
 
 
-# ------------------------------------------------------------- outbox delegates to the writer
-def test_outbox_uses_configured_writer(tmp_path):
-    aq = AllQueues()
-    outbox = MicroscopeOutbox(
-        aq, base_path=tmp_path, stop_event=Event(), writer=make_writer("ome-zarr")
+# ------------------------------------------------------ writer process delegates to the writer
+def test_writer_process_uses_configured_writer(tmp_path):
+    outbox = WriterProcess(
+        base_path=tmp_path, stop_event=Event(), writer=make_writer("ome-zarr")
     )
     exp = make_experiment("exp.00")
     plan = make_plan(make_schedule([exp], steps=2))
@@ -281,3 +276,168 @@ def test_outbox_uses_configured_writer(tmp_path):
 def test_make_writer_rejects_unknown_format():
     with pytest.raises(ValueError, match="unknown storage format"):
         make_writer("tiff")
+
+
+# ------------------------------------------------------------------ tracks
+def test_zarr_tracks_layout_readback_and_export(tmp_path):
+    from pyclm.core.datatypes import TrackingData
+    from pyclm.core.experiments import TrackingConfig
+    from pyclm.core.tracking import TrackRow
+
+    exp = make_experiment("exp.00", every_t=1, segmentation_method="cellpose")
+    exp.segmentation.save = True
+    exp.stimulation.save = False  # one cadence group with the single channel 545
+    exp.tracking = TrackingConfig("centroid")
+    plan = make_plan(make_schedule([exp], steps=3, interval=2.0))
+    writer = OMEZarrWriter()
+    recorded = {
+        "raw": {("exp.00", "545"), ("exp.00", "DMD")},
+        "seg": {("exp.00", "545")},
+        "tracks": {("exp.00", "545")},
+    }
+    routing = {"routes": {"exp.00": {"545": {"tracks": ["pattern@pattern"]}}}}
+    writer.open(
+        plan, core_with(), tmp_path, AFFINE, SLM, recorded=recorded, routing=routing
+    )
+
+    for t in range(3):
+        raw = acquire(plan, "exp.00", t, "545", np.full((16, 16), t + 1, np.uint16))
+        writer.write_frame(raw)
+        labels = np.zeros((16, 16), np.uint16)
+        labels[2:6, 2:6] = 1
+        labels[10:14, 8 + t : 12 + t] = 2
+        writer.write_labels(SegmentationData(raw.event, labels))
+        rows = [TrackRow(10, 1, 3.5, 3.5, 16, 0), TrackRow(20, 2, 11.5, 9.5 + t, 16, 0)]
+        writer.write_tracks(
+            TrackingData(raw.event, labels.astype(np.uint32) * 10, rows)
+        )
+    writer.close()
+
+    root = tmp_path / "exp.00.zarr"
+    g = zarr.open_group(str(root), mode="r")
+    assert g["imaging/labels"].attrs["labels"] == ["segmentation", "tracks"]
+    assert g["imaging/labels/tracks/0"].dtype == np.uint32
+    assert g["imaging/labels/tracks/0"].shape == (3, 1, 16, 16)
+    assert g.attrs["pyclm"]["routing"] == routing
+    assert (tmp_path / "tracks.parquet").exists()
+    assert (tmp_path / "tracks.csv").exists()
+
+    with pio.open(root) as data:
+        grp = data.groups["imaging"]
+        assert grp.has_labels
+        assert grp.has_tracks
+        assert grp.tracks(1, "545")[3, 3] == 10
+        assert grp.tracks(1, "545")[12, 10] == 20
+        assert grp.labels(1, "545")[3, 3] == 1
+        table = data.tracks
+        assert table.num_rows == 6
+        assert table.column("track_id").to_pylist() == [10, 20] * 3
+        assert table.column("t").to_pylist() == [0, 0, 1, 1, 2, 2]
+        assert table.column("x").to_pylist()[1::2] == [9.5, 10.5, 11.5]
+        assert table.column("x_um").to_pylist()[1] == 9.5 * grp.pixel_size_um
+        assert data.routing == routing
+        [path] = pio.export_imagej(data, tmp_path / "export")
+
+    import tifffile
+
+    stack = tifffile.imread(path)
+    assert stack.shape == (3, 3, 16, 16)  # raw, segmentation, tracks (no pattern)
+    assert stack[1, 1, 3, 3] == 1
+    assert stack[1, 2, 3, 3] == 10
+
+
+def test_hdf5_v1_drops_tracks_with_one_warning(tmp_path, caplog):
+    import logging
+
+    from pyclm.core.datatypes import TrackingData
+
+    exp = make_experiment("exp.00")
+    plan = make_plan(make_schedule([exp], steps=2))
+    writer = HDF5WriterV1()
+    writer.open(plan, core_with(), tmp_path, AFFINE, SLM, routing={"routes": {}})
+    raw = acquire(plan, "exp.00", 0, "545", np.ones((16, 16), np.uint16))
+    with caplog.at_level(logging.WARNING):
+        writer.write_tracks(TrackingData(raw.event, np.zeros((16, 16), np.uint32), []))
+        writer.write_tracks(TrackingData(raw.event, np.zeros((16, 16), np.uint32), []))
+    writer.close()
+
+    assert caplog.text.count("does not store tracks") == 1
+    import h5py
+
+    with h5py.File(tmp_path / "exp.00.hdf5", "r") as f:
+        assert json.loads(f.attrs["routing"]) == {"routes": {}}
+
+
+def test_zarr_named_segmentations_layout_readback_and_export(tmp_path):
+    """Two [segmentation] tables of one channel: one label image each, read back by name, exported as two label sets."""
+    import tifffile
+
+    from pyclm.core.experiments import SegmentationConfig
+
+    exp = make_experiment("exp.00", every_t=1, segmentation_method="cellpose")
+    exp.segmentation.save = True
+    exp.segmentations["nuclei"] = SegmentationConfig("cellpose", model="nuclei")
+    exp.stimulation.save = False
+    plan = make_plan(make_schedule([exp], steps=2, interval=2.0))
+    writer = OMEZarrWriter()
+    recorded = {
+        "raw": {("exp.00", "545"), ("exp.00", "DMD")},
+        "seg": {("exp.00", "545")},
+        "seg:nuclei": {("exp.00", "545")},
+    }
+    writer.open(plan, core_with(), tmp_path, AFFINE, SLM, recorded=recorded)
+    for t in range(2):
+        raw = acquire(plan, "exp.00", t, "545", np.full((16, 16), t + 1, np.uint16))
+        writer.write_frame(raw)
+        writer.write_frame(
+            acquire(plan, "exp.00", t, "DMD", None, np.full(SLM, 1, np.uint8), "p0")
+        )
+        writer.write_labels(
+            SegmentationData(raw.event, np.full((16, 16), 1, np.uint16))
+        )
+        writer.write_labels(
+            SegmentationData(raw.event, np.full((16, 16), 2, np.uint16), "nuclei")
+        )
+    writer.close()
+
+    import zarr
+
+    g = zarr.open_group(str(tmp_path / "exp.00.zarr"), mode="r")
+    assert g["imaging/labels"].attrs["labels"] == ["segmentation", "nuclei"]
+    assert g["imaging/labels/nuclei/0"][1, 0].max() == 2
+
+    with pio.open(tmp_path / "exp.00.zarr") as data:
+        grp = data.groups["imaging"]
+        assert grp.label_names == ("segmentation", "nuclei")
+        assert grp.has_labels
+        assert grp.labels(0, "545").max() == 1
+        assert grp.labels(0, "545", "nuclei").max() == 2
+        assert grp.labels(0, "545", "cyto") is None
+        paths = pio.export_imagej(data, tmp_path)
+    stack = tifffile.imread(paths[0])
+    assert stack.shape[1] == 4  # raw, segmentation, nuclei, pattern overlay
+    assert stack[0, 2].max() == 2
+
+
+def test_hdf5_v1_drops_named_segmentations_with_one_warning(tmp_path, caplog):
+    import logging
+
+    exp = make_experiment("exp.00", every_t=1, segmentation_method="cellpose")
+    plan = make_plan(make_schedule([exp], steps=2))
+    writer = HDF5WriterV1()
+    writer.open(plan, core_with(), tmp_path)
+    raw = acquire(plan, "exp.00", 0, "545", np.zeros((16, 16), np.uint16))
+    writer.write_frame(raw)
+    with caplog.at_level(logging.WARNING):
+        for _ in range(2):
+            writer.write_labels(
+                SegmentationData(raw.event, np.ones((16, 16), np.uint16), "nuclei")
+            )
+        writer.write_labels(SegmentationData(raw.event, np.ones((16, 16), np.uint16)))
+    writer.close()
+    assert caplog.text.count("stores only the default segmentation") == 1
+    with pio.open(tmp_path / "exp.00.hdf5") as data:
+        grp = data.groups["imaging_545"]
+        assert grp.label_names == ("segmentation",)
+        assert grp.labels(0, "545").max() == 1
+        assert grp.labels(0, "545", "nuclei") is None

@@ -1,7 +1,8 @@
 """
 Export PyCLM experiments to ImageJ hyperstacks: one TIFF per cadence group,
-channels = raw channels, then segmentation labels (if any), then the DMD
-pattern warped into camera space (if the affine transform is known).
+channels = raw channels, then segmentation labels (if any), then tracked
+labels (if any), then the DMD pattern warped into camera space (if the
+affine transform is known).
 """
 
 from __future__ import annotations
@@ -25,7 +26,10 @@ def _lut(r, g, b):
     return np.stack([ramp if r else zero, ramp if g else zero, ramp if b else zero])
 
 
-GRAY, YELLOW, CYAN = _lut(1, 1, 1), _lut(1, 1, 0), _lut(0, 1, 1)
+GRAY, YELLOW, CYAN, MAGENTA = _lut(1, 1, 1), _lut(1, 1, 0), _lut(0, 1, 1), _lut(1, 0, 1)
+GREEN, RED, BLUE = _lut(0, 1, 0), _lut(1, 0, 0), _lut(0, 0, 1)
+# one LUT per segmentation table, in the store's order (the default first)
+LABEL_LUTS = (YELLOW, GREEN, RED, BLUE)
 
 
 def pattern_to_camera(
@@ -57,7 +61,8 @@ def export_group(
         return None
 
     shape = group.shape
-    use_labels = include_labels and group.has_labels
+    label_names = list(group.label_names) if include_labels else []
+    use_tracks = include_labels and group.has_tracks
     use_pattern = (
         overlay_pattern
         and affine is not None
@@ -72,12 +77,26 @@ def export_group(
             planes.append(
                 np.zeros(shape, np.uint16) if fr is None else fr.astype(np.uint16)
             )
-        if use_labels:
+        for name in label_names:
             for c in group.channels:
-                lb = group.labels(i, c)
+                lb = group.labels(i, c, name)
                 planes.append(
                     np.zeros(shape, np.uint16) if lb is None else lb.astype(np.uint16)
                 )
+        if use_tracks:
+            for c in group.channels:
+                tr = group.tracks(i, c)
+                if tr is None:
+                    planes.append(np.zeros(shape, np.uint16))
+                else:
+                    if tr.max() > np.iinfo(np.uint16).max:
+                        logger.warning(
+                            f"{exp.name}/{group.name}: track ids exceed 65535 and are "
+                            "clipped in the ImageJ export; read the zarr store for exact ids"
+                        )
+                    planes.append(
+                        np.clip(tr, 0, np.iinfo(np.uint16).max).astype(np.uint16)
+                    )
         if use_pattern:
             pat = exp.pattern_at(group.global_t(i))
             planes.append(
@@ -90,8 +109,11 @@ def export_group(
     stack = np.stack(frames)  # (T, C, Y, X)
     luts = [GRAY] * len(group.channels)
     ranges = [0, 5000] * len(group.channels)
-    if use_labels:
-        luts += [YELLOW] * len(group.channels)
+    for k, _name in enumerate(label_names):
+        luts += [LABEL_LUTS[k % len(LABEL_LUTS)]] * len(group.channels)
+        ranges += [0, 1] * len(group.channels)
+    if use_tracks:
+        luts += [MAGENTA] * len(group.channels)
         ranges += [0, 1] * len(group.channels)
     if use_pattern:
         luts.append(CYAN)

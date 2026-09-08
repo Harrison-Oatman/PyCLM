@@ -13,6 +13,6 @@ settle_time_seconds = 1.0
 # Output format: "hdf5" (PyCLM format 1, one SWMR file per experiment) or
 # "ome-zarr" (format 2, one OME-NGFF store per experiment; opens in Fiji/napari/zarr)
 [output]
-format = "hdf5"
+format = "ome-zarr"
 pattern_policy = "on_change"   # DMD patterns stored: on_change | all | none (ome-zarr only)
 export_imagej = true           # write ImageJ hyperstacks next to the data when the run ends

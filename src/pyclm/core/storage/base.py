@@ -13,6 +13,7 @@ See docs/stage2-storage-options.md.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +22,10 @@ import numpy as np
 
 from ..core_interface import MicroscopeCoreInterface
 from ..datatypes import AcquisitionData, SegmentationData
+from ..kinds import is_seg_kind, seg_name
 from ..plan import AcquisitionPlan
+
+logger = logging.getLogger(__name__)
 
 STORAGE_FORMATS = ("hdf5", "ome-zarr")
 PATTERN_POLICIES = ("on_change", "all", "none")
@@ -142,8 +146,13 @@ class FrameWriter(ABC):
 
     ``open`` prepares every output for the plan (readers may open the outputs
     as soon as it returns); ``write_frame`` receives raw and stimulation
-    frames, ``write_labels`` segmentation masks; ``close`` finalises. Writers
-    must never block on readers.
+    frames, ``write_labels`` segmentation masks, ``write_tracks`` tracking
+    output; ``close`` finalises. Writers must never block on readers.
+
+    ``recorded`` (from the Router) says which ``(experiment, channel)`` pairs
+    will actually arrive for each kind; without it :meth:`records` falls back
+    to the experiment configuration. ``routing`` is the resolved routing
+    table, stored with the data as provenance.
     """
 
     format: str = "base"
@@ -151,7 +160,9 @@ class FrameWriter(ABC):
     def __init__(self):
         self.base_path: Path = Path.cwd()
         self.plan: AcquisitionPlan | None = None
+        self.recorded: dict[str, set[tuple[str, str]]] | None = None
         self.is_open = False
+        self._warned_tracks = False
 
     @abstractmethod
     def open(
@@ -161,14 +172,41 @@ class FrameWriter(ABC):
         base_path: Path,
         affine_transform: np.ndarray | None = None,
         slm_shape: tuple[int, int] | None = None,
+        recorded: dict[str, set[tuple[str, str]]] | None = None,
+        routing: dict | None = None,
     ) -> list[tuple[str, str]]:
         """Create the outputs. Returns ``(path, layer)`` pairs for the live GUI."""
+
+    def records(self, experiment: str, channel: str, kind: str) -> bool:
+        """Whether ``kind`` for this channel will reach the writer (Router table, else config)."""
+        if self.recorded is not None:
+            return (experiment, channel) in self.recorded.get(kind, ())
+        exp = self.plan.schedule.experiments[experiment]
+        if is_seg_kind(kind):
+            cfg = exp.segmentations.get(seg_name(kind))
+            return cfg is not None and bool(cfg.save)
+        if kind == "tracks":
+            tracking = getattr(exp, "tracking", None)
+            return bool(
+                tracking is not None
+                and tracking.save
+                and tracking.method_name != "none"
+            )
+        return True
 
     @abstractmethod
     def write_frame(self, data: AcquisitionData) -> None: ...
 
     @abstractmethod
     def write_labels(self, data: SegmentationData) -> None: ...
+
+    def write_tracks(self, data) -> None:
+        """Record tracking output. Writers that cannot store tracks log once and drop them."""
+        if not self._warned_tracks:
+            self._warned_tracks = True
+            logger.warning(
+                f"the {self.format} writer does not store tracks; they are dropped"
+            )
 
     @abstractmethod
     def close(self) -> None: ...

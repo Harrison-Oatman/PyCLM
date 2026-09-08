@@ -22,6 +22,7 @@ from .pattern import (
     AcquiredImageRequest,
     CameraProperties,
     DataDock,
+    ExperimentState,
     PatternContext,
     PatternMethod,
     PatternMethodReturnsSLM,

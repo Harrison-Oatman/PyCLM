@@ -2,11 +2,10 @@ import logging
 from threading import Event
 from typing import ClassVar
 
-from .base_process import BaseProcess
+from .base_process import PipelineProcess
 from .datatypes import AcquisitionData, SegmentationData
 from .experiments import Experiment
-from .messages import Message, StreamCloseMessage
-from .queues import AllQueues
+from .kinds import DEFAULT_SEGMENTATION, base_kind, seg_name
 from .segmentation import SegmentationMethod
 from .segmentation.cellpose_segmentation import (
     CellposeSegmentationMethod,
@@ -16,26 +15,31 @@ from .segmentation.cellpose_segmentation import (
 logger = logging.getLogger(__name__)
 
 
-class SegmentationProcess(BaseProcess):
+class SegmentationProcess(PipelineProcess):
+    """
+    Produces ``seg`` from ``raw``: runs the experiment's segmentation methods
+    on every frame the Router delivers and publishes one label image per
+    demanded ``[segmentation]`` table (the default one travels as ``seg``, a
+    named ``[segmentation.<name>]`` as ``seg:<name>``).
+
+    Runs only where some consumer demands a segmentation (the Router
+    decides; the Controller then calls :meth:`request_method` per name).
+    """
+
+    produces: ClassVar[dict[str, tuple[str, ...]]] = {"seg": ("raw",)}
+
     default_models: ClassVar[dict[str, type[SegmentationMethod]]] = {
         "cellpose": CellposeSegmentationMethod,
         "embryo_resizing": EmbryoSegmentationMethod,
     }
 
-    def __init__(self, aq: AllQueues, stop_event: Event | None = None):
+    def __init__(self, stop_event: Event | None = None):
         super().__init__(stop_event, name="segmentation")
 
         # per-instance copy so registrations do not leak between controllers
         self.known_models: dict[str, type[SegmentationMethod]] = dict(
             self.default_models
         )
-
-        self.inbox = aq.manager_to_seg
-
-        self.from_raw = aq.outbox_to_seg
-        self.to_outbox = aq.seg_to_outbox
-
-        self.to_pattern = aq.seg_to_pattern
 
         self.initialized = False
 
@@ -44,11 +48,14 @@ class SegmentationProcess(BaseProcess):
         self.accommodated_requests = []
         self.shared_resources = dict()
 
-        self.register_queue(self.inbox, self.handle_message)
-        self.register_queue(self.from_raw, self.handle_from_raw)
-
     def initialize(self):
         self.initialized = True
+
+    def can_produce(self, kind: str, experiment: Experiment, channel: str) -> bool:
+        if base_kind(kind) != "seg":
+            return False
+        cfg = experiment.segmentations.get(seg_name(kind))
+        return cfg is not None and cfg.method_name != "none"
 
     def register_method(self, method: type, name: str | None = None):
         assert issubclass(method, SegmentationMethod), (
@@ -64,8 +71,10 @@ class SegmentationProcess(BaseProcess):
 
         self.known_models[model_name] = method
 
-    def request_method(self, experiment: Experiment):
-        method_name = experiment.segmentation.method_name
+    def request_method(self, experiment: Experiment, name: str = DEFAULT_SEGMENTATION):
+        """Construct the method of one ``[segmentation]`` table for an experiment."""
+        cfg = experiment.segmentations[name]
+        method_name = cfg.method_name
 
         model_class: type = self.known_models.get(method_name)
 
@@ -77,7 +86,7 @@ class SegmentationProcess(BaseProcess):
         )
 
         experiment_name = experiment.experiment_name
-        method_kwargs = experiment.segmentation.kwargs
+        method_kwargs = cfg.kwargs
 
         model = model_class(experiment_name, **method_kwargs)
 
@@ -86,7 +95,7 @@ class SegmentationProcess(BaseProcess):
         if this_resource_request:
             self.handle_resource_request(model, this_resource_request)
 
-        self.models[experiment_name] = model
+        self.models[(experiment_name, name)] = model
 
     def handle_resource_request(self, model, request):
         preexisting_resource = None
@@ -116,63 +125,55 @@ class SegmentationProcess(BaseProcess):
             # provide the resource to the model
             model.provide_resource(resource)
 
-    def run_model(self, experiment_name, aq_data: AcquisitionData) -> SegmentationData:
-        model = self.models.get(experiment_name, None)
+    def run_model(
+        self,
+        experiment_name,
+        aq_data: AcquisitionData,
+        name: str = DEFAULT_SEGMENTATION,
+    ) -> SegmentationData:
+        model = self.models.get((experiment_name, name), None)
 
         assert isinstance(model, SegmentationMethod), (
-            f"self.models[{experiment_name}] is not a SegmentationModel"
+            f"self.models[{(experiment_name, name)}] is not a SegmentationModel"
         )
 
         data_to_seg = aq_data.data
         segmented = model.segment(data_to_seg)
 
         event = aq_data.event
-        seg_data = SegmentationData(event, segmented)
+        seg_data = SegmentationData(event, segmented, name)
 
         return seg_data
 
-    def handle_segment_data(self, aq_data: AcquisitionData):
-        event = aq_data.event
-        name = event.experiment_name
+    def segmentations_for(
+        self, experiment_name: str, channel: str
+    ) -> list[tuple[str, str]]:
+        """
+        ``[(segmentation name, cadence)]`` to run on a frame of that channel:
+        from the routing table when attached to a router, else every method
+        constructed for the experiment.
+        """
+        produced = getattr(self.router, "produced_by", None)
+        if produced is not None:
+            wanted = produced(self.name).get((experiment_name, channel))
+            if wanted is not None:
+                return [(seg_name(kind), cadence) for kind, cadence in wanted]
+        return [(n, "always") for (e, n) in self.models if e == experiment_name]
 
-        logger.debug(f"segmenting {name}: t = {event.t_index}")
+    def handle_data(self, data):
+        assert isinstance(data, AcquisitionData), (
+            f"segmentation received {type(data)}, expected AcquisitionData"
+        )
+        event = data.event
+        experiment_name = event.experiment_name
+        channel = event.index.get("c")
 
-        # pass data to pattern process for pattern gen
-        seg_data = self.run_model(name, aq_data)
-        self.to_pattern.put(seg_data)
-
-        # pass data to outbox for saving
-        if event.save_seg:
-            self.to_outbox.put(seg_data)
-
-    def handle_message(self, message: Message):
-        # Check source/type if possible or just handle both
-        match message.message:
-            case "close":
-                # Manager config close
-                return False
-
-            case "stream_close":
-                logger.info(
-                    "segmentation process received stream close from outbox. Sending to outbox and pattern"
-                )
-
-                close_msg = StreamCloseMessage()
-                self.to_pattern.put(close_msg)
-
-                close_msg = StreamCloseMessage()
-                self.to_outbox.put(close_msg)
-                return True
-
-            case _:
-                raise NotImplementedError
-
-    def handle_from_raw(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                logger.info("segmentation process closing")
-                return True
-        else:
-            assert isinstance(data, AcquisitionData)
-            self.handle_segment_data(data)
-        return False
+        for name, cadence in self.segmentations_for(experiment_name, channel):
+            if cadence == "pattern" and not self.router.plan.pattern_due(
+                experiment_name, event.t_index
+            ):
+                continue
+            logger.debug(
+                f"segmenting {experiment_name}/{channel} ({name}): t = {event.t_index}"
+            )
+            self.publish(self.run_model(experiment_name, data, name))

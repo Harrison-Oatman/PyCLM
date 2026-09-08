@@ -9,6 +9,7 @@ Layout per experiment (``<experiment>.zarr/``):
         .zattrs                 multiscales (axes t,c,y,x; time scale = every_t * interval), omero
         0                       (T, C, Y, X) uint16, chunks (1, 1, Y, X), zstd; compact T
         labels/segmentation/0   (T, C, Y, X) uint16 label images (only if segmentation.save)
+        labels/<name>/0         the same for each named [segmentation.<name>] table
     patterns/dmd/0              (N, H_slm, W_slm) uint8, one per distinct pattern_id
                                 (policy "on_change"), or one per stimulation event ("all")
     frames.parquet / frames.csv one row per acquired frame and per stimulation event
@@ -35,6 +36,7 @@ import zarr
 
 from ..core_interface import MicroscopeCoreInterface
 from ..datatypes import AcquisitionData, SegmentationData, StimulationData
+from ..kinds import DEFAULT_SEGMENTATION, is_seg_kind, seg_name
 from ..plan import AcquisitionPlan
 from .base import (
     PATTERN_POLICIES,
@@ -66,6 +68,38 @@ FRAMES_COLUMNS = (
     "pattern_id",
     "pattern_index",
     "pixel_size_um",
+)
+TRACKS_COLUMNS = (
+    "experiment",
+    "t",
+    "channel",
+    "group",
+    "local_index",
+    "track_id",
+    "label",
+    "y",
+    "x",
+    "y_um",
+    "x_um",
+    "area",
+    "parent",
+)
+TRACKS_SCHEMA = pa.schema(
+    [
+        ("experiment", pa.string()),
+        ("t", pa.int32()),
+        ("channel", pa.string()),
+        ("group", pa.string()),
+        ("local_index", pa.int32()),
+        ("track_id", pa.int64()),
+        ("label", pa.int64()),
+        ("y", pa.float64()),
+        ("x", pa.float64()),
+        ("y_um", pa.float64()),
+        ("x_um", pa.float64()),
+        ("area", pa.int64()),
+        ("parent", pa.int64()),
+    ]
 )
 
 
@@ -119,7 +153,9 @@ class _ExperimentStore:
         self.root = root
         self.groups = {g.name: g for g in groups}
         self.images: dict[str, zarr.Array] = {}
-        self.labels: dict[str, zarr.Array] = {}
+        # (cadence group, segmentation name) -> label array
+        self.labels: dict[tuple[str, str], zarr.Array] = {}
+        self.tracks: dict[str, zarr.Array] = {}
         self.pattern_array: zarr.Array | None = None
         self.pattern_ids: list[str] = []
         self.written: set[tuple[int, str]] = set()  # (t, channel) frames written
@@ -143,9 +179,12 @@ class OMEZarrWriter(FrameWriter):
         self.pattern_policy = pattern_policy
         self.stores: dict[str, _ExperimentStore] = {}
         self.rows: list[dict] = []
+        self.track_rows: list[dict] = []
         self.dropped_frames = 0
         self.error_count = 0
         self.frames_path: Path | None = None
+        self.tracks_path: Path | None = None
+        self.routing: dict | None = None
         self._pixel_size_um: float = 1.0
 
     def planned_paths(self, names, base_path):
@@ -159,11 +198,23 @@ class OMEZarrWriter(FrameWriter):
         )
 
     # ---------------------------------------------------------------- open
-    def open(self, plan, core, base_path, affine_transform=None, slm_shape=None):
+    def open(
+        self,
+        plan,
+        core,
+        base_path,
+        affine_transform=None,
+        slm_shape=None,
+        recorded=None,
+        routing=None,
+    ):
         self.plan = plan
+        self.recorded = recorded
+        self.routing = routing
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.frames_path = self.base_path / "frames.parquet"
+        self.tracks_path = self.base_path / "tracks.parquet"
         self._pixel_size_um = float(core.getPixelSizeUm())
 
         slm_device = core.getSLMDevice()
@@ -224,29 +275,23 @@ class OMEZarrWriter(FrameWriter):
                 compressors=_compressor(),
                 fill_value=0,
             )
-            if experiment.segmentation.save:
+            seg_names = self._recorded_segmentations(exp_name, g.channels)
+            record_tracks = any(self.records(exp_name, c, "tracks") for c in g.channels)
+            if seg_names or record_tracks:
                 labels = img_group.create_group("labels")
-                labels.attrs["labels"] = ["segmentation"]
-                seg = labels.create_group("segmentation")
-                seg.attrs.update(
-                    ngff_image_attrs(
-                        f"{exp_name}/{g.name}/segmentation",
-                        [g.every_t * plan.interval_s, 1.0, px, px],
-                        g.channels,
+                labels.attrs["labels"] = [
+                    *seg_names,
+                    *(["tracks"] if record_tracks else []),
+                ]
+                scale = [g.every_t * plan.interval_s, 1.0, px, px]
+                for seg in seg_names:
+                    store.labels[(g.name, seg)] = self._label_array(
+                        labels, seg, exp_name, g, scale, (h, w), "uint16"
                     )
-                )
-                seg.attrs["image-label"] = {
-                    "version": NGFF_VERSION,
-                    "source": {"image": "../../"},
-                }
-                store.labels[g.name] = seg.create_array(
-                    "0",
-                    shape=(g.timepoints, len(g.channels), h, w),
-                    chunks=(1, 1, h, w),
-                    dtype="uint16",
-                    compressors=_compressor(),
-                    fill_value=0,
-                )
+                if record_tracks:
+                    store.tracks[g.name] = self._label_array(
+                        labels, "tracks", exp_name, g, scale, (h, w), "uint32"
+                    )
             for c in g.channels:
                 layers.append((str(path.resolve()), f"{g.name}/{c}"))
 
@@ -275,6 +320,7 @@ class OMEZarrWriter(FrameWriter):
             else np.asarray(affine_transform, dtype=float).tolist(),
             "slm_shape": None if slm_shape is None else [int(v) for v in slm_shape],
             "pattern_policy": self.pattern_policy,
+            "routing": self.routing,
             "groups": {
                 g.name: {
                     "channels": list(g.channels),
@@ -292,6 +338,45 @@ class OMEZarrWriter(FrameWriter):
         self.stores[exp_name] = store
         logger.info(f"Initialized OME-Zarr store {path}")
         return layers
+
+    def _recorded_segmentations(self, exp_name: str, channels) -> list[str]:
+        """Segmentation tables whose labels will reach the writer for these channels, default first."""
+        if self.recorded is not None:
+            names = {
+                seg_name(kind)
+                for kind, pairs in self.recorded.items()
+                if is_seg_kind(kind) and any((exp_name, c) in pairs for c in channels)
+            }
+        else:
+            exp = self.plan.schedule.experiments[exp_name]
+            names = set()
+            if any(self.records(exp_name, c, "seg") for c in channels):
+                names.add(DEFAULT_SEGMENTATION)
+            for n, cfg in exp.segmentations.items():
+                if n != DEFAULT_SEGMENTATION and cfg.method_name != "none" and cfg.save:
+                    names.add(n)
+        return sorted(names, key=lambda n: (n != DEFAULT_SEGMENTATION, n))
+
+    @staticmethod
+    def _label_array(labels, name, exp_name, g, scale, shape, dtype):
+        """One NGFF label image (segmentation or tracks) under a cadence group."""
+        h, w = shape
+        grp = labels.create_group(name)
+        grp.attrs.update(
+            ngff_image_attrs(f"{exp_name}/{g.name}/{name}", scale, g.channels)
+        )
+        grp.attrs["image-label"] = {
+            "version": NGFF_VERSION,
+            "source": {"image": "../../"},
+        }
+        return grp.create_array(
+            "0",
+            shape=(g.timepoints, len(g.channels), h, w),
+            chunks=(1, 1, h, w),
+            dtype=dtype,
+            compressors=_compressor(),
+            fill_value=0,
+        )
 
     # --------------------------------------------------------------- write
     def _row(
@@ -400,8 +485,10 @@ class OMEZarrWriter(FrameWriter):
             )
         logger.info(f"{g.name}: resizing arrays from {arr.shape[2:]} to {shape}")
         arr.resize((arr.shape[0], arr.shape[1], *shape))
-        if g.name in store.labels:
-            lab = store.labels[g.name]
+        extras = [a for (gname, _n), a in store.labels.items() if gname == g.name]
+        if g.name in store.tracks:
+            extras.append(store.tracks[g.name])
+        for lab in extras:
             lab.resize((lab.shape[0], lab.shape[1], *shape))
 
     def _record_pattern(
@@ -432,17 +519,63 @@ class OMEZarrWriter(FrameWriter):
                 return
             channel = ev.index.get("c")
             g = store.group_for(channel)
-            if g is None or g.name not in store.labels:
+            if g is None:
+                return
+            key = (g.name, getattr(data, "name", DEFAULT_SEGMENTATION))
+            if key not in store.labels:
                 return
             i = g.local_index(ev.t_index)
             if i is None:
                 return
-            store.labels[g.name][i, g.channel_index(channel)] = np.asarray(
+            store.labels[key][i, g.channel_index(channel)] = np.asarray(
                 data.data, dtype=np.uint16
             )
         except Exception as e:
             self.error_count += 1
             logger.error(f"Failed to write labels: {e}", exc_info=True)
+
+    def write_tracks(self, data):
+        try:
+            ev = data.event
+            store = self.stores.get(ev.experiment_name)
+            if store is None:
+                return
+            channel = ev.index.get("c")
+            g = store.group_for(channel)
+            if g is None or g.name not in store.tracks:
+                return
+            i = g.local_index(ev.t_index)
+            if i is None:
+                return
+            labels = np.asarray(data.data, dtype=np.uint32)
+            self._fit_group_shape(store, g, labels.shape)
+            store.tracks[g.name][i, g.channel_index(channel)] = labels
+
+            px = ev.pixel_width_um
+            if not px:
+                px = self._pixel_size_um * g.binning
+            for r in data.rows:
+                self.track_rows.append(
+                    {
+                        "experiment": ev.experiment_name,
+                        "t": int(ev.t_index),
+                        "channel": channel,
+                        "group": g.name,
+                        "local_index": int(i),
+                        "track_id": int(r.track_id),
+                        "label": int(r.label),
+                        "y": float(r.y),
+                        "x": float(r.x),
+                        "y_um": float(r.y) * float(px),
+                        "x_um": float(r.x) * float(px),
+                        "area": int(r.area),
+                        "parent": int(r.parent),
+                    }
+                )
+            self._write_tracks_table()
+        except Exception as e:
+            self.error_count += 1
+            logger.error(f"Failed to write tracks: {e}", exc_info=True)
 
     def _update_progress(self, store: _ExperimentStore, exp_name: str, t: int):
         if t <= store.current_t:
@@ -483,10 +616,22 @@ class OMEZarrWriter(FrameWriter):
     def _write_frames_table(self):
         if self.frames_path is None:
             return
-        table = self._frames_table()
-        tmp = self.frames_path.with_suffix(".parquet.tmp")
+        self._write_parquet(self._frames_table(), self.frames_path)
+
+    def _tracks_table(self) -> pa.Table:
+        columns = {k: [r.get(k) for r in self.track_rows] for k in TRACKS_COLUMNS}
+        return pa.table(columns, schema=TRACKS_SCHEMA)
+
+    def _write_tracks_table(self):
+        if self.tracks_path is None:
+            return
+        self._write_parquet(self._tracks_table(), self.tracks_path)
+
+    @staticmethod
+    def _write_parquet(table: pa.Table, path: Path):
+        tmp = path.with_suffix(".parquet.tmp")
         pq.write_table(table, tmp)
-        shutil.move(str(tmp), str(self.frames_path))
+        shutil.move(str(tmp), str(path))
 
     # --------------------------------------------------------------- close
     def close(self):
@@ -498,5 +643,13 @@ class OMEZarrWriter(FrameWriter):
                 )
             except Exception as e:
                 logger.error(f"failed to finalise frames table: {e}", exc_info=True)
+        if self.tracks_path is not None and self.track_rows:
+            try:
+                self._write_tracks_table()
+                pacsv.write_csv(
+                    self._tracks_table(), self.tracks_path.with_suffix(".csv")
+                )
+            except Exception as e:
+                logger.error(f"failed to finalise tracks table: {e}", exc_info=True)
         self.stores.clear()
         self.is_open = False

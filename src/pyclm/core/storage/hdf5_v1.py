@@ -20,6 +20,7 @@ from ..core_interface import MicroscopeCoreInterface
 from ..datatypes import AcquisitionData, SegmentationData, StimulationData
 from ..events import storage_group
 from ..experiments import ImagingConfig
+from ..kinds import DEFAULT_SEGMENTATION
 from ..plan import PLAN_FORMAT, AcquisitionPlan
 from .base import FrameWriter, image_shape
 
@@ -47,8 +48,18 @@ class HDF5WriterV1(FrameWriter):
         )
 
     # ---------------------------------------------------------------- open
-    def open(self, plan, core, base_path, affine_transform=None, slm_shape=None):
+    def open(
+        self,
+        plan,
+        core,
+        base_path,
+        affine_transform=None,
+        slm_shape=None,
+        recorded=None,
+        routing=None,
+    ):
         self.plan = plan
+        self.recorded = recorded
         self.base_path = Path(base_path)
         schedule = plan.schedule
         metadata = schedule.as_dict()
@@ -74,6 +85,8 @@ class HDF5WriterV1(FrameWriter):
                 )
                 f.attrs["plan"] = plan_yaml
                 f.attrs["plan_format"] = PLAN_FORMAT
+                if routing is not None:
+                    f.attrs["routing"] = json.dumps(routing, default=str)
                 if affine_transform is not None:
                     f.attrs["affine_transform"] = np.asarray(
                         affine_transform, dtype=float
@@ -159,14 +172,7 @@ class HDF5WriterV1(FrameWriter):
         dset.attrs["binning"] = 1
         dset.attrs["index"] = ""
         dset.attrs["save_output"] = False
-        dset.attrs["segment"] = False
-        dset.attrs["seg_method"] = ""
-        dset.attrs["save_seg"] = False
-        dset.attrs["raw_goes_to_pattern"] = False
-        dset.attrs["seg_goes_to_pattern"] = False
         dset.attrs["channel_id"] = ""
-        dset.attrs["pattern_method"] = ""
-        dset.attrs["save_pattern"] = False
         dset.attrs["pixel_width_um"] = ""
         dset.attrs["pattern_id"] = ""
 
@@ -180,6 +186,16 @@ class HDF5WriterV1(FrameWriter):
         self._write(data, "data")
 
     def write_labels(self, data: SegmentationData):
+        name = getattr(data, "name", DEFAULT_SEGMENTATION)
+        if name != DEFAULT_SEGMENTATION:
+            # format 1 has one seg dataset per frame; named segmentations need format 2
+            if not getattr(self, "_warned_named_seg", False):
+                self._warned_named_seg = True
+                logger.warning(
+                    f"HDF5 format 1 stores only the default segmentation; dropping "
+                    f'the {name!r} labels (use [output] format = "ome-zarr")'
+                )
+            return
         self._write(data, "seg")
 
     def _timepoint_complete(self, f, t_index: int, exp_name: str) -> bool:
@@ -236,7 +252,7 @@ class HDF5WriterV1(FrameWriter):
                 self._retry(put)
 
             if isinstance(data, StimulationData) and dset_name == "data":
-                if aq_event.save_stim and (relpath + "dmd") in f:
+                if (relpath + "dmd") in f:
                     dmd = f[relpath + "dmd"]
                     if dmd.shape != data.dmd_pattern.shape:
                         dmd.resize(data.dmd_pattern.shape)

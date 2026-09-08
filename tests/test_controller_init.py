@@ -21,12 +21,21 @@ def make_controller(**kwargs):
     )
 
 
-def test_existing_output_is_rejected_before_models_load(tmp_path):
-    controller = make_controller()
+@pytest.mark.parametrize(
+    ("storage_format", "suffix"), [("ome-zarr", ".zarr"), ("hdf5", ".hdf5")]
+)
+def test_existing_output_is_rejected_before_models_load(
+    tmp_path, storage_format, suffix
+):
+    controller = make_controller(storage_format=storage_format)
     schedule = make_schedule([make_experiment("exp.00")])
-    (tmp_path / "exp.00.hdf5").write_bytes(b"")
+    existing = tmp_path / f"exp.00{suffix}"
+    if suffix == ".zarr":
+        existing.mkdir()
+    else:
+        existing.write_bytes(b"")
 
-    with pytest.raises(FileExistsError, match=r"exp\.00\.hdf5"):
+    with pytest.raises(FileExistsError, match=rf"exp\.00\{suffix}"):
         controller.initialize(schedule, (8, 8), IDENTITY, tmp_path)
 
     assert controller.pattern.models == {}

@@ -12,6 +12,7 @@ from toml import load
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .core.position_mover import PositionMover
+from .core.tracking import TrackingMethod
 from .directories import dry_schedule_from_directory, schedule_from_directory
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ _PYCLM_HANDLER_FLAG = "_pyclm_run_handler"
 
 DEFAULT_FOCUS_DEVICE = "ZDrive"
 DEFAULT_SETTLE_TIME_S = 1.0
-DEFAULT_STORAGE_FORMAT = "hdf5"
+DEFAULT_STORAGE_FORMAT = "ome-zarr"
 DEFAULT_PATTERN_POLICY = "on_change"
 
 
@@ -101,6 +102,7 @@ def run_pyclm(
     pattern_methods: dict[str, type[PatternMethod]] | None = None,
     position_mover: PositionMover | None = None,
     dry_image_source=None,
+    tracking_methods: dict[str, type[TrackingMethod]] | None = None,
     dry: bool = False,
     gui: bool = False,
 ):
@@ -113,6 +115,8 @@ def run_pyclm(
                                     key is the method name (used by [experiment].toml), value is the class
     :param pattern_methods: optional dictionary of pattern method classes to register with the PatternProcess
                                     key is the method name (used by [experiment].toml), value is the class
+    :param tracking_methods: optional dictionary of tracking method classes to register with the TrackingProcess
+                                    key is the method name (used by [tracking] in the experiment toml), value is the class
     :return:
     """
 
@@ -185,6 +189,10 @@ def run_pyclm(
     if pattern_methods is not None:
         for name, method in pattern_methods.items():
             c.register_pattern_method(name, method)
+
+    if tracking_methods is not None:
+        for name, method in tracking_methods.items():
+            c.register_tracking_method(name, method)
 
     core = c.core
     core.describe()

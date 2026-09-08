@@ -1,6 +1,7 @@
 """
-Unit tests for MicroscopeProcess against the simulated core: frame delivery,
-configurable settle time, the per-message error guard, and the SLM handshake.
+Unit tests for MicroscopeProcess against the simulated core: frame delivery
+to the router, configurable settle time, the per-message error guard, and
+the SLM handshake.
 """
 
 import logging
@@ -11,7 +12,7 @@ from uuid import uuid4
 
 import numpy as np
 import pytest
-from helpers import FakeImageSource, drain, make_experiment
+from helpers import FakeImageSource, make_experiment
 
 from pyclm.core.datatypes import AcquisitionData, EventSLMPattern
 from pyclm.core.events import (
@@ -23,7 +24,6 @@ from pyclm.core.experiments import DeviceProperty, MicroscopePosition
 from pyclm.core.messages import (
     AcquisitionEventMessage,
     CloseMessage,
-    StreamCloseMessage,
     UpdatePositionEventMessage,
     UpdateZPositionMessage,
 )
@@ -35,6 +35,21 @@ from pyclm.core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
 EXP = make_experiment("exp.00")
 
 
+class Sink:
+    """Stands in for the Router: records what the microscope publishes."""
+
+    def __init__(self):
+        self.items = []
+        self.ended = []
+
+    def publish(self, data):
+        self.items.append(data)
+        return 1
+
+    def end_stream(self, name):
+        self.ended.append(name)
+
+
 def make_microscope(**kwargs):
     aq = AllQueues()
     core = SimulatedMicroscopeCore(FakeImageSource((16, 16)))
@@ -42,6 +57,7 @@ def make_microscope(**kwargs):
         core, aq, stop_event=Event(), settle_time_s=0.0, **kwargs
     )
     microscope.declare_slm()
+    microscope.attach(Sink())
     return aq, microscope, core
 
 
@@ -57,12 +73,12 @@ def make_event(t_index=0, devices=None):
 
 
 def test_acquisition_event_delivers_frame():
-    aq, microscope, _ = make_microscope()
+    _aq, microscope, _ = make_microscope()
     event = make_event()
 
     microscope.handle_acquisition_event(event)
 
-    data = aq.acquisition_outbox.get_nowait()
+    [data] = microscope.router.items
     assert isinstance(data, AcquisitionData)
     assert data.data.shape == (16, 16)
     assert data.event is event
@@ -98,9 +114,10 @@ def test_handler_error_is_counted_and_process_continues():
     assert microscope.error_count == 1
     assert microscope.consecutive_errors == 0
 
-    delivered = drain(aq.acquisition_outbox)
-    assert [type(d) for d in delivered] == [AcquisitionData, StreamCloseMessage]
+    delivered = microscope.router.items
+    assert [type(d) for d in delivered] == [AcquisitionData]
     assert delivered[0].event is good
+    assert microscope.router.ended == ["microscope"]
 
 
 def test_consecutive_errors_abort_the_run():

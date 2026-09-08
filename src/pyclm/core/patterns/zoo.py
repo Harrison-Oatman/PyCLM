@@ -96,14 +96,59 @@ class ZooContext:
     def raw(self, channel_name: str) -> np.ndarray:
         return self._raw
 
-    def segmentation(self, channel_name: str) -> np.ndarray:
+    def segmentation(self, channel_name: str, name: str = "segmentation") -> np.ndarray:
         return self._seg
+
+    def regions(self, channel_name: str, name: str = "segmentation"):
+        from ..measure import Regions
+
+        return Regions(self._seg)
 
     def stim_raw(self) -> np.ndarray:
         return self._raw
 
     def stim_seg(self) -> np.ndarray:
         return self._seg
+
+    # --- Stage 3 additions: timepoint, history, tracks, previous patterns ---
+
+    t = 0
+    generation = 0
+
+    def tracks(self, channel_name: str):
+        from skimage.measure import regionprops_table
+
+        from ..tracking import TrackRow, Tracks
+
+        props = regionprops_table(
+            np.asarray(self._seg).astype(np.int64),
+            properties=("label", "centroid", "area"),
+        )
+        rows = [
+            TrackRow(int(lab), int(lab), float(y), float(x), int(a), 0)
+            for lab, y, x, a in zip(
+                props["label"],
+                props["centroid-0"],
+                props["centroid-1"],
+                props["area"],
+                strict=True,
+            )
+        ]
+        return Tracks(self._seg, rows)
+
+    def history(self, channel_name: str, kind: str = "seg", n=None) -> list:
+        if kind == "tracks":
+            return [self.tracks(channel_name)]
+        return [self._seg if kind.startswith("seg") else self._raw]
+
+    def stim_history(self, kind: str = "raw", n=None) -> list:
+        return self.history("", kind, n)
+
+    def last_pattern(self):
+        return None
+
+    def pattern_history(self, n=None) -> list:
+        return []
 
 
 # ---------------------------------------------------------------------------

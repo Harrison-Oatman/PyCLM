@@ -15,8 +15,7 @@ from helpers import make_experiment, make_plan, make_schedule
 from pyclm.convert_hdf5s import get_binning_from_metadata, make_tif
 from pyclm.core.datatypes import AcquisitionData
 from pyclm.core.events import AcquisitionEvent
-from pyclm.core.manager import MicroscopeOutbox
-from pyclm.core.queues import AllQueues
+from pyclm.core.writer_process import WriterProcess
 
 
 class MockCore:
@@ -30,8 +29,7 @@ class MockCore:
 def test_swmr_initialization_and_reading():
     with TemporaryDirectory() as tmp_dir:
         base_path = Path(tmp_dir)
-        aq = AllQueues()
-        outbox = MicroscopeOutbox(aq, base_path=base_path, stop_event=threading.Event())
+        outbox = WriterProcess(base_path=base_path, stop_event=threading.Event())
 
         exp = make_experiment("test_exp", channel="638", binning=2, stim_exposure=0)
         schedule = make_schedule([exp], steps=3)

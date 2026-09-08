@@ -56,6 +56,12 @@ class UpdatePositionWithAutoFocusEvent(UpdateStagePositionEvent):
 
 
 class AcquisitionEvent:
+    """
+    One image acquisition: identity from the plan (``index``), where and how
+    to take it, and whether the frame is saved. Who consumes the frame is
+    not the event's business; the Router decides that from its identity.
+    """
+
     def __init__(
         self,
         experiment,
@@ -69,19 +75,11 @@ class AcquisitionEvent:
         config_groups: list[ConfigGroup] | None = None,
         devices: list[DeviceProperty] | None = None,
         save_output=True,
-        save_stim=True,
-        do_segmentation=False,
-        segmentation_method=None,
-        save_segmentation=False,
-        raw_goes_to_pattern=False,
-        pattern_method=None,
-        save_pattern=False,
-        segmentation_goes_to_pattern=False,
         binning: int = 1,
     ):
         self.id = uuid4()
 
-        # experiment (determines h5 filename)
+        # experiment (determines the output file / store)
         self.experiment_name = experiment
 
         # position
@@ -106,20 +104,10 @@ class AcquisitionEvent:
         # device-name, parameter, value, type
         self.devices = devices
 
-        # what to do with the output
+        # whether the writer records the frame
         self.save_output = save_output
-        self.save_stim = save_stim
 
-        self.segment = do_segmentation
-        self.seg_method = segmentation_method
-        self.save_seg = save_segmentation
-
-        self.raw_goes_to_pattern = raw_goes_to_pattern
-        self.seg_goes_to_pattern = segmentation_goes_to_pattern
         self.channel_id = channel_id
-
-        self.pattern_method = pattern_method
-        self.save_pattern = save_pattern
 
         self.pixel_width_um = None
 
@@ -175,19 +163,7 @@ class AcquisitionEvent:
                 attrs[f"devices: {dp.device}-{dp.property}"] = str(dp.value)
 
         attrs["save_output"] = self.save_output
-        attrs["segment"] = self.segment
-        # HDF5 attributes cannot hold None
-        attrs["seg_method"] = "" if self.seg_method is None else str(self.seg_method)
-        attrs["save_seg"] = self.save_seg
-
-        attrs["raw_goes_to_pattern"] = self.raw_goes_to_pattern
-        attrs["seg_goes_to_pattern"] = self.seg_goes_to_pattern
         attrs["channel_id"] = str(self.channel_id)
-
-        attrs["pattern_method"] = (
-            "" if self.pattern_method is None else str(self.pattern_method)
-        )
-        attrs["save_pattern"] = self.save_pattern
 
         attrs["pixel_width_um"] = str(self.pixel_width_um)
 

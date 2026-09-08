@@ -5,7 +5,10 @@
 > what each fix covered and what remains. Stage 1 (acquisition plan on
 > useq-schema) is implemented; see [stage1-plan-design.md](stage1-plan-design.md).
 > Stage 2 (storage: `FrameWriter`, OME-Zarr format 2, `pyclm.io`) is
-> implemented; see [stage2-storage-options.md](stage2-storage-options.md).
+> implemented and validated on the microscope on 2026-09-07; see
+> [stage2-storage-options.md](stage2-storage-options.md). Stage 3 (router,
+> registration, pattern history, tracking) is implemented on `Stage3-router`;
+> see [stage3-router-design.md](stage3-router-design.md).
 
 Scope: the core modules (Manager, MicroscopeProcess, MicroscopeOutbox,
 SLMBuffer, SegmentationProcess, PatternProcess) and the code that feeds them

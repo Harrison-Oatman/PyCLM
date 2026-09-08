@@ -7,6 +7,7 @@ analysis code.
     g = exp.groups["imaging"]                   # a cadence group
     g.frame(i, "545")                           # numpy array or None if not (yet) acquired
     g.labels(i, "545")                          # segmentation labels or None
+    g.labels(i, "545", "nuclei")                # labels of a named [segmentation.nuclei] table
     g.global_t(i)                               # plan timepoint of slot i
     exp.pattern_at(t)                           # DMD pattern in force at plan timepoint t
     exp.frames                                  # pyarrow.Table (format 2) or None
@@ -59,10 +60,26 @@ class GroupData(ABC):
     def frame(self, i: int, channel: str) -> np.ndarray | None: ...
 
     @abstractmethod
-    def labels(self, i: int, channel: str) -> np.ndarray | None: ...
+    def labels(
+        self, i: int, channel: str, name: str = "segmentation"
+    ) -> np.ndarray | None:
+        """Label image of a slot from the segmentation table ``name``, or None."""
 
     @property
     def has_labels(self) -> bool:
+        return bool(self.label_names)
+
+    @property
+    def label_names(self) -> tuple[str, ...]:
+        """Segmentation tables stored for this group (the default one is ``"segmentation"``)."""
+        return ()
+
+    def tracks(self, i: int, channel: str) -> np.ndarray | None:
+        """Label image relabelled with track ids for a slot, or None."""
+        return None
+
+    @property
+    def has_tracks(self) -> bool:
         return False
 
 
@@ -88,6 +105,12 @@ class ExperimentData(ABC):
 
     @property
     def frames(self):
+        """The frames table rows for this experiment (pyarrow), or None."""
+        return None
+
+    @property
+    def tracks(self):
+        """The tracks table rows for this experiment (pyarrow), or None."""
         return None
 
     def refresh(self) -> None:
@@ -110,7 +133,14 @@ class _ZarrGroup(GroupData):
     def _path_for(root_path, name):
         return root_path / name
 
-    def __init__(self, root_path: Path, name: str, meta: dict, has_labels: bool):
+    def __init__(
+        self,
+        root_path: Path,
+        name: str,
+        meta: dict,
+        label_names=(),
+        has_tracks: bool = False,
+    ):
         import zarr
 
         self.name = name
@@ -137,9 +167,13 @@ class _ZarrGroup(GroupData):
             pass
         self._path = root_path / name
         self._arr = zarr.open_array(str(self._path / "0"), mode="r")
-        self._labels = (
-            zarr.open_array(str(self._path / "labels" / "segmentation" / "0"), mode="r")
-            if has_labels
+        self._labels = {
+            n: zarr.open_array(str(self._path / "labels" / n / "0"), mode="r")
+            for n in label_names
+        }
+        self._tracks = (
+            zarr.open_array(str(self._path / "labels" / "tracks" / "0"), mode="r")
+            if has_tracks
             else None
         )
 
@@ -148,13 +182,20 @@ class _ZarrGroup(GroupData):
         return tuple(int(v) for v in self._arr.shape[2:])
 
     @property
-    def has_labels(self):
-        return self._labels is not None
+    def label_names(self):
+        return tuple(self._labels)
 
-    def _chunk_exists(self, i: int, c: int, labels: bool = False) -> bool:
-        base = (
-            self._path / "labels" / "segmentation" / "0" if labels else self._path / "0"
-        )
+    @property
+    def has_tracks(self):
+        return self._tracks is not None
+
+    def _chunk_exists(self, i: int, c: int, labels=None, tracks=False) -> bool:
+        if tracks:
+            base = self._path / "labels" / "tracks" / "0"
+        elif labels:
+            base = self._path / "labels" / str(labels) / "0"
+        else:
+            base = self._path / "0"
         return (base / f"{i}.{c}.0.0").exists()
 
     def acquired(self):
@@ -170,13 +211,22 @@ class _ZarrGroup(GroupData):
             return None
         return np.asarray(self._arr[i, c])
 
-    def labels(self, i, channel):
-        if self._labels is None:
+    def labels(self, i, channel, name="segmentation"):
+        arr = self._labels.get(name)
+        if arr is None:
             return None
         c = self.channels.index(channel)
-        if not self._chunk_exists(i, c, labels=True):
+        if not self._chunk_exists(i, c, labels=name):
             return None
-        return np.asarray(self._labels[i, c])
+        return np.asarray(arr[i, c])
+
+    def tracks(self, i, channel):
+        if self._tracks is None:
+            return None
+        c = self.channels.index(channel)
+        if not self._chunk_exists(i, c, tracks=True):
+            return None
+        return np.asarray(self._tracks[i, c])
 
 
 class ZarrExperiment(ExperimentData):
@@ -201,17 +251,36 @@ class ZarrExperiment(ExperimentData):
                 self.path,
                 name,
                 gmeta,
-                (self.path / name / "labels" / "segmentation" / "0").exists(),
+                self._label_names(self.path / name / "labels"),
+                (self.path / name / "labels" / "tracks" / "0").exists(),
             )
             for name, gmeta in meta["groups"].items()
         }
         self._frames_path = self.path.parent / "frames.parquet"
         self._frames = None
+        self._tracks_path = self.path.parent / "tracks.parquet"
+        self._tracks = None
         self._pattern_arr = None
         if (self.path / "patterns" / "dmd" / "0").exists():
             self._pattern_arr = zarr.open_array(
                 str(self.path / "patterns" / "dmd" / "0"), mode="r"
             )
+
+    @staticmethod
+    def _label_names(labels_dir: Path) -> tuple[str, ...]:
+        """Segmentation label images under a group (NGFF ``labels`` list, minus tracks)."""
+        attrs = labels_dir / ".zattrs"
+        names: list[str] = []
+        if attrs.exists():
+            try:
+                names = list(json.loads(attrs.read_text()).get("labels", []))
+            except Exception:
+                names = []
+        if not names and labels_dir.exists():
+            names = sorted(p.name for p in labels_dir.iterdir() if p.is_dir())
+        return tuple(
+            n for n in names if n != "tracks" and (labels_dir / n / "0").exists()
+        )
 
     def refresh(self):
         import zarr
@@ -219,11 +288,16 @@ class ZarrExperiment(ExperimentData):
         self._root = zarr.open_group(str(self.path), mode="r")
         self._meta = dict(self._root.attrs["pyclm"])
         self._frames = None
+        self._tracks = None
         for g in self.groups.values():
             g._arr = zarr.open_array(str(g._path / "0"), mode="r")
-            if g._labels is not None:
-                g._labels = zarr.open_array(
-                    str(g._path / "labels" / "segmentation" / "0"), mode="r"
+            for n in list(g._labels):
+                g._labels[n] = zarr.open_array(
+                    str(g._path / "labels" / n / "0"), mode="r"
+                )
+            if g._tracks is not None:
+                g._tracks = zarr.open_array(
+                    str(g._path / "labels" / "tracks" / "0"), mode="r"
                 )
         if self._pattern_arr is not None:
             self._pattern_arr = zarr.open_array(
@@ -234,17 +308,31 @@ class ZarrExperiment(ExperimentData):
     def current_t(self):
         return int(self._meta.get("current_t", -1))
 
+    def _read_rows(self, path):
+        import pyarrow.parquet as pq
+
+        table = pq.read_table(path)
+        mask = np.asarray(
+            table["experiment"].to_numpy(zero_copy_only=False) == self.name
+        )
+        return table.filter(mask)
+
     @property
     def frames(self):
         if self._frames is None and self._frames_path.exists():
-            import pyarrow.parquet as pq
-
-            table = pq.read_table(self._frames_path)
-            mask = np.asarray(
-                table["experiment"].to_numpy(zero_copy_only=False) == self.name
-            )
-            self._frames = table.filter(mask)
+            self._frames = self._read_rows(self._frames_path)
         return self._frames
+
+    @property
+    def tracks(self):
+        if self._tracks is None and self._tracks_path.exists():
+            self._tracks = self._read_rows(self._tracks_path)
+        return self._tracks
+
+    @property
+    def routing(self) -> dict | None:
+        """The resolved routing table recorded at the start of the run, if any."""
+        return self._meta.get("routing")
 
     def _pattern_index_at(self, t: int) -> int | None:
         table = self.frames
@@ -314,9 +402,11 @@ class _HDF5Group(GroupData):
         return self._shape or (0, 0)
 
     @property
-    def has_labels(self):
+    def label_names(self):
         # v1 pre-allocates empty seg datasets for every channel; only a written one counts
-        return any(self._dset(i, "seg") is not None for i in self.acquired())
+        if any(self._dset(i, "seg") is not None for i in self.acquired()):
+            return ("segmentation",)
+        return ()
 
     def _read_pixel_size(self):
         f = self._exp._file
@@ -349,7 +439,9 @@ class _HDF5Group(GroupData):
     def frame(self, i, channel):
         return self._dset(i, "data")
 
-    def labels(self, i, channel):
+    def labels(self, i, channel, name="segmentation"):
+        if name != "segmentation":
+            return None
         return self._dset(i, "seg")
 
 

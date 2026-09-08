@@ -2,6 +2,7 @@ import logging
 from queue import Empty
 from threading import Event
 from time import sleep, time
+from typing import ClassVar
 
 import numpy as np
 
@@ -10,7 +11,7 @@ from .core_interface import MicroscopeCoreInterface
 from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
 from .experiments import ConfigGroup, DeviceProperty
-from .messages import Message, StreamCloseMessage, UpdateZPositionMessage
+from .messages import Message, UpdateZPositionMessage
 from .position_mover import BasicPositionMover, PositionMover
 from .queues import AllQueues
 
@@ -21,11 +22,17 @@ class MicroscopeProcess(BaseProcess):
     """
     Executes acquisition, stage and SLM events against a MicroscopeCoreInterface.
 
+    Every frame it takes is published to the Router (it is the producer of
+    ``raw``); nothing about who consumes a frame is decided here.
+
     An error while handling one message is logged and counted, and the process
     moves on to the next message, so a single failed event does not end the
     experiment. After ``max_consecutive_errors`` failures in a row the error is
     re-raised, which makes the Controller abort the run.
     """
+
+    produces: ClassVar[dict[str, tuple[str, ...]]] = {"raw": ()}
+    always_active: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -45,8 +52,11 @@ class MicroscopeProcess(BaseProcess):
 
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
-        self.outbox = aq.acquisition_outbox  # send acquisition data to outbox process
         self.slm_queue = aq.slm_to_microscope  # receives SLM updates
+
+        # set by Router.resolve(); frames are published through it
+        self.router = None
+        self._stream_ended = False
 
         # seconds to wait after waitForSystem() before snapping
         self.settle_time_s = settle_time_s
@@ -69,6 +79,26 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern_id = None
 
         self.warned_binning = False
+
+    # ------------------------------------------------------------ routing
+    def subscriptions(self, plan) -> list:
+        return []
+
+    def attach(self, router, data_inbox=None):
+        """Called by the Router; the microscope consumes nothing, so the inbox is unused."""
+        self.router = router
+
+    def _emit(self, data):
+        if self.router is None:
+            raise RuntimeError("microscope process is not attached to a router")
+        self.router.publish(data)
+
+    def end_stream(self):
+        """Tell the router no more frames are coming (idempotent)."""
+        if self._stream_ended or self.router is None:
+            return
+        self._stream_ended = True
+        self.router.end_stream(self.name)
 
     def declare_slm(self):
         core = self.core
@@ -148,8 +178,8 @@ class MicroscopeProcess(BaseProcess):
                 self.handle_update_position_event(msg.event)
 
             case "close":
-                # Send stream close to outbox
-                self.outbox.put(StreamCloseMessage())
+                # no more events from the manager: end the raw stream
+                self.end_stream()
                 return True
 
             case _:
@@ -339,7 +369,7 @@ class MicroscopeProcess(BaseProcess):
         else:
             data_out = AcquisitionData(aq_event, image)
 
-        self.outbox.put(data_out)
+        self._emit(data_out)
 
     def snap(self):
         core = self.core

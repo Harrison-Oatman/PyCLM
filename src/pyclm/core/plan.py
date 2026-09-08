@@ -11,7 +11,8 @@ the rules useq cannot express and PyCLM needs:
 - the per-position time offset (``time_between_positions``),
 - the stimulation channel and the SLM-update / pattern-request events that
   surround it,
-- routing flags derived from the pattern method's requirements.
+- the pattern method's requirements, which set the pattern cadence (the
+  Router turns them into subscriptions; nothing about routing is on an event).
 
 Everything PyCLM-specific lives under ``metadata["pyclm"]`` in the sequence,
 and this wrapper, not useq's iterator, is the authority for *when* things
@@ -34,6 +35,7 @@ import useq
 
 from .events import storage_group
 from .experiments import Experiment, ExperimentSchedule, ImagingConfig
+from .kinds import seg_kind
 from .patterns import AcquiredImageRequest
 
 logger = logging.getLogger(__name__)
@@ -50,7 +52,8 @@ class PlannedEvent:
 
     ``kind`` is one of ``"request_pattern"``, ``"position"``,
     ``"update_pattern"``, ``"acquire"``. ``index`` identifies the frame
-    (``{"t", "p", "c"}``; ``c`` absent for non-acquisition events).
+    (``{"t", "p", "c"}``; ``c`` absent for non-acquisition events). Who
+    consumes the frame is the Router's decision, not the event's.
     """
 
     kind: str
@@ -61,10 +64,6 @@ class PlannedEvent:
     channel: str | None = None
     is_stim: bool = False
     save: bool = True
-    segment: bool = False
-    save_seg: bool = False
-    raw_to_pattern: bool = False
-    seg_to_pattern: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,6 +77,29 @@ class ExpectedDataset:
     group: str
     config: ImagingConfig
     save: bool
+
+
+def _needs(req) -> dict:
+    out = {
+        "raw": bool(req.needs_raw),
+        "seg": bool(req.needs_seg),
+        "tracks": bool(getattr(req, "needs_tracks", False)),
+    }
+    named = [str(n) for n in getattr(req, "segmentations", ())]
+    if named:
+        out["segmentations"] = named
+    return out
+
+
+def requirement_kinds(needs: dict) -> list[str]:
+    """The routing kinds a ``pattern_requirements`` entry asks for, in delivery order."""
+    kinds = [k for k in ("raw", "seg") if needs.get(k)]
+    kinds += [
+        seg_kind(n) for n in needs.get("segmentations", ()) if seg_kind(n) != "seg"
+    ]
+    if needs.get("tracks"):
+        kinds.append("tracks")
+    return kinds
 
 
 def _channel_group(exp: Experiment) -> str:
@@ -257,17 +279,11 @@ class AcquisitionPlan:
         out = {}
         for req in reqs or ():
             if stim_name is not None and req.id == exp.stimulation.channel_id:
-                out[stim_name] = {
-                    "raw": bool(req.needs_raw),
-                    "seg": bool(req.needs_seg),
-                }
+                out[stim_name] = _needs(req)
                 continue
             for cname, cfg in exp.channels.items():
                 if cfg.channel_id == req.id:
-                    out[cname] = {
-                        "raw": bool(req.needs_raw),
-                        "seg": bool(req.needs_seg),
-                    }
+                    out[cname] = _needs(req)
         return out
 
     # --------------------------------------------------------------- validate
@@ -319,8 +335,8 @@ class AcquisitionPlan:
                 )
 
     # ------------------------------------------------------------ requirements
-    def _resolve_requirements(self, name: str) -> dict[str, tuple[bool, bool]]:
-        """{channel name: (needs_raw, needs_seg)} for the pattern method of one experiment."""
+    def _resolve_requirements(self, name: str) -> dict[str, dict[str, bool]]:
+        """{channel name: {"raw", "seg", "tracks"}} for the pattern method of one experiment."""
         exp = self.schedule.experiments[name]
         stim_name = self._meta[name]["stim_channel"]
         reqs = self.requirements.get(name)
@@ -328,7 +344,14 @@ class AcquisitionPlan:
             by_name = self._requirements_by_name(exp, stim_name, reqs)
         else:
             by_name = self._meta[name].get("pattern_requires") or {}
-        return {c: (bool(v["raw"]), bool(v["seg"])) for c, v in by_name.items()}
+        out = {}
+        for c, v in by_name.items():
+            needs = {k: bool(v.get(k, False)) for k in ("raw", "seg", "tracks")}
+            named = [str(n) for n in v.get("segmentations", ())]
+            if named:
+                needs["segmentations"] = named
+            out[c] = needs
+        return out
 
     def _compute_lcm(self, name: str) -> int:
         meta = self._meta[name]
@@ -415,20 +438,17 @@ class AcquisitionPlan:
         return this_t % int(every) == 0
 
     def pattern_due(self, experiment: str, t: int) -> bool:
+        """Whether the experiment's pattern method runs at ``t`` (so its inputs are routed to it)."""
         this_t = self._relative_t(experiment, t)
         return this_t is not None and this_t % self._pattern_lcm[experiment] == 0
 
-    def _routing(self, experiment: str, channel: str, make_pattern: bool) -> dict:
-        exp = self.schedule.experiments[experiment]
-        if not make_pattern or channel not in self._required[experiment]:
-            return {}
-        needs_raw, needs_seg = self._required[experiment][channel]
-        return {
-            "segment": needs_seg,
-            "save_seg": bool(exp.segmentation.save),
-            "raw_to_pattern": needs_raw,
-            "seg_to_pattern": needs_seg,
-        }
+    def pattern_requirements(self, experiment: str) -> dict[str, dict]:
+        """
+        ``{channel: {"raw", "seg", "tracks"[, "segmentations"]}}`` the pattern
+        method needs when it runs (``segmentations`` lists the named
+        segmentation tables; see :func:`requirement_kinds`).
+        """
+        return {c: dict(v) for c, v in self._required[experiment].items()}
 
     def events_at(self, t: int) -> list[PlannedEvent]:
         """Everything the Manager does at timepoint ``t``, in order."""
@@ -477,7 +497,6 @@ class AcquisitionPlan:
                         channel,
                         is_stim,
                         save=bool(config.save),
-                        **self._routing(name, channel, make_pattern),
                     )
                 )
         return out

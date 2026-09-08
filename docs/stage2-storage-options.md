@@ -7,8 +7,9 @@ by default, 7 DMD patterns on change, 8 zarr v2 / NGFF 0.4). Code:
 `src/pyclm/core/storage/` (`FrameWriter`, `HDF5WriterV1`, `OMEZarrWriter`,
 `cadence_groups`), `src/pyclm/io/` (readers for both formats, ImageJ export),
 the GUI rewritten on `pyclm.io`, `[output]` in `pyclm_config.toml`. Tests:
-`tests/test_storage.py` and a dry run in the zarr format. The default stays
-`hdf5` until a real experiment has been run and analysed on zarr (step 2d).
+`tests/test_storage.py` and a dry run in the zarr format. Step 2d: after the
+format was validated on the microscope (2026-09-07) the default flipped to
+`ome-zarr` in Stage 3; `hdf5` remains selectable and readable.
 
 The worry driving this stage is usability: PyCLM must not produce data that
 people cannot open without PyCLM. This document sets a concrete usability

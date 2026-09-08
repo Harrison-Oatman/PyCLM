@@ -16,6 +16,7 @@ from .core.experiments import (
     PatternConfig,
     PositionWithAutoFocus,
     SegmentationConfig,
+    TrackingConfig,
     get_config_groups,
     get_device_properties,
 )
@@ -110,24 +111,37 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         get_device_properties(toml_data["stimulation"], "device_properties")
     )
 
-    # make segmentation config (copy so the parsed toml is left intact)
+    # segmentation: [segmentation] is the default table, [segmentation.<name>]
+    # sub-tables are named segmentations (copies, so the parsed toml is left intact)
     segmentation = dict(toml_data.get("segmentation") or {})
-
-    no_seg = False
-
-    if segmentation:
-        if "method" in segmentation:
-            method = segmentation.pop("method")
-            segmentation_config = SegmentationConfig(method, **segmentation)
-
-        else:
-            no_seg = True
-
+    segmentations = {}
+    for key in list(segmentation):
+        if isinstance(segmentation[key], dict):
+            named = dict(segmentation.pop(key))
+            if "method" not in named:
+                raise ValueError(f"[segmentation.{key}] in {toml_path} needs a method")
+            if "save" in named:
+                named["save_output"] = named.pop("save")
+            segmentations[key] = SegmentationConfig(named.pop("method"), **named)
+    if "save" in segmentation:
+        segmentation["save_output"] = segmentation.pop("save")
+    if "method" in segmentation:
+        segmentation_config = SegmentationConfig(
+            segmentation.pop("method"), **segmentation
+        )
     else:
-        no_seg = True
-
-    if no_seg:
         segmentation_config = SegmentationConfig("none")
+
+    # make tracking config: [tracking] method = "..." plus method kwargs; "save"
+    # (or "save_output") says whether tracks are recorded; "segmentation" names
+    # the segmentation table the tracker links (default: the default table)
+    tracking = dict(toml_data.get("tracking") or {})
+    if "save" in tracking:
+        tracking["save_output"] = tracking.pop("save")
+    if tracking and "method" in tracking:
+        tracking_config = TrackingConfig(tracking.pop("method"), **tracking)
+    else:
+        tracking_config = TrackingConfig("none")
 
     # make pattern config (copy so the parsed toml is left intact)
     pattern = dict(toml_data["pattern"])
@@ -145,6 +159,8 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
         t_stop=t_stop,
         pattern=pattern_config,
         t_delay=t_delay,
+        tracking=tracking_config,
+        segmentations=segmentations,
     )
 
 

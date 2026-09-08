@@ -133,29 +133,31 @@ def test_no_position_event_when_nothing_is_acquired():
     assert plan.channels("exp.00") == ["545"]
 
 
-def test_routing_flags_follow_requirements():
+def test_pattern_requirements_and_cadence_follow_requirements():
     exp = make_experiment("exp.00", pattern_kwargs={"every_t": 2})
     reqs = {
         "exp.00": [AcquiredImageRequest(exp.channels["545"].channel_id, True, True)]
     }
     plan = make_plan(make_schedule([exp], steps=3), reqs)
 
-    # t=0: a pattern is due, the required channel is routed and segmented
-    acquires = {e.channel: e for e in plan.events_at(0) if e.kind == "acquire"}
-    assert acquires["545"].segment
-    assert acquires["545"].raw_to_pattern
-    assert acquires["545"].seg_to_pattern
-    assert acquires["545"].save_seg
-    assert not acquires["DMD"].segment
-    assert not acquires["DMD"].raw_to_pattern
-
-    # t=1: no pattern due (pattern every 2), so nothing is routed
-    kinds = [e.kind for e in plan.events_at(1)]
-    assert "request_pattern" not in kinds
-    acquires = {e.channel: e for e in plan.events_at(1) if e.kind == "acquire"}
-    assert not acquires["545"].segment
-    assert not acquires["545"].raw_to_pattern
+    # the plan records what the pattern needs; the router turns it into deliveries
+    assert plan.pattern_requirements("exp.00") == {
+        "545": {"raw": True, "seg": True, "tracks": False}
+    }
     assert plan.pattern_lcm("exp.00") == 2
+    assert [plan.pattern_due("exp.00", t) for t in range(3)] == [True, False, True]
+
+    # events carry identity only: nothing about consumers
+    acquire = next(e for e in plan.events_at(0) if e.kind == "acquire")
+    assert not hasattr(acquire, "segment")
+    assert not hasattr(acquire, "raw_to_pattern")
+
+    # t=1: no pattern due (pattern every 2)
+    assert "request_pattern" not in [e.kind for e in plan.events_at(1)]
+
+    # a plan read back from YAML resolves the same requirements from metadata
+    reread = AcquisitionPlan(plan.sequence, plan.schedule)
+    assert reread.pattern_requirements("exp.00") == plan.pattern_requirements("exp.00")
 
 
 def test_yaml_round_trip(tmp_path):

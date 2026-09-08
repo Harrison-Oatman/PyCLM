@@ -1,41 +1,51 @@
 # PyCLM architecture notes
 
-Factual reference for the runtime as of Stage 1 (acquisition plan) on branch
-`Stage0-hygiene` (September 2026; the pre-refactor state was `7af035a`). Opinions and recommendations live in
+Factual reference for the runtime as of Stage 3 (router, registration,
+pattern history, tracking) on branch `Stage3-router` (September 2026; the
+pre-refactor state was `7af035a`). Opinions and recommendations live in
 [assessment-2026-09.md](assessment-2026-09.md); bugs live in
 [known-issues.md](known-issues.md).
 
-Sizes for orientation: `src/pyclm` is ~5,400 lines. The core pipeline
-(`core/manager.py` 900, `core/microscope.py` 270, `core/pattern_process.py` 237,
-`core/segmentation_process.py` 176, `core/patterns/pattern.py` 313,
-`controller.py` 242, `directories.py` 480) is about 2,600 of those.
+Sizes for orientation: `src/pyclm` is ~9,300 lines. The core pipeline
+(`core/*.py`, `controller.py`, `directories.py`) is about 4,200 of those;
+`core/storage/`, `core/patterns/`, `core/tracking/` and `pyclm.io` make up
+most of the rest.
 
 ---
 
 ## 1. Process topology
 
-`Controller` (`controller.py`) builds six process objects, wires them to one
-shared `AllQueues`, and runs each one's `process()` method in a
-`ThreadPoolExecutor` (`controller.py:164-241`). **They are threads, not OS
-processes**, despite the naming. All processes share one `threading.Event`
-(`stop_event`) for forced shutdown.
+`Controller` (`controller.py`) builds the process objects, wires the
+addressed control queues (`AllQueues`) and the frame-routing table
+(`Router`, `core/router.py`), and runs each active process's `process()`
+method in a `ThreadPoolExecutor` (`Controller.run`). **They are threads, not
+OS processes**, despite the naming. All processes share one
+`threading.Event` (`stop_event`) for forced shutdown.
 
-| Process | Class / file | Role | Inherits `BaseProcess`? |
+| Process | Class / file | Role | Router role |
 |---|---|---|---|
-| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the other processes. | **No** (own loop) |
-| Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. | Yes, but overrides `process()` with its own loop (per-message error guard; aborts after `max_consecutive_errors`, default 10) |
-| Outbox | `MicroscopeOutbox`, `core/manager.py` | Hands frames to the configured `FrameWriter` (`core/storage/`: HDF5 format 1 or OME-Zarr format 2) **and** fans them out to Segmentation and Pattern. | Yes (via `DataPassingProcess`) |
-| SLM buffer | `SLMBuffer`, `core/manager.py:486` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | Yes (via `DataPassingProcess`) |
-| Segmentation | `SegmentationProcess`, `core/segmentation_process.py:17` | Runs a `SegmentationMethod` per experiment on frames flagged for segmentation. | Yes |
-| Pattern | `PatternProcess`, `core/pattern_process.py:24` | Collects the raw/seg frames a `PatternMethod` declared it needs, runs `generate()`, sends the result to the SLM buffer. | Yes |
+| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Own loop, not a `BaseProcess`. | none (control only) |
+| Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. Own loop with a per-message error guard (aborts after `max_consecutive_errors`, default 10). | produces `raw`; ends the raw stream on the Manager's close |
+| Writer | `WriterProcess`, `core/writer_process.py` (`MicroscopeOutbox` is an alias) | Hands every frame, label image and track table to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2, the default, or HDF5 format 1). | consumes `raw` for every channel and, with `demand=False`, `seg` / `tracks` where the method has `save = true`; `always_active` |
+| SLM buffer | `SLMBuffer`, `core/manager.py` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | none (the pattern → SLM → microscope path is a control handshake, not routed) |
+| Segmentation | `SegmentationProcess`, `core/segmentation_process.py` | Runs one `SegmentationMethod` per `[segmentation]` table the experiment configures (the default table and any `[segmentation.<name>]`) on the frames the router delivers, each at the cadence its consumers need (`segmentations_for`). | produces `seg` and `seg:<name>` from `raw`; started only where some segmentation is demanded |
+| Tracking | `TrackingProcess`, `core/tracking_process.py` | Runs a `TrackingMethod` per (experiment, channel) on every segmentation of that channel. | produces `tracks` from `seg`; `continuous` (needs every frame); started only where `tracks` is demanded |
+| Pattern | `PatternProcess`, `core/pattern_process.py` | Collects the raw/seg/tracks data a `PatternMethod` declared it needs, keeps a bounded per-experiment history, runs `generate()`, sends the result to the SLM buffer. | consumes at `"pattern"` cadence; `always_active` |
 
 `BaseProcess` (`core/base_process.py`) is a poll loop: for each registered
 `(queue, handler)` it calls `get_nowait()`, sleeps 1 ms when no queue had
 work, catches and logs any handler exception and increments `error_count`
 (the process keeps running), and exits when a handler returns `True` or
-`stop_event` is set.
+`stop_event` is set. `PipelineProcess` (same file) is the router-facing
+subclass: it declares `produces` (`{kind: (input kinds,)}`), `continuous`,
+`always_active`, `subscriptions(plan)` and `can_produce(kind, experiment,
+channel)`; the router hands it one data inbox (`attach`), on which data and
+the final `StreamCloseMessage` arrive in order; `handle_data(data)` is the
+only method a consumer implements and `publish(data)` is how a producer
+emits. `Controller.add_process(proc)` registers an extra `PipelineProcess`
+before `initialize()`.
 
-### Queues (`core/queues.py`)
+### Control queues (`core/queues.py`)
 
 All queues are `queue.Queue` (Stage 0 replaced `multiprocessing.Queue`, which
 pickled every item through a pipe even between threads). Items are passed by
@@ -46,22 +56,48 @@ nothing downstream may mutate a frame or event it did not create.
 ```
 manager → microscope     manager_to_microscope     AcquisitionEventMessage, UpdatePatternEventMessage,
                                                    UpdatePositionEventMessage, "close"
-manager → outbox         manager_to_outbox         "close"
 manager → slm_buffer     manager_to_slm_buffer     UpdatePatternEventMessage, "close"
-manager → seg            manager_to_seg            "close"
 manager → pattern        manager_to_pattern        RequestPattern, "close"
 microscope → manager     microscope_to_manager     UpdateZPositionMessage
-microscope → outbox      acquisition_outbox        AcquisitionData | StimulationData, StreamCloseMessage
-outbox → seg             outbox_to_seg             AcquisitionData, StreamCloseMessage
-seg → outbox             seg_to_outbox             SegmentationData, StreamCloseMessage
-outbox → pattern         outbox_to_pattern         AcquisitionData, StreamCloseMessage
-seg → pattern            seg_to_pattern            SegmentationData, StreamCloseMessage
 pattern → slm_buffer     pattern_to_slm            CameraPattern, StreamCloseMessage
 slm_buffer → microscope  slm_to_microscope         EventSLMPattern
 ```
 
-The topology is fixed by attribute names on `AllQueues`; each process reaches
-into `aq.<name>` in its constructor. There is no registry or routing table.
+### The router (`core/router.py`)
+
+Frame-derived data (`AcquisitionData` / `StimulationData` = kind `raw`,
+`SegmentationData` = `seg`, or `seg:<name>` for a named
+`[segmentation.<name>]` table, `TrackingData` = `tracks`; `core/kinds.py`
+holds the vocabulary) does not travel on named queues. `Controller.initialize` builds a `Router(plan)`, `add()`s the
+microscope, writer, segmentation, tracking, pattern and any user process,
+and calls `resolve()`, which:
+
+1. collects each process's `subscriptions(plan)` (`Subscription(consumer,
+   experiment, channel, kind, cadence, demand)`; cadence `"always"` or
+   `"pattern"` = only at timepoints where `plan.pattern_due(experiment, t)`);
+2. for every demanded kind other than `raw`, subscribes the kind's producer
+   to its input kinds at the widest downstream cadence (`"always"` if the
+   producer is `continuous`), iterating until nothing changes; a demanded
+   kind with no producer, or whose producer's `can_produce` says the
+   experiment has no method configured, raises `RoutingError`;
+3. adds `demand=False` subscriptions (the writer's) only for data that is
+   produced anyway;
+4. computes each consumer's upstream set (the producers of the kinds it
+   receives, plus the raw producer), creates one inbox per active process
+   (something routed to it, or `always_active`) and calls `attach`.
+
+`publish(data)` looks up `(event.experiment_name, event.index["c"],
+data.kind)` and puts the same object on each subscriber's inbox whose
+cadence is due at `event.t_index`; a key nobody subscribes to is counted in
+`undeliverable` and logged once. `end_stream(producer)` puts one
+`StreamCloseMessage` on a consumer's inbox when the last of its upstreams
+has ended. `as_dict()` is the resolved table; it is logged at INFO and
+stored in the outputs (`pyclm.routing` in the zarr root attrs, `routing`
+attribute in HDF5).
+
+The router is not a thread: `publish` runs on the producer's thread and
+costs one `put` per delivery, so a frame reaches segmentation before the
+writer has compressed it.
 
 ---
 
@@ -75,24 +111,28 @@ into `aq.<name>` in its constructor. There is no registry or routing table.
     `MicroscopePosition`, `channel_id` (UUID of the `ImagingConfig`),
     scheduled wall time, `index` (`{"t", "p", "c"}`; `t_index` is a property
     on it, and `get_rel_path()` derives the HDF5 path from it), exposure,
-    binning, `config_groups`, `devices`, `needs_slm`, and a block of
-    **routing/persistence booleans** (`save_output`, `save_stim`, `segment`,
-    `save_seg`, `raw_goes_to_pattern`, `seg_goes_to_pattern`) plus method
-    names. It is mutated by the microscope after the snap
-    (`completed_time`, `pixel_width_um`).
+    binning, `config_groups`, `devices`, `needs_slm` and `save_output`.
+    Nothing about who consumes the frame (Stage 3 removed the routing
+    booleans and method names). It is mutated by the microscope after the
+    snap (`completed_time`, `pixel_width_um`).
   - `PlannedEvent` (`core/plan.py`) — what the plan hands the Manager: `kind`
     (`request_pattern` / `position` / `update_pattern` / `acquire`), `t`,
-    `experiment`, `index`, `scheduled_offset_s`, and the resolved routing
-    flags. The Manager's `dispatch()` maps each one onto the messages above.
+    `experiment`, `index`, `scheduled_offset_s`, `channel`, `is_stim`, `save`.
+    The Manager's `dispatch()` maps each one onto the messages above.
   - `UpdatePatternEvent` — "put this experiment's current pattern on the SLM".
   - `UpdateStagePositionEvent` — "move to this position".
   - `RequestPattern` (`pattern_process.py`) — a message, not an event: tells
     the pattern process which frames to wait for at an absolute timepoint.
-- **Data** (`core/datatypes.py`) carry numpy arrays plus the originating event:
-  `AcquisitionData(event, data)`, `StimulationData(event, data, dmd_pattern,
-  pattern_id)`, `SegmentationData(event, data)`, `CameraPattern(experiment,
-  data, slm_coords, binning)` (gets a fresh `pattern_id` UUID),
-  `EventSLMPattern(event_id, pattern, pattern_unique_id)`.
+- **Data** (`core/datatypes.py`) carry numpy arrays plus the originating
+  event, and a class-level `kind` the router keys on: `AcquisitionData(event,
+  data)` (`raw`), `StimulationData(event, data, dmd_pattern, pattern_id)`
+  (`raw`), `SegmentationData(event, data, name)` (`seg`, or `seg:<name>`
+  for a named table; the router looks producers up by the base kind, so one
+  segmentation process serves every name), `TrackingData(event,
+  labels, rows)` (`tracks`; `rows` are `TrackRow`s). Not routed:
+  `CameraPattern(experiment, data, slm_coords, binning)` (gets a fresh
+  `pattern_id` UUID) and `EventSLMPattern(event_id, pattern,
+  pattern_unique_id)`.
 
 ---
 
@@ -125,7 +165,11 @@ the pipeline runs from (see the end of this section).
 - a stimulation `ImagingConfig` from `[stimulation]` (its `binning` defaults
   to the imaging binning);
 - `SegmentationConfig(method, **rest)` from `[segmentation]` or
-  `SegmentationConfig("none")`;
+  `SegmentationConfig("none")`, plus one per `[segmentation.<name>]`
+  sub-table, all in `Experiment.segmentations` (`experiment.segmentation`
+  is the default entry, `segmentation_names` the configured ones);
+- `TrackingConfig(method, segmentation=..., **rest)` from `[tracking]`
+  (`segmentation` names the table the tracker links);
 - `PatternConfig(method, **rest)` from `[pattern]` (`every_t` is read from
   the kwargs by `MethodBasedConfig`);
 - `t_delay`, `t_stop` (in timepoints).
@@ -175,12 +219,16 @@ matching, then TIF file names as positions) and builds a
 4. For each experiment: `PatternProcess.request_method(experiment)` constructs
    the `PatternMethod` from `pattern.kwargs` **only** and calls
    `model.initialize(experiment)`, which resolves `add_requirement(channel_name,
-   raw, seg)` / `request_stim(raw, seg)` calls into a list of
-   `AcquiredImageRequest(channel_id, needs_raw, needs_seg)`. If any request
-   needs seg, `SegmentationProcess.request_method(experiment)` constructs the
-   `SegmentationMethod` (with shared-resource dedup for e.g. the Cellpose
-   model). **Segmentation is never instantiated unless a pattern asks for it**;
-   a configured-but-unused segmentation method logs a warning.
+   raw, seg, tracks, history)` (`seg` may name `[segmentation.<name>]`
+   tables) / `request_stim(raw, seg, history)` calls into a list of
+   `AcquiredImageRequest(channel_id, needs_raw, needs_seg, needs_tracks,
+   history, segmentations)`, whose `.kinds` are the routing kinds. After the
+   router resolves (step 7), `Controller._instantiate_producers` calls
+   `SegmentationProcess.request_method(experiment, name)` for every demanded
+   `(experiment, segmentation name)` (with shared-resource dedup for e.g. the
+   Cellpose model) and `TrackingProcess.request_method` per tracked channel.
+   **A segmentation is never instantiated unless something asks for it**; a
+   configured-but-unused table logs a warning.
 5. `t_gcd` of all channel `every_t` values is computed for the GUI.
 6. `PatternProcess.initialize_models()` → `configure_system()` on each method
    injects camera properties and the experiment reference and applies the
@@ -279,22 +327,29 @@ microscope re-raises and the Controller aborts the run.
 MicroscopeProcess.handle_acquisition_event
   → set config groups, device props, exposure, binning; wait; snap
   → AcquisitionData(event, img)  or  StimulationData(event, img, current_pattern, pattern_id)
-  → acquisition_outbox
-MicroscopeOutbox.handle_data
-  → write_data(): resize pre-allocated dset, write, write_attrs, flush; dmd + pattern_id for stim;
-    bump current_t_index if _timepoint_complete(); a frame with no pre-allocated dataset is
-    dropped, logged, and counted in dropped_frames
-  → if event.segment:             outbox_to_seg.put(data)
-  → if event.raw_goes_to_pattern: outbox_to_pattern.put(data)
-SegmentationProcess.handle_segment_data
-  → SegmentationData(event, model.segment(img))
-  → seg_to_pattern.put(seg)           (always)
-  → seg_to_outbox.put(seg)            (if event.save_seg)  → Outbox writes ".../seg"
+  → router.publish(data)                       key (experiment, channel, "raw")
+Router.publish
+  → for each subscriber of the key whose cadence is due at event.t_index: inbox.put(data)
+    (the writer always; segmentation if seg is demanded for the channel; the pattern
+    process if it asked for the raw frame; a user process if it subscribed)
+WriterProcess.handle_data
+  → FrameWriter.write_frame / write_labels / write_tracks by data.kind
+    (OME-Zarr: chunk write, frames/tracks table rows, current_t; HDF5 v1: resize the
+    pre-allocated dataset, write attrs, flush, current_t_index; a frame with no slot is
+    dropped, logged, and counted in dropped_frames)
+SegmentationProcess.handle_data
+  → for each (segmentation name, cadence) the router wants of this channel, skipping
+    "pattern"-cadence ones when the pattern is not due:
+    SegmentationData(event, model.segment(img), name)    → router.publish   "seg" / "seg:<name>"
+TrackingProcess.handle_data                              (only if tracks are demanded; every frame)
+  → labels, rows = method.track(seg, t, pixel_size_um)
+  → TrackingData(event, labels, rows)                    → router.publish   "tracks"
 PatternProcess
   → RequestPattern creates DataDock(time_sec, requirements) keyed (experiment, t)
-  → raw/seg arrivals fill the dock (data for a timepoint with no dock is dropped with a warning);
-    when complete: docks.pop(), PatternContext(dock, experiment),
-    model.generate(context) → CameraPattern(experiment, pattern, slm_coords, binning) → pattern_to_slm
+  → raw/seg/tracks arrivals fill the dock by data.kind (data for a timepoint with no dock is
+    dropped with a warning); when complete: docks.pop(), ExperimentState.absorb(dock, t),
+    PatternContext(state, experiment), model.generate(context)
+    → CameraPattern(experiment, pattern, slm_coords, binning) → state.record_pattern → pattern_to_slm
 SLMBuffer.handle_data
   → pattern_to_slm(): float[0,1] camera coords → uint8, warpAffine with affine (scaled by binning) → SLM shape
   → slm_patterns[experiment] = (pattern_id, slm_image)
@@ -302,18 +357,25 @@ SLMBuffer on UpdatePatternEvent → EventSLMPattern(event.id, slm_image, pattern
 MicroscopeProcess.handle_update_pattern_event → core.setSLMImage(); remembers pattern + id for the next StimulationData
 ```
 
-Who decides routing: `AcquisitionPlan._routing()` resolves the pattern's
-`AcquiredImageRequest`s to channel names and sets `segment`, `save_seg`,
-`raw_to_pattern`, `seg_to_pattern` on the `PlannedEvent`, but only when a
-pattern is being generated this timepoint; `Manager.dispatch()` copies them
-onto the `AcquisitionEvent`. The Outbox and Segmentation processes just read
-those flags.
+Who decides routing: the `Router` (§1), from the pattern method's
+`AcquiredImageRequest`s (`plan.pattern_requirements()`), the writer's
+recording subscriptions, and the producers' declarations. Deliveries to the
+pattern process happen only at timepoints where a pattern is due
+(`plan.pattern_due`), which is also when the Manager sends `RequestPattern`;
+deliveries to tracking happen at every frame. Nothing is decided per event.
 
-What a pattern method sees: `PatternContext` (`patterns/pattern.py:92`) exposes
-`.time` (seconds since start, scheduled), `.raw(name)`, `.segmentation(name)`,
-`.stim_raw()`, `.stim_seg()` for **the current timepoint only**. The dock is
-popped and discarded after `generate()`. Any temporal state must live on the
-method instance (e.g. `BounceModel.down`, `EmbryoSegmentationMethod.cached_result`).
+What a pattern method sees: `PatternContext` (`patterns/pattern.py`) on the
+experiment's `ExperimentState`: `.t`, `.time`, `.generation`, `.raw(name)`,
+`.segmentation(channel, name=)` (a named table's labels), `.regions(channel,
+name=)` (a `Regions`), `.tracks(channel)` (a `Tracks`, itself a `Regions`:
+relabelled mask, rows, `mask(id)`, `centroid(id)`, `measure`, `paint`),
+`.stim_raw()`, `.stim_seg()`, `.history(name,
+kind, n)` (the last `history` deliveries declared in `add_requirement`, at
+the pattern's cadence), `.stim_history()`, `.last_pattern()`,
+`.pattern_history(n)`. The dock is still popped after each timepoint; the
+state persists for the run and is bounded by the declared depths (default 1)
+and `PatternMethod.pattern_history` (default 2). `ZooContext` mirrors the
+same methods for the docs zoo.
 
 ---
 
@@ -336,7 +398,9 @@ slot per acquisition of that group; `every_t` and `t_delay` in the group's
 zstd. In the common configuration there is one group, `imaging`; a saved
 stimulation frame joins the group of its cadence (last channel) or forms
 `stim`. `<group>/labels/segmentation/0` holds label images when
-`segmentation.save` is set. `patterns/dmd/0` is `(N, H_slm, W_slm)` uint8 with
+`segmentation.save` is set, and `<group>/labels/<name>/0` those of each named
+`[segmentation.<name>]` table the writer records (the NGFF `labels` list
+names them, default first). `patterns/dmd/0` is `(N, H_slm, W_slm)` uint8 with
 one entry per distinct `pattern_id` (`pattern_policy = on_change`; `all` keeps
 one per stimulation event). Root attrs `pyclm`: format, plan YAML, experiment
 and schedule metadata, affine transform, SLM shape, groups, `current_t`.
@@ -344,6 +408,14 @@ and schedule metadata, affine transform, SLM shape, groups, `current_t`.
 the experiment directory hold one row per frame and per stimulation event
 (`kind`, `t`, group, `local_index`, channel, timestamps, position,
 `pattern_id`, `pattern_index`). Skipped timepoints are never written.
+
+Tracks (Stage 3): `<group>/labels/tracks/0` `(T, C, Y, X) uint32` next to
+`labels/segmentation`, created for the channels whose tracks the writer will
+receive (`recorded`, from the router), and `tracks.parquet` / `tracks.csv`
+in the experiment directory (columns `experiment, t, channel, group,
+local_index, track_id, label, y, x, y_um, x_um, area, parent`). The resolved
+routing table is stored under `pyclm.routing` in the root attrs (HDF5 v1: a
+`routing` root attribute; v1 does not store tracks and warns once).
 
 ### HDF5 (format 1, `core/storage/hdf5_v1.py`, one file per experiment/position)
 
@@ -396,25 +468,31 @@ zarr or `channel_x` / `stim_aq` for HDF5).
 
 Normal completion is a drain, not a stop:
 
-1. Manager finishes its loop, sends `"close"` to all five manager→X queues,
-   returns. `Controller.run` sees the manager future complete and falls through
-   to `finally`, which waits for all futures (it does **not** set `stop_event`).
-2. Microscope: on `"close"` puts `StreamCloseMessage` on `acquisition_outbox`
-   and returns.
-3. Outbox: counts `stream_close` messages. First one (from microscope) is
-   forwarded to seg and pattern. Exits when `manager_done and stream_count >= 2`
-   (microscope + segmentation), closing its files.
-4. Segmentation: on `stream_close` forwards to pattern and outbox, exits.
-5. Pattern: exits when it has seen `stream_close` from both `from_raw` and
-   `from_seg` (`stream_count >= 2`), forwarding one to the SLM buffer.
-6. SLM buffer: exits when `manager_done and pattern_done`.
+1. Manager finishes its loop, sends `"close"` to its three addressed queues
+   (microscope, SLM buffer, pattern), returns. `Controller.run` sees the
+   manager future complete and falls through to `finally`, which waits for
+   all futures (it does **not** set `stop_event`).
+2. Microscope: on `"close"` calls `router.end_stream("microscope")` and
+   returns.
+3. Router: for every consumer whose upstreams have all ended it puts one
+   `StreamCloseMessage` on that consumer's inbox. Upstreams are derived from
+   the table at `resolve()`: every consumer waits for the raw producer plus
+   each producer that feeds it (`Router.upstreams(name)`), so in the closed
+   loop segmentation closes first, then tracking (if any), then the pattern
+   process and the writer.
+4. A `PipelineProcess` on `StreamCloseMessage` runs `on_stream_end()`: the
+   default ends its own stream (which may close consumers downstream) and
+   exits; the writer closes its outputs first; the pattern process forwards
+   a `StreamCloseMessage` to the SLM buffer first.
+5. SLM buffer: exits when `manager_done and pattern_done`.
 
-The counts (`>= 2`) are hard-coded to the current topology. Forced shutdown
-(`stop_event`, set on `KeyboardInterrupt` or any crashed process) makes every
-`BaseProcess` loop break at its next iteration. `MicroscopeOutbox.process`
-wraps the loop in `try/finally: close_files()`, and `Controller.run` calls
-`close_files()` again in its own `finally`, so files are closed on both paths
-(every write is also followed by `flush()`).
+No process counts anything; adding a consumer adds nothing to shut down.
+Forced shutdown (`stop_event`, set on `KeyboardInterrupt` or any crashed
+process) makes every `BaseProcess` loop break at its next iteration;
+`PipelineProcess.process` ends its stream in a `finally`,
+`WriterProcess.process` closes the outputs in a `finally`, and
+`Controller.run` calls `close_files()` again in its own `finally`, so outputs
+are closed on both paths.
 
 ---
 
@@ -433,16 +511,35 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 
 ---
 
-## 10. Extension points that exist today
+## 10. Extension points
 
 - `PatternMethod` subclass + `Controller.register_pattern_method(name, cls)` or
   `run_pyclm(pattern_methods={...})`. Constructor gets only the TOML kwargs;
-  hardware context arrives later via `configure_system`. Built-ins are
-  registered in `core/patterns/__init__.py:known_models`; each
-  `PatternProcess` / `SegmentationProcess` instance copies its registry at
-  construction, so registrations do not leak between controllers.
+  hardware context arrives later via `configure_system`. Requirements:
+  `add_requirement(channel, raw, seg, tracks, history)` (`seg`: `True`, a
+  `[segmentation.<name>]` name, or a list of names), `request_stim(raw,
+  seg, history)`. The measurement toolbox (`core/measure.py`: `Regions`,
+  `PerTrack`, `nuclear_cytosolic_ratio`; `Tracks` is a `Regions`) is what
+  methods use to measure per object, remember per track and paint
+  per-object values back into a pattern. The per-cell bases (`PerCellPatternMethod`,
+  `NucleusControlMethod`) take `tracks=True` to run their loop on tracked
+  labels and expose `cell_labels(context)` as the hook that supplies the
+  label image. Built-ins are registered in
+  `core/patterns/__init__.py:known_models`; each process instance copies its
+  registry at construction, so registrations do not leak between controllers.
 - `SegmentationMethod` subclass (`segment(img) -> labels`), optional
   `request_resource()` for shared heavy models.
+- `TrackingMethod` subclass (`track(labels, t, pixel_size_um) -> (relabelled,
+  rows)`, `core/tracking/`) + `Controller.register_tracking_method` or
+  `run_pyclm(tracking_methods={...})`; one instance per (experiment,
+  channel), configured by `[tracking]`. Built-in: `centroid`.
+- `PipelineProcess` subclass + `Controller.add_process(proc)`: a new consumer
+  or producer declares `produces`, `continuous`, `always_active`,
+  `subscriptions(plan)` and implements `handle_data`; the router wires it and
+  derives its shutdown. `TrackingProcess` is the reference example.
+- `FrameWriter` subclass (`core/storage/base.py`): `open`, `write_frame`,
+  `write_labels`, `write_tracks` (optional), `close`, `planned_paths`,
+  `output_paths`; selected by `make_writer`.
 - `PositionMover` subclass (`move_to(position, core) -> (z_moved, z)`).
   `PFSPositionMover` raises `TimeoutError` if focus does not lock within
   `PFS_TIMEOUT_S` (30 s).
@@ -451,27 +548,37 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 - Image sources for dry runs: `TimeSeriesImageSource` (folder/yaml, mapping,
   single stack).
 
+Concurrency is threads and `queue.Queue` (Stage 0). If a stage ever has to
+move out of process, the Router is the one place to do it: a consumer whose
+inbox is a `multiprocessing.Queue` and whose `publish` path pickles is a
+router concern, invisible to producers and to the Controller.
+
 ## 11. Tests
 
-`uv run --group test pytest` — 114 tests, ~80 s, all passing after Stage 2
-(2026-09-06). The dry-run integration tests take almost all of that time.
+`uv run --group test pytest` — 170 tests, ~100 s, all passing after Stage 3
+plus named segmentations and the measurement toolbox (2026-09-08). The dry-run integration tests take almost all of that time.
 
 | File | Covers |
 |---|---|
-| `test_dry_run.py` | Whole pipeline against the simulated core for each position-list / discovery mode; HDF5 dataset inventory, shapes, dtypes. |
-| `test_swmr.py` | Outbox init + write + `convert_hdf5s.make_tif` (HDF5 format 1). |
-| `test_storage.py` | Cadence grouping, the OME-Zarr writer end to end (layout, NGFF attrs, compact T, labels, pattern policies, chunks only for acquired frames, frames table), `pyclm.io` readers for both formats, ImageJ export, outbox delegating to the writer. |
+| `test_dry_run.py` | Whole pipeline against the simulated core for each position-list / discovery mode (HDF5 dataset inventory), the OME-Zarr run, and a closed loop with segmentation + tracking on OME-Zarr (tracked labels, tracks table, routing provenance, export). |
+| `test_router.py` | Table resolution (pattern-only, tracking widens segmentation to every frame, recording only what is produced, shared producers), validation errors, cadence filtering and object identity on publish, undeliverable counting, stream close after the last upstream, exactly once, under concurrent producers. |
+| `test_shutdown.py` | Graceful drain of the workers after `CloseMessage` in open loop, with segmentation, and with tracking (derived upstreams); forced stop; outputs closed on both paths. |
+| `test_doc_examples.py` | The pattern methods shown in the user docs (`documentation/examples/`: leader cells, three-phase intensity programme on the toolbox, the KTR clamp on two named segmentations) against synthetic data, and the `tracks = true` switch on the per-cell base classes. |
+| `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
+| `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |
+| `test_tracking.py` | The centroid linker (id stability, new ids, µm gate, empty frames), `Tracks`, `TrackingProcess`, `[tracking]` parsing, router wiring for tracks, `context.tracks()`. |
+| `test_storage.py` | Cadence grouping, the OME-Zarr writer end to end (layout, NGFF attrs, compact T, labels, tracks, pattern policies, chunks only for acquired frames, frames and tracks tables, routing attrs), `pyclm.io` readers for both formats, ImageJ export, the writer process delegating to the writer, HDF5 v1 dropping tracks with one warning. |
+| `test_swmr.py` | Writer init + write + `convert_hdf5s.make_tif` (HDF5 format 1). |
 | `test_base_process.py` | Poll loop, stop paths, handler error counting. |
-| `test_plan.py` | `AcquisitionPlan` enumeration against the scheduling rules over 54 `every_t`/`t_delay`/`t_stop`/stim-cadence combinations, event order and offsets, routing flags, YAML round trip, index → path, stimulation naming, PFS offset recorded not executed, z-readiness of the structure, timing budget, validation. |
-| `test_manager_scheduling.py` | Which messages the Manager emits at which `t` from a plan, request/event index agreement, per-timepoint ordering, close fan-out, z-update handling, wait loop not spinning, stop event. |
-| `test_pattern_process.py` | Dock keyed by absolute `t`, unrequested data dropped with a warning, per-instance registries. |
-| `test_microscope_process.py` | Frame delivery, settle time, error guard and abort threshold, SLM handshake (stale replies, timeout), z-correction message. |
-| `test_shutdown.py` | Graceful drain of the five workers after `CloseMessage`; forced stop; HDF5 files closed on both paths. |
+| `test_plan.py` | `AcquisitionPlan` enumeration against the scheduling rules over 54 `every_t`/`t_delay`/`t_stop`/stim-cadence combinations, event order and offsets, pattern requirements and cadence, YAML round trip, index → path, stimulation naming, PFS offset recorded not executed, z-readiness of the structure, timing budget, validation. |
+| `test_manager_scheduling.py` | Which messages the Manager emits at which `t` from a plan, request/event index agreement, per-timepoint ordering, close fan-out to the addressed queues, z-update handling, wait loop not spinning, stop event. |
+| `test_pattern_process.py` | Dock keyed by absolute `t`, unrequested data dropped with a warning, per-instance registries, subscriptions at pattern cadence, history depth and order, previous patterns, unrequested history rejected. |
+| `test_microscope_process.py` | Frame delivery to the router, settle time, error guard and abort threshold, SLM handshake (stale replies, timeout), z-correction message. |
 | `test_logging_setup.py` | Per-run log handlers. |
-| `test_controller_init.py` | Early `FileExistsError`, unused-segmentation warning, settle-time plumbing. |
+| `test_controller_init.py` | Early `FileExistsError` for both formats, unused-segmentation warning, settle-time plumbing. |
 | `test_pattern_method.py` | Integral `pattern_shape` under binning; `PatternReview` constructible from TOML kwargs. |
 
 `tests/helpers.py` holds the builders (`make_experiment`, `make_schedule`,
-`make_plan`, `FakeImageSource`, `drain`) used by the unit tests. Still untested: `SLMBuffer`
-transforms, `DataDock` completeness with mixed raw/seg requirements, the
-built-in pattern methods (exercised only by the docs zoo).
+`make_plan`, `FakeImageSource`, `drain`) used by the unit tests. Still
+untested: `SLMBuffer` transforms, the built-in pattern methods (exercised
+only by the docs zoo).

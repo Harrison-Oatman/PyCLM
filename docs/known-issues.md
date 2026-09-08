@@ -92,8 +92,8 @@ attributes on `PFSPositionMover`; the y-axis negation in
 ### 11. Swallowed handler exceptions have no health signal (hazard, partly addressed)
 
 Every `BaseProcess` and the microscope now count errors (`error_count`), and
-the outbox counts `dropped_frames`, but nothing reads those counters during a
-run. A pattern method that throws every timepoint still means the SLM keeps
+the writer counts `dropped_frames` and the router `undeliverable`, but nothing
+reads those counters during a run. A pattern method that throws every timepoint still means the SLM keeps
 showing the last good pattern with no indication in the GUI or to the
 Manager. Surfacing this is Stage 4.
 
@@ -137,20 +137,17 @@ replaces per-dataset attributes with a frames table.
 
 ### 17. Shutdown counts encode the topology
 
-`MicroscopeOutbox.handle_message` waits for `stream_count >= 2`,
-`PatternProcess` for `>= 2` (`core/manager.py`, `core/pattern_process.py`).
-Adding a consumer (tracking) means auditing every count. Stage 3 (router)
-derives fan-in from the subscription table.
+**Fixed in Stage 3.** `Router.end_stream` derives each consumer's fan-in from
+the resolved table (`core/router.py`); no process counts stream closes
+(`tests/test_router.py::test_stream_close_arrives_after_the_last_upstream`,
+`tests/test_shutdown.py`).
 
 ### 18. Routing is baked into `AcquisitionEvent`
 
-`AcquisitionPlan._routing` (`core/plan.py`; moved there from
-`Manager.get_kwargs` in Stage 1) decides `segment`, `save_seg`,
-`raw_to_pattern`, `seg_to_pattern` from the pattern's
-`AcquiredImageRequest`s, and `Manager.dispatch` copies them onto the event;
-the Outbox and Segmentation processes read the flags. A new consumer still
-needs a new flag, a new branch in the Outbox, and a new attribute in the HDF5
-schema (#15). Stage 3.
+**Fixed in Stage 3.** Events carry identity only; the `Router` resolves who
+receives what from the processes' declarations (`core/router.py`,
+architecture-notes §1). Adding a consumer is `Controller.add_process()`;
+`TrackingProcess` was added that way.
 
 ### 19. `pattern_shape` became a float tuple after binning
 
@@ -189,6 +186,10 @@ shape differs from the frame as absent (`tests/test_swmr.py` covers it).
 optimisation), but `Controller.initialize` now logs a warning when a
 segmentation method is configured and no pattern requirement uses it
 (`tests/test_controller_init.py::test_unused_segmentation_method_warns`).
+Stage 3 made this the general rule of the Router: a producer stage
+(segmentation, tracking) runs for a channel only when a demanding consumer
+needs its output; `save` only decides whether the writer records it
+(`Router.resolve`, docs/stage3-router-design.md §3.4, decision 2).
 
 ### 24. Virtual microscope fidelity around binning
 
@@ -222,3 +223,13 @@ before `method` is popped.
 
 **Fixed in Stage 0.** `pre-commit run --all-files` (ruff format + check,
 nbstripout) passes.
+
+### 29. One segmentation configuration per experiment
+
+**Fixed in Stage 3 (2026-09-08).** `experiment_from_toml` built a single
+`SegmentationConfig`, `SegmentationProcess` kept one model per experiment,
+and the routing kind `seg` was one per channel, so two models on one frame
+(nuclei and whole cells of a biosensor channel) or different models per
+channel could not be configured. Named `[segmentation.<name>]` tables,
+kind `seg:<name>`, `Experiment.segmentations` and one label image per table
+in OME-Zarr (see stage3-router-design.md §9) remove the limit.

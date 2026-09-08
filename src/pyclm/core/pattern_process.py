@@ -1,8 +1,8 @@
 import logging
 from threading import Event
 
-from .base_process import BaseProcess
-from .datatypes import AcquisitionData, CameraPattern, SegmentationData
+from .base_process import PipelineProcess
+from .datatypes import AcquisitionData, CameraPattern
 from .experiments import Experiment
 from .messages import Message, StreamCloseMessage
 from .patterns import (
@@ -14,12 +14,25 @@ from .patterns import (
     PatternMethodReturnsSLM,
     known_models,
 )
+from .patterns.pattern import ExperimentState
+from .plan import requirement_kinds
 from .queues import AllQueues
+from .router import Subscription
 
 logger = logging.getLogger(__name__)
 
 
-class PatternProcess(BaseProcess):
+class PatternProcess(PipelineProcess):
+    """
+    Generates patterns: the Manager announces each pattern-due timepoint with
+    a :class:`RequestPattern`, the Router delivers the required raw / seg /
+    tracks data at that cadence, and once the dock for that timepoint is
+    complete the experiment's method runs and the result goes to the SLM
+    buffer.
+    """
+
+    always_active = True
+
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="pattern")
 
@@ -29,27 +42,32 @@ class PatternProcess(BaseProcess):
         self.inbox = aq.manager_to_pattern
         self.slm = aq.pattern_to_slm
 
-        self.from_seg = aq.seg_to_pattern
-        self.from_raw = aq.outbox_to_pattern
-
-        self.stream_count = 0
-
         self.camera_properties = None
         self.initialized = False
 
         self.models = {}
         self.docks = {}
         self.experiments = {}
+        # per-experiment memory: histories of deliveries and generated patterns
+        self.states: dict[str, ExperimentState] = {}
 
         self.register_queue(self.inbox, self.handle_message_wrapper)
-        self.register_queue(self.from_raw, self.handle_from_raw)
-        self.register_queue(self.from_seg, self.handle_from_seg)
 
     def initialize(self, camera_properties: CameraProperties):
         self.camera_properties = camera_properties
 
         self.initialized = True
 
+    # ------------------------------------------------------------ routing
+    def subscriptions(self, plan) -> list[Subscription]:
+        subs = []
+        for name in plan.experiments:
+            for channel, needs in plan.pattern_requirements(name).items():
+                for kind in requirement_kinds(needs):
+                    subs.append(Subscription(self.name, name, channel, kind, "pattern"))
+        return subs
+
+    # ------------------------------------------------------------ methods
     def request_method(self, experiment: Experiment) -> list[AcquiredImageRequest]:
         method_name = experiment.pattern.method_name
 
@@ -73,7 +91,11 @@ class PatternProcess(BaseProcess):
 
         logger.info(f'initializing pattern model "{method_name}"')
 
-        return model.initialize(experiment)
+        requirements = model.initialize(experiment)
+        self.states[experiment_name] = ExperimentState(
+            requirements, pattern_history=getattr(model, "pattern_history", 2)
+        )
+        return requirements
 
     def initialize_models(self):
         for experiment_name in self.models:
@@ -104,28 +126,29 @@ class PatternProcess(BaseProcess):
             f"self.models[{'experiment_name'}] is not a PatternMethod"
         )
 
-        # Create context wrapper
-
-        # We assume _experiment_ref is available. If not, we might crash, which is acceptable for alpha breakage.
-        # Ideally, we ensure configure_system is called.
         if model._experiment_ref is None:
             raise RuntimeError(
                 f"Model {model.name} for {experiment_name} was not properly configured with an experiment reference."
             )
 
-        context = PatternContext(data_dock, model._experiment_ref)
+        state = self.states.get(experiment_name)
+        if state is None:
+            state = self.states[experiment_name] = ExperimentState(
+                data_dock.requirements
+            )
+        state.absorb(data_dock, dockname[1])
+        context = PatternContext(state, model._experiment_ref)
 
         if isinstance(model, PatternMethodReturnsSLM):
-            slm_pattern = model.generate(context)
-            self.slm.put(CameraPattern(experiment_name, slm_pattern, slm_coords=True))
-
+            pattern = model.generate(context)
+            out = CameraPattern(experiment_name, pattern, slm_coords=True)
         else:
             pattern = model.generate(context)
-            self.slm.put(
-                CameraPattern(
-                    experiment_name, pattern, slm_coords=False, binning=model.binning
-                )
+            out = CameraPattern(
+                experiment_name, pattern, slm_coords=False, binning=model.binning
             )
+        state.record_pattern(out.pattern_id, pattern)
+        self.slm.put(out)
 
     def dock_key(self, experiment_name, t) -> tuple[str, int]:
         return (experiment_name, int(t))
@@ -136,19 +159,10 @@ class PatternProcess(BaseProcess):
         if dock.check_complete():
             self.run_model(experiment_name, dockname)
 
+    # ----------------------------------------------------------- messages
     def handle_message(self, message: Message):
         match message.message:
             case "close":
-                return False
-
-            case "stream_close":
-                logger.info("pattern process received stream close")
-
-                self.stream_count += 1
-                if self.stream_count >= 2:
-                    out_msg = StreamCloseMessage()
-                    self.slm.put(out_msg)
-                    return True
                 return False
 
             case "request_pattern":
@@ -178,53 +192,32 @@ class PatternProcess(BaseProcess):
             return True
         return False
 
-    def handle_from_raw(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                return True
-        else:
-            assert isinstance(data, AcquisitionData)
-            name = data.event.experiment_name
-            t_index = data.event.t_index
+    def on_stream_end(self) -> bool:
+        logger.info("pattern process: stream ended, closing the SLM buffer")
+        self.slm.put(StreamCloseMessage())
+        return super().on_stream_end()
 
-            dockname = self.dock_key(name, t_index)
+    # --------------------------------------------------------------- data
+    def handle_data(self, data):
+        assert isinstance(data, AcquisitionData), (
+            f"pattern process received {type(data)}"
+        )
+        name = data.event.experiment_name
+        t_index = data.event.t_index
 
-            dock = self.docks.get(dockname)
-            if dock is None:
-                logger.warning(
-                    f"received raw data for {dockname} but no pattern was "
-                    "requested for that timepoint; dropping it"
-                )
-                return False
+        dockname = self.dock_key(name, t_index)
 
-            dock.add_raw(data)
+        dock = self.docks.get(dockname)
+        if dock is None:
+            logger.warning(
+                f"received {data.kind} data for {dockname} but no pattern was "
+                "requested for that timepoint; dropping it"
+            )
+            return
 
-            self.check(name, dockname)
-        return False
+        dock.add(data)
 
-    def handle_from_seg(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                return True
-        else:
-            assert isinstance(data, SegmentationData)
-            name = data.event.experiment_name
-            t_index = data.event.t_index
-
-            dockname = self.dock_key(name, t_index)
-
-            dock = self.docks.get(dockname)
-            if dock is None:
-                logger.warning(
-                    f"received segmentation for {dockname} but no pattern was "
-                    "requested for that timepoint; dropping it"
-                )
-                return False
-
-            dock.add_seg(data)
-
-            self.check(name, dockname)
-        return False
+        self.check(name, dockname)
 
 
 class RequestPattern(Message):

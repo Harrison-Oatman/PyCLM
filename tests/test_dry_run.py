@@ -309,7 +309,7 @@ def test_dry_run_ome_zarr(yml_experiment_dir):
     """
     config = yml_experiment_dir / "pyclm_config.toml"
     config.write_text(
-        config.read_text() + '\n[output]\nformat = "ome-zarr"\nexport_imagej = true\n'
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
     )
     run_pyclm(yml_experiment_dir, dry=True)
 
@@ -341,3 +341,153 @@ def test_dry_run_tif_names(tif_name_experiment_dir):
     """
     run_pyclm(tif_name_experiment_dir, dry=True)
     assert_hdf5_content(tif_name_experiment_dir, 2)
+
+
+def test_dry_run_tracking_ome_zarr(yml_experiment_dir):
+    """
+    A closed loop with tracking: [segmentation] and [tracking] in the TOMLs and
+    a pattern method that asks for tracks. On OME-Zarr the store gains
+    labels/tracks and tracks.parquet, the routing table is recorded, and the
+    ImageJ export carries the tracked labels.
+    """
+    import pyclm.io as pio
+    from pyclm.core.patterns import PatternMethod
+    from pyclm.core.segmentation import SegmentationMethod
+
+    class ThresholdSegmentation(SegmentationMethod):
+        name = "threshold"
+
+        def segment(self, data):
+            from skimage.measure import label
+
+            return label(data > np.percentile(data, 99)).astype(np.uint16)
+
+    class FollowTracks(PatternMethod):
+        name = "follow_tracks"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", tracks=True)
+
+        def generate(self, context):
+            tracks = context.tracks("545")
+            assert tracks is not None
+            return (tracks.labels > 0).astype(np.float32)
+
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    for name in ("bar10", "bar025"):
+        toml = yml_experiment_dir / f"{name}.toml"
+        text = toml.read_text()
+        toml.write_text(
+            text[: text.index("[pattern]")] + '[segmentation]\nmethod = "threshold"\n\n'
+            '[tracking]\nmethod = "centroid"\nmax_distance_um = 30\n\n'
+            '[pattern]\nmethod = "follow_tracks"\n'
+        )
+
+    run_pyclm(
+        yml_experiment_dir,
+        dry=True,
+        segmentation_methods={"threshold": ThresholdSegmentation},
+        pattern_methods={"follow_tracks": FollowTracks},
+    )
+
+    assert (yml_experiment_dir / "tracks.parquet").exists()
+    stores = sorted(yml_experiment_dir.glob("*.zarr"))
+    assert len(stores) == 2
+    for store in stores:
+        with pio.open(store) as exp:
+            g = exp.groups["imaging"]
+            assert g.has_labels
+            assert g.has_tracks
+            assert g.acquired() == list(range(_STEPS // _IMAGING_EVERY_T))
+            assert g.tracks(0, "545").shape == _CAMERA_SHAPE
+            assert g.tracks(0, "545").max() > 0
+            assert exp.tracks is not None
+            assert exp.tracks.num_rows > 0
+            routes = exp.routing["routes"][exp.name]["545"]
+            assert routes["raw"] == ["segmentation", "writer(record)"]
+            assert routes["seg"] == ["tracking", "writer(record)"]
+            assert routes["tracks"] == ["pattern@pattern", "writer(record)"]
+        import tifffile
+
+        stack = tifffile.imread(yml_experiment_dir / f"{store.stem}_imaging.tif")
+        assert stack.shape[1] == 4  # raw, segmentation, tracks, pattern
+
+
+def test_dry_run_named_segmentations_ome_zarr(yml_experiment_dir):
+    """
+    Two [segmentation] tables of one channel (the default and "bright"), a
+    pattern that asks for both: the store carries one label image per
+    table, the routing table shows both kinds, and the export has both
+    label sets.
+    """
+    import pyclm.io as pio
+    from pyclm.core.patterns import PatternMethod
+    from pyclm.core.segmentation import SegmentationMethod
+
+    class Threshold(SegmentationMethod):
+        name = "threshold"
+
+        def __init__(self, experiment_name, percentile=99, **kwargs):
+            super().__init__(experiment_name, **kwargs)
+            self.percentile = percentile
+
+        def segment(self, data):
+            from skimage.measure import label
+
+            return label(data > np.percentile(data, self.percentile)).astype(np.uint16)
+
+    class TwoSegmentations(PatternMethod):
+        name = "two_segmentations"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", seg=["segmentation", "bright"])
+
+        def generate(self, context):
+            both = context.regions("545").labels > 0
+            both &= context.regions("545", "bright").labels > 0
+            return both.astype(np.float32)
+
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    for name in ("bar10", "bar025"):
+        toml = yml_experiment_dir / f"{name}.toml"
+        text = toml.read_text()
+        toml.write_text(
+            text[: text.index("[pattern]")]
+            + '[segmentation]\nmethod = "threshold"\npercentile = 95\n\n'
+            '[segmentation.bright]\nmethod = "threshold"\npercentile = 99.5\n\n'
+            '[pattern]\nmethod = "two_segmentations"\n'
+        )
+
+    run_pyclm(
+        yml_experiment_dir,
+        dry=True,
+        segmentation_methods={"threshold": Threshold},
+        pattern_methods={"two_segmentations": TwoSegmentations},
+    )
+
+    import tifffile
+
+    for store in sorted(yml_experiment_dir.glob("*.zarr")):
+        with pio.open(store) as exp:
+            g = exp.groups["imaging"]
+            assert g.label_names == ("segmentation", "bright")
+            for i in g.acquired():
+                assert g.labels(i, "545").max() > 0
+                assert g.labels(i, "545", "bright").max() > 0
+                # the bright threshold keeps fewer pixels than the default
+                assert (g.labels(i, "545", "bright") > 0).sum() < (
+                    g.labels(i, "545") > 0
+                ).sum()
+            routes = exp.routing["routes"][exp.name]["545"]
+            assert routes["seg"] == ["pattern@pattern", "writer(record)"]
+            assert routes["seg:bright"] == ["pattern@pattern", "writer(record)"]
+        stack = tifffile.imread(yml_experiment_dir / f"{store.stem}_imaging.tif")
+        assert stack.shape[1] == 4  # raw, two label sets, pattern

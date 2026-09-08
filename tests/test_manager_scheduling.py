@@ -58,7 +58,7 @@ def test_pattern_request_index_matches_acquisition_index(t_delay):
     assert [r.t_index for r in requests] == expected_t
     assert [e.t_index for e in channel_events] == expected_t
     # every requested timepoint routes its raw frame to the pattern process
-    assert all(e.raw_goes_to_pattern for e in channel_events)
+    assert all(e.index["c"] == "545" for e in channel_events)
 
 
 def test_pattern_cadence_follows_lcm_of_required_channels():
@@ -120,15 +120,14 @@ def test_event_order_within_timepoint():
     assert slm_messages[0].event.id == messages[1].event.id
 
 
-def test_close_is_sent_to_every_process():
+def test_close_is_sent_to_every_addressed_process():
     exp = make_experiment("exp.00")
     aq, _ = run_manager(make_schedule([exp], steps=1), {"exp.00": []})
 
+    # the writer and segmentation exit on the router's stream close instead
     for queue in (
         aq.manager_to_microscope,
-        aq.manager_to_outbox,
         aq.manager_to_slm_buffer,
-        aq.manager_to_seg,
         aq.manager_to_pattern,
     ):
         assert isinstance(drain(queue)[-1], CloseMessage)

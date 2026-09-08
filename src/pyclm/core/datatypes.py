@@ -1,12 +1,18 @@
 """
-Contains classes for passing structured data between processes
+Contains classes for passing structured data between processes.
+
+Frame-derived data carries the acquisition event it came from and a
+``kind`` (``"raw"``, ``"seg"``, ``"tracks"``) that the Router uses to look up
+its subscribers.
 """
 
+from typing import ClassVar
 from uuid import uuid4
 
 import numpy as np
 
 from .events import AcquisitionEvent
+from .kinds import DEFAULT_SEGMENTATION, seg_kind
 
 
 class EventSLMPattern:
@@ -23,6 +29,10 @@ class GenericData:
 
 
 class AcquisitionData(GenericData):
+    """A raw camera frame and the event that produced it."""
+
+    kind: ClassVar[str] = "raw"
+
     def __init__(self, event: AcquisitionEvent, data: np.ndarray):
         super().__init__(data)
 
@@ -32,6 +42,8 @@ class AcquisitionData(GenericData):
 
 
 class StimulationData(AcquisitionData):
+    """A camera frame taken during stimulation, with the DMD pattern that was applied."""
+
     def __init__(
         self,
         event: AcquisitionEvent,
@@ -45,7 +57,41 @@ class StimulationData(AcquisitionData):
 
 
 class SegmentationData(AcquisitionData):
-    pass
+    """
+    A label image for one frame (``data``), sharing the frame's event.
+    ``name`` says which ``[segmentation]`` table produced it; the routing
+    ``kind`` is ``"seg"`` for the default table and ``"seg:<name>"`` otherwise.
+    """
+
+    kind: ClassVar[str] = "seg"
+
+    def __init__(
+        self,
+        event: AcquisitionEvent,
+        data: np.ndarray,
+        name: str = DEFAULT_SEGMENTATION,
+    ):
+        super().__init__(event, data)
+        self.name = name or DEFAULT_SEGMENTATION
+        self.kind = seg_kind(self.name)
+
+
+class TrackingData(AcquisitionData):
+    """
+    Tracking output for one frame: ``data`` (alias ``labels``) is the label
+    image relabelled with stable track ids; ``rows`` are the per-object
+    records for this timepoint (see ``pyclm.core.tracking.TrackRow``).
+    """
+
+    kind: ClassVar[str] = "tracks"
+
+    def __init__(self, event: AcquisitionEvent, labels: np.ndarray, rows: list):
+        super().__init__(event, labels)
+        self.rows = list(rows)
+
+    @property
+    def labels(self) -> np.ndarray:
+        return self.data
 
 
 class CameraPattern(GenericData):

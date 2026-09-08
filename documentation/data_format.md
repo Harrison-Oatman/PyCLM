@@ -6,7 +6,7 @@ formats are available, selected in `pyclm_config.toml`:
 
 ```toml
 [output]
-format = "hdf5"              # "hdf5" (default) or "ome-zarr"
+format = "ome-zarr"          # "ome-zarr" (default) or "hdf5"
 pattern_policy = "on_change" # ome-zarr only: "on_change", "all", or "none"
 export_imagej = true         # write ImageJ hyperstacks when the run ends
 ```
@@ -18,10 +18,11 @@ export_imagej = true         # write ImageJ hyperstacks when the run ends
 | Live viewing during a run | Yes (`--gui`, or napari on the folder) | Yes (`--gui`, via SWMR) |
 | Compression | zstd per frame | none |
 | Skipped timepoints | Cost nothing on disk | Pre-allocated empty datasets |
+| Tracking output | `labels/tracks` + `tracks.parquet` | Not stored |
 | Standard | [OME-NGFF 0.4](https://ngff.openmicroscopy.org/0.4/) on zarr v2 | PyCLM's original layout |
 
-`hdf5` remains the default until the OME-Zarr layout has been used for a
-full real experiment. Both formats are read by the same tools
+`ome-zarr` is the default; `hdf5` is PyCLM's original layout and remains
+available. Both formats are read by the same tools
 (`pyclm.io`, `convert_hdf5s`, the live GUI), and files written by older
 PyCLM versions stay readable.
 
@@ -35,6 +36,7 @@ experiment_dir/
 ├── bar025.pos1_imaging.tif
 ├── frames.parquet            # (ome-zarr) one row per frame and stimulation event
 ├── frames.csv                # the same table as CSV, written when the run ends
+├── tracks.parquet            # (ome-zarr, with tracking) one row per tracked object and timepoint
 ├── plan.useq.yaml            # the acquisition plan derived from your TOMLs and positions
 ├── all_layers.txt            # layer list used by the live GUI
 └── log.log
@@ -51,11 +53,13 @@ it is moved on its own.
 ```
 bar10.pos1.zarr/
 ├── .zattrs                       pyclm: format, plan, experiment and schedule metadata,
-│                                 affine_transform, slm_shape, groups, current_t
+│                                 affine_transform, slm_shape, groups, routing, current_t
 ├── imaging/                      one OME-NGFF image per cadence group
 │   ├── .zattrs                   multiscales (axes t, c, y, x; time scale in seconds), omero
 │   ├── 0/                        (T, C, Y, X) uint16, one compressed chunk per frame
-│   └── labels/segmentation/0/    (T, C, Y, X) uint16 label images, if segmentation is saved
+│   ├── labels/segmentation/0/    (T, C, Y, X) uint16 label images, if segmentation is saved
+│   ├── labels/<name>/0/          the same for each named [segmentation.<name>] table
+│   └── labels/tracks/0/          (T, C, Y, X) uint32 tracked labels, if tracking is saved
 └── patterns/dmd/0/               (N, H_slm, W_slm) uint8 DMD patterns, one per distinct pattern
 ```
 
@@ -115,6 +119,26 @@ directory:
 | `x`, `y`, `z`, `pfs_offset` | stage position |
 | `pattern_id`, `pattern_index` | the pattern in force (index into `patterns/dmd/0`) |
 
+### The tracks table
+
+With a `[tracking]` table in the experiment TOML (see [Tracking](tracking.md)),
+`tracks.parquet` (and `tracks.csv` at the end of the run) holds one row per
+tracked object and timepoint, for all experiments in the directory:
+
+| Column | Meaning |
+|---|---|
+| `experiment`, `t`, `channel` | which experiment, plan timepoint and channel |
+| `group`, `local_index` | where the frame lives in the store |
+| `track_id` | the stable id of the object (matches the value in `labels/tracks`) |
+| `label` | the object's id in the segmentation of that frame |
+| `y`, `x`, `y_um`, `x_um` | centroid in pixels of the (binned) frame and in micrometres |
+| `area` | pixels |
+| `parent` | parent track id for divisions, 0 if none |
+
+The store's root attributes also record `routing`: which process received
+which kind of data for each channel during the run (for instance whether
+segmentation ran on every frame or only when a pattern was due).
+
 ### Opening OME-Zarr data
 
 **Fiji / ImageJ.** Use *File ▸ Import ▸ HDF5/N5/Zarr/OME-NGFF* (the n5-ij
@@ -154,6 +178,8 @@ g.channels                 # ('545', '638')
 g.acquired()               # slots that hold data, e.g. [0, 1, 2, ...]
 g.frame(3, "545")          # numpy array, or None if not acquired
 g.labels(3, "545")         # segmentation labels, or None
+g.labels(3, "545", "nuclei")   # labels of a named [segmentation.nuclei] table, or None
+g.label_names              # e.g. ('segmentation', 'nuclei')
 g.global_t(3)              # the plan timepoint of slot 3
 exp.pattern_at(g.global_t(3))   # DMD pattern in force at that timepoint
 exp.frames                 # pyarrow.Table of the frames rows for this experiment
@@ -198,8 +224,12 @@ Every export writes one hyperstack per cadence group, named
 pixel size set for ImageJ, and channels in this order:
 
 1. the raw channels of the group, grey LUT;
-2. the segmentation labels of each channel, yellow LUT (only if any were saved);
-3. the DMD pattern in force at each frame, warped into camera coordinates,
+2. the segmentation labels of each channel, one set per `[segmentation]`
+   table in the store's order, yellow then green, red and blue LUTs (only if
+   any were saved);
+3. the tracked labels of each channel, magenta LUT (only with tracking; ids
+   above 65535 are clipped in the TIFF, the store keeps them exact);
+4. the DMD pattern in force at each frame, warped into camera coordinates,
    cyan LUT (only if the affine transform is known).
 
 **Automatically.** With `export_imagej = true` (the default) the stacks are

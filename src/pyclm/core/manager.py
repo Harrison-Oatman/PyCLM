@@ -1,16 +1,15 @@
 """
-The controller is the brain of the feedback loop.
+The Manager is the timing brain of the feedback loop: it walks the
+acquisition plan and turns each timepoint into messages for the microscope,
+the SLM buffer and the pattern process. The SLMBuffer holds the current DMD
+pattern per experiment and answers the microscope's pattern requests.
 
-It is responsible for
-- managing timing
-- passing messages between processes
-- scheduling microscope events
+Frame routing lives in ``router.py`` and persistence in ``writer_process.py``
+(before Stage 3 both were the "microscope outbox" defined here;
+``MicroscopeOutbox`` is still importable from this module).
 """
 
-import json
 import logging
-from abc import ABCMeta, abstractmethod
-from pathlib import Path
 from queue import Empty
 from threading import Event
 from time import sleep, time
@@ -18,228 +17,46 @@ from typing import Any
 
 import numpy as np
 from cv2 import warpAffine
-from h5py import File
 
 from pyclm.core.pattern_process import RequestPattern
 
-from .core_interface import MicroscopeCoreInterface
-from .datatypes import (
-    AcquisitionData,
-    CameraPattern,
-    EventSLMPattern,
-    GenericData,
-    SegmentationData,
-    StimulationData,
-)
+from .base_process import BaseProcess
+from .datatypes import CameraPattern, EventSLMPattern
 from .events import (
     AcquisitionEvent,
     UpdatePatternEvent,
     UpdateStagePositionEvent,
-    storage_group,
 )
-from .experiments import (
-    Experiment,
-    ExperimentSchedule,
-    ImagingConfig,
-    TimeCourse,
-)
+from .experiments import Experiment
 from .messages import (
     AcquisitionEventMessage,
     CloseMessage,
     Message,
-    StreamCloseMessage,
     UpdatePatternEventMessage,
     UpdatePositionEventMessage,
     UpdateZPositionMessage,
 )
-from .patterns import AcquiredImageRequest
 from .plan import AcquisitionPlan, PlannedEvent
 from .queues import AllQueues
-from .storage import FrameWriter, HDF5WriterV1
+from .writer_process import MicroscopeOutbox, WriterProcess
 
 logger = logging.getLogger(__name__)
 
-
-from .base_process import BaseProcess
-
-
-class DataPassingProcess(BaseProcess, metaclass=ABCMeta):
-    def __init__(self, aq: AllQueues, stop_event: Event | None = None):
-        super().__init__(stop_event, name="data passing process")
-        self.all_queues = aq
-
-        # Subclasses should set these or register queues manually
-        self.from_manager = None
-        self.data_in = None
-
-    def initialize_queues(self):
-        # Helper to register standard queues if subclasses set attributes
-        if self.from_manager:
-            self.register_queue(self.from_manager, self.handle_message_wrapper)
-
-        if self.data_in:
-            for q in self.data_in:
-                self.register_queue(q, self.handle_data_wrapper)
-
-    def handle_message_wrapper(self, msg):
-        """Wrapper to handle return value logic expected by BaseProcess"""
-        if isinstance(msg, Message):
-            # BaseProcess expects True to stop
-            return self.handle_message(msg)
-        return False
-
-    def handle_data_wrapper(self, data):
-        """Wrapper to handle data or message in data channel"""
-        if isinstance(data, Message):
-            logger.debug(
-                f"{self.name} received message on data channel: {data.message}"
-            )
-            return self.handle_message(data)
-
-        assert isinstance(data, GenericData), (
-            f"Unexpected data type: {type(data)}, expected subtype of GenericData"
-        )
-        self.handle_data(data)
-        return False
-
-    @abstractmethod
-    def handle_data(self, data):
-        pass
-
-    def handle_message(self, msg):
-        match msg.message:
-            case "close":
-                return True
-
-            case _:
-                raise ValueError(f"Unexpected message: {msg}")
+__all__ = ["Manager", "MicroscopeOutbox", "SLMBuffer", "WriterProcess"]
 
 
-class MicroscopeOutbox(DataPassingProcess):
+class SLMBuffer(BaseProcess):
     """
-    Receives every frame the microscope produces, hands it to the configured
-    FrameWriter for persistence, and routes it on to segmentation and pattern
-    generation according to the event's flags.
+    Holds the most recent pattern per experiment in SLM coordinates and
+    answers the Manager's ``update_pattern_event`` with it (the microscope
+    waits for that reply before a stimulation frame).
     """
 
-    def __init__(
-        self,
-        aq: AllQueues,
-        base_path: Path | None = None,
-        stop_event: Event | None = None,
-        writer: FrameWriter | None = None,
-    ):
-        super().__init__(aq, stop_event)
-        self.name = "microscope outbox"
-
-        if base_path is None:
-            base_path = Path().cwd()
-
-        self.from_manager = aq.manager_to_outbox
-        self.data_in = [aq.acquisition_outbox, aq.seg_to_outbox]
-
-        self.manager_done = False
-        self.stream_count = 0
-
-        self.seg_queue = aq.outbox_to_seg
-        self.pattern_queue = aq.outbox_to_pattern
-
-        self.base_path = base_path
-        self.writer: FrameWriter = writer if writer is not None else HDF5WriterV1()
-        self.plan: AcquisitionPlan | None = None
-
-        self.initialize_queues()
-
-    @property
-    def open_files(self) -> dict:
-        """Open HDF5 handles when the HDF5 writer is in use (empty otherwise)."""
-        return getattr(self.writer, "open_files", {})
-
-    @property
-    def dropped_frames(self) -> int:
-        return getattr(self.writer, "dropped_frames", 0)
-
-    def process(self):
-        """Run the poll loop and close the outputs however the loop exits."""
-        try:
-            super().process()
-        finally:
-            self.close_files()
-
-    def initialize(
-        self,
-        plan: AcquisitionPlan,
-        core: MicroscopeCoreInterface,
-        affine_transform=None,
-        slm_shape=None,
-    ):
-        """Create the outputs for the plan. Returns the (path, layer) pairs for the GUI."""
-        self.plan = plan
-        return self.writer.open(plan, core, self.base_path, affine_transform, slm_shape)
-
-    def close_files(self):
-        """Finalise and close all outputs (idempotent)."""
-        self.writer.close()
-
-    def write_data(self, data: AcquisitionData):
-        if isinstance(data, SegmentationData):
-            self.writer.write_labels(data)
-        else:
-            self.writer.write_frame(data)
-
-    def handle_data(self, data):
-        aq_event = data.event
-
-        self.write_data(data)
-
-        if isinstance(data, SegmentationData):
-            return
-
-        if aq_event.segment:
-            self.seg_queue.put(data)
-
-        if aq_event.raw_goes_to_pattern:
-            self.pattern_queue.put(data)
-
-    def handle_message(self, msg):
-        logger.info(msg)
-
-        match msg.message:
-            case "close":
-                self.manager_done = True
-
-            case "stream_close":
-                self.stream_count += 1
-
-                # First stream close (Microscope)
-                if self.stream_count == 1:
-                    logger.info(
-                        "Outbox received stream_close from Microscope. Propagating to seg/pattern."
-                    )
-                    self.seg_queue.put(StreamCloseMessage())
-                    self.pattern_queue.put(StreamCloseMessage())
-
-                elif self.stream_count == 2:
-                    logger.info("Outbox received stream_close from Segmentation.")
-
-            case _:
-                raise ValueError(f"Unexpected message: {msg}")
-
-        if self.manager_done and self.stream_count >= 2:
-            self.close_files()
-            return True
-
-        return False
-
-
-class SLMBuffer(DataPassingProcess):
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
-        super().__init__(aq, stop_event)
-        self.name = "slm buffer"
+        super().__init__(stop_event, name="slm buffer")
 
         self.from_manager = aq.manager_to_slm_buffer
-        self.data_in = [aq.pattern_to_slm]
-
+        self.from_pattern = aq.pattern_to_slm
         self.to_microscope = aq.slm_to_microscope
 
         self.slm_patterns = {}
@@ -252,7 +69,8 @@ class SLMBuffer(DataPassingProcess):
         self.manager_done = False
         self.pattern_done = False
 
-        self.initialize_queues()
+        self.register_queue(self.from_manager, self.handle_message)
+        self.register_queue(self.from_pattern, self._handle_from_pattern)
 
     def initialize(
         self,
@@ -301,8 +119,14 @@ class SLMBuffer(DataPassingProcess):
             (self.slm_shape[1], self.slm_shape[0]),
         )
 
+    def _handle_from_pattern(self, item):
+        if isinstance(item, Message):
+            return self.handle_message(item)
+        self.handle_data(item)
+        return False
+
     def handle_data(self, data: CameraPattern):
-        logger.info("SLM buffer received data from slm")
+        logger.info("SLM buffer received a pattern")
 
         pattern = data.data
         pattern_id = data.pattern_id
@@ -322,7 +146,8 @@ class SLMBuffer(DataPassingProcess):
 
     def handle_message(self, msg):
         """
-        Handle messages sent to the SLMBuffer from the manager
+        Handle messages sent to the SLMBuffer from the manager (and the
+        pattern process's stream close).
         :param msg: Message object
         :return: bool indicating whether to close the process
         """
@@ -364,9 +189,7 @@ class Manager:
         self.stop_event = stop_event
         self.msgout = {
             "microscope": aq.manager_to_microscope,
-            "outbox": aq.manager_to_outbox,
             "slm_buffer": aq.manager_to_slm_buffer,
-            "seg": aq.manager_to_seg,
             "pattern": aq.manager_to_pattern,
         }
 
@@ -454,7 +277,6 @@ class Manager:
                 self.msgout["microscope"].put(upmsg)
 
             case "acquire":
-                experiment = self.experiments[name]
                 cfg = self.plan.imaging_config(name, ev.channel)
                 event = AcquisitionEvent(
                     name,
@@ -468,13 +290,7 @@ class Manager:
                     config_groups=cfg.get_config_groups(),
                     devices=cfg.get_device_properties(),
                     save_output=ev.save,
-                    segmentation_method=experiment.segmentation.method_name,
-                    pattern_method=experiment.pattern.method_name,
                     binning=cfg.binning,
-                    do_segmentation=ev.segment,
-                    save_segmentation=ev.save_seg,
-                    raw_goes_to_pattern=ev.raw_to_pattern,
-                    segmentation_goes_to_pattern=ev.seg_to_pattern,
                 )
                 self.msgout["microscope"].put(AcquisitionEventMessage(event))
 
