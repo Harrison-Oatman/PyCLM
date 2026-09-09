@@ -113,6 +113,24 @@ class ExperimentData(ABC):
         """The tracks table rows for this experiment (pyarrow), or None."""
         return None
 
+    @property
+    def events(self):
+        """
+        Runtime events of this experiment (pyarrow): setting changes a
+        pattern method requested, late timepoints, acquisition errors. From
+        ``events.parquet`` in the experiment directory; None if absent.
+        """
+        path = Path(self.path).parent / "events.parquet"
+        if not path.exists():
+            return None
+        import pyarrow.parquet as pq
+
+        table = pq.read_table(path)
+        mask = np.asarray(
+            table["experiment"].to_numpy(zero_copy_only=False) == self.name
+        )
+        return table.filter(mask)
+
     def refresh(self) -> None:
         """Re-read metadata that changes while the experiment is running."""
         return None

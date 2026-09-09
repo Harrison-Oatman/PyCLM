@@ -32,6 +32,7 @@ from .core.position_mover import PositionMover
 from .core.real_core import RealMicroscopeCore
 from .core.router import Router
 from .core.storage import make_writer
+from .core.storage.events import EventLog
 from .core.tracking_process import TrackingProcess
 from .core.virtual_microscope.simulated_core import SimulatedMicroscopeCore
 
@@ -220,7 +221,14 @@ class Controller:
         self._instantiate_producers(schedule, router)
         logger.info(f"routing table: {json.dumps(router.as_dict())}")
 
-        self.manager.initialize(plan)
+        self.event_log = EventLog(out_path / "events.parquet")
+        self.manager.initialize(
+            plan,
+            event_log=self.event_log,
+            status_path=out_path / "status.json",
+            health=self.health,
+        )
+        self.pattern.positions = schedule.positions
         self.slm_buffer.initialize(
             slm_shape, affine_transform, schedule.experiment_names
         )
@@ -270,6 +278,19 @@ class Controller:
                     f"but the pattern method '{experiment.pattern.method_name}' "
                     "does not request tracks, so no tracking will run"
                 )
+
+    def health(self) -> dict:
+        """Process error counters, undeliverable frames and dropped frames, for status.json."""
+        errors = {
+            p.name: p.error_count
+            for p in self.processes
+            if hasattr(p, "error_count") and hasattr(p, "name")
+        }
+        return {
+            "errors": errors,
+            "undeliverable": self.router.undeliverable if self.router else 0,
+            "dropped_frames": self.writer_process.dropped_frames,
+        }
 
     def run(self):
         with ThreadPoolExecutor() as executor:
@@ -349,6 +370,8 @@ class Controller:
 
                 # the writer closes its own outputs when its loop exits; this covers
                 # the case where the writer thread never ran
+                # the last acknowledgements, the final status and the events table
+                self.manager.finish()
                 self.writer_process.close_files()
                 self.all_queues.close()
 

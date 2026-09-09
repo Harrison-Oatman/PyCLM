@@ -9,7 +9,10 @@ Frame routing lives in ``router.py`` and persistence in ``writer_process.py``
 ``MicroscopeOutbox`` is still importable from this module).
 """
 
+import datetime
+import json
 import logging
+from pathlib import Path
 from queue import Empty
 from threading import Event
 from time import sleep, time
@@ -27,17 +30,21 @@ from .events import (
     UpdatePatternEvent,
     UpdateStagePositionEvent,
 )
-from .experiments import Experiment
+from .experiments import ConfigGroup, DeviceProperty, Experiment
 from .messages import (
     AcquisitionEventMessage,
     CloseMessage,
+    EventDoneMessage,
     Message,
+    SettingsRequestMessage,
     UpdatePatternEventMessage,
     UpdatePositionEventMessage,
     UpdateZPositionMessage,
 )
 from .plan import AcquisitionPlan, PlannedEvent
 from .queues import AllQueues
+from .settings import STIMULATION, SettingChange, check_change, property_type
+from .storage.events import EventLog
 from .writer_process import MicroscopeOutbox, WriterProcess
 
 logger = logging.getLogger(__name__)
@@ -195,6 +202,7 @@ class Manager:
 
         self.msgin = {
             "microscope": aq.microscope_to_manager,
+            "pattern": aq.pattern_to_manager,
         }
 
         # seconds to sleep between inbox checks while waiting for the next timepoint
@@ -207,12 +215,38 @@ class Manager:
         self.times = None
         self.positions = None
 
-    def initialize(self, plan: AcquisitionPlan):
+        # runtime edits (core/settings.py) and feedback from the microscope
+        self.event_log: EventLog = EventLog(None)
+        self.status_path: Path | None = None
+        self.health = None  # optional callable returning process counters
+        self.current_t = 0  # the timepoint being awaited or dispatched
+        self._last_burst_t = -1  # the last timepoint whose events were emitted
+        self.start_time = 0.0
+        # (experiment, channel) -> {frames-table column: value} in force
+        self.overrides: dict[tuple[str, str], dict] = {}
+        # t -> experiment -> {"frames", "errors", "lateness_s"} from acknowledgements
+        self.acks: dict[int, dict[str, dict]] = {}
+        self.settings_applied = 0
+        self.settings_refused = 0
+        self._late_warned: set[int] = set()
+        self.finished = False
+
+    def initialize(
+        self,
+        plan: AcquisitionPlan,
+        event_log: EventLog | None = None,
+        status_path: Path | None = None,
+        health=None,
+    ):
         self.plan = plan
         self.schedule = plan.schedule
         self.experiments: dict[str, Experiment] = plan.schedule.experiments
         self.positions = plan.schedule.positions
         self.times = plan.schedule.times
+        if event_log is not None:
+            self.event_log = event_log
+        self.status_path = None if status_path is None else Path(status_path)
+        self.health = health
 
         self.initialized = True
 
@@ -223,7 +257,28 @@ class Manager:
                 name = msg.experiment_name
                 val = msg.new_z_position
 
+                old = self.positions[name].z
                 self.positions[name].z = val
+                self.event_log.record(
+                    "z_correction",
+                    name,
+                    None,
+                    "z",
+                    old,
+                    val,
+                    "applied",
+                    "focus lock moved z",
+                    self.current_t,
+                    self.current_t,
+                )
+
+            case "settings_request":
+                assert isinstance(msg, SettingsRequestMessage)
+                self.apply_settings(msg)
+
+            case "event_done":
+                assert isinstance(msg, EventDoneMessage)
+                self.handle_event_done(msg)
 
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
@@ -244,10 +299,207 @@ class Manager:
 
         return handled
 
+    # ------------------------------------------------------ runtime edits
+    def _config_for(self, name: str, channel: str | None):
+        """(ImagingConfig, canonical channel name) for a channel of an experiment, or (None, channel)."""
+        exp = self.experiments[name]
+        stim = self.plan.stim_channel(name)
+        if channel == STIMULATION or (stim is not None and channel == stim):
+            return exp.stimulation, stim or STIMULATION
+        return exp.channels.get(channel), channel
+
+    def apply_settings(self, msg: SettingsRequestMessage):
+        """
+        Validate and apply a pattern method's requested changes to its own
+        experiment. They take effect from ``current_t`` (the next timepoint
+        whose events have not been emitted) and every one is recorded.
+        """
+        name = msg.experiment_name
+        t_apply = self.next_timepoint()
+        for change in msg.changes:
+            reason = (
+                None if name in self.experiments else f"unknown experiment {name!r}"
+            )
+            channel = change.channel
+            cfg = None
+            if reason is None:
+                reason = check_change(change)
+            if reason is None and change.kind != "position":
+                cfg, channel = self._config_for(name, change.channel)
+                if cfg is None:
+                    reason = (
+                        f"unknown channel {change.channel!r} "
+                        f"(channels: {self.plan.channels(name)}, or '{STIMULATION}')"
+                    )
+            if reason is not None:
+                self.settings_refused += 1
+                logger.warning(f"{name}: refused {change.describe()}: {reason}")
+                self.event_log.record(
+                    change.kind,
+                    name,
+                    channel,
+                    change.key,
+                    None,
+                    change.value,
+                    "refused",
+                    reason,
+                    msg.t_requested,
+                    t_apply,
+                )
+                continue
+            old = self._apply_change(name, cfg, channel, change)
+            self.settings_applied += 1
+            logger.info(f"{name}: {change.describe()} (was {old!r}) from t = {t_apply}")
+            self.event_log.record(
+                change.kind,
+                name,
+                channel,
+                change.key,
+                old,
+                change.value,
+                "applied",
+                None,
+                msg.t_requested,
+                t_apply,
+            )
+
+    def next_timepoint(self) -> int:
+        """The first timepoint whose events have not been emitted: where a change takes effect."""
+        if self.current_t > self._last_burst_t:
+            return self.current_t
+        return self._last_burst_t + 1
+
+    def _apply_change(self, name: str, cfg, channel: str | None, change: SettingChange):
+        if change.kind == "position":
+            pos = self.positions[name]
+            if change.key == "pfs_offset":
+                old = pos.extras.get("PFSOffset")
+                pos.extras["PFSOffset"] = float(change.value)
+            else:
+                old = getattr(pos, change.key)
+                setattr(pos, change.key, float(change.value))
+            return old
+        if change.kind == "exposure":
+            old = cfg.exposure
+            cfg.exposure = float(change.value)
+            return old
+        if change.kind == "config":
+            old = {g.group: g.config for g in cfg.get_config_groups()}.get(change.key)
+            cfg.update_config_groups([ConfigGroup(change.key, change.value)])
+        else:
+            old = next(
+                (
+                    d.value
+                    for d in cfg.get_device_properties()
+                    if d.device == change.device and d.property == change.prop
+                ),
+                None,
+            )
+            cfg.update_device_properties(
+                [
+                    DeviceProperty(
+                        change.device,
+                        change.prop,
+                        change.value,
+                        property_type(change.value),
+                    )
+                ]
+            )
+        self.overrides.setdefault((name, channel), {})[change.column] = change.value
+        return old
+
     def construct_position_event_message(self, position, name):
         self.msgout["microscope"].put(
             UpdatePositionEventMessage(UpdateStagePositionEvent(position, name))
         )
+
+    # -------------------------------------------------- acknowledgements
+    def handle_event_done(self, msg: EventDoneMessage):
+        rec = self.acks.setdefault(msg.t_index, {}).setdefault(
+            msg.experiment_name, {"frames": 0, "errors": 0, "lateness_s": 0.0}
+        )
+        rec["frames"] += 1
+        if msg.error:
+            rec["errors"] += 1
+            self.event_log.record(
+                "acquisition_error",
+                msg.experiment_name,
+                msg.channel,
+                None,
+                None,
+                None,
+                "failed",
+                msg.error,
+                msg.t_index,
+                msg.t_index,
+            )
+            return
+        late = msg.lateness_s or 0.0
+        rec["lateness_s"] = max(rec["lateness_s"], late)
+        if late > self.plan.interval_s and msg.t_index not in self._late_warned:
+            self._late_warned.add(msg.t_index)
+            logger.warning(
+                f"t = {msg.t_index}: {msg.experiment_name}/{msg.channel} completed "
+                f"{late:.1f}s late (interval {self.plan.interval_s:.1f}s)"
+            )
+            self.event_log.record(
+                "late",
+                msg.experiment_name,
+                msg.channel,
+                None,
+                None,
+                f"{late:.3f}",
+                "warning",
+                "completed more than one interval late",
+                msg.t_index,
+                msg.t_index,
+            )
+
+    def status(self, done: bool = False) -> dict:
+        """What the run looks like now: progress, per-experiment lateness and errors, process health."""
+        experiments = {}
+        for name in self.plan.experiments:
+            seen = [(t, recs[name]) for t, recs in self.acks.items() if name in recs]
+            errors = sum(r["errors"] for _, r in seen)
+            if seen:
+                t_last, last = max(seen, key=lambda item: item[0])
+                experiments[name] = {
+                    "last_t": t_last,
+                    "lateness_s": round(last["lateness_s"], 3),
+                    "errors": errors,
+                }
+            else:
+                experiments[name] = {"last_t": None, "lateness_s": None, "errors": 0}
+        return {
+            "t": self.current_t,
+            "timepoints": self.plan.timepoints,
+            "done": done,
+            "wall_time": datetime.datetime.now().isoformat(timespec="seconds"),
+            "elapsed_s": round(time() - self.start_time, 1) if self.start_time else 0.0,
+            "settings_applied": self.settings_applied,
+            "settings_refused": self.settings_refused,
+            "experiments": experiments,
+            "health": self.health() if self.health is not None else {},
+        }
+
+    def write_status(self, done: bool = False):
+        if self.status_path is None:
+            return
+        try:
+            tmp = self.status_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(self.status(done), indent=1, default=str))
+            tmp.replace(self.status_path)
+        except Exception as e:
+            logger.error(f"failed to write {self.status_path}: {e}")
+
+    def finish(self):
+        """Absorb the last acknowledgements, write the final status, close the events table."""
+        if self.finished or not self.initialized:
+            return
+        self.finished = True
+        self.drain_inboxes()
+        self.write_status(done=True)
+        self.event_log.close()
 
     def dispatch(self, ev: PlannedEvent, start_time: float):
         """Turn one planned event into the message(s) the other processes expect."""
@@ -292,6 +544,7 @@ class Manager:
                     save_output=ev.save,
                     binning=cfg.binning,
                 )
+                event.overrides = dict(self.overrides.get((name, ev.channel), {}))
                 self.msgout["microscope"].put(AcquisitionEventMessage(event))
 
             case _:
@@ -305,14 +558,17 @@ class Manager:
         plan = self.plan
         setup = plan.setup_s
         start_time = time() + setup
+        self.start_time = start_time
 
         # time iter loop
         for t in range(plan.timepoints):
+            self.current_t = t
             # operator-facing progress line (the console log handler only shows warnings)
             print(f"t = {t}: {(time() - start_time) / 60: 0.1f} minutes")
 
             # wait until preparatory phase
-            # todo: check if we are behind schedule
+            # settings requests and acknowledgements arriving here apply to
+            # (or describe) this timepoint and earlier ones
             while (time() - start_time) < plan.time_offset_s(t) - setup:
                 if self.stop_event and self.stop_event.is_set():
                     logger.info("force stopping manager process")
@@ -321,8 +577,10 @@ class Manager:
                 if not self.drain_inboxes():
                     sleep(self.sleep_interval)
 
+            self.write_status()
             for ev in plan.events_at(t):
                 self.dispatch(ev, start_time)
+            self._last_burst_t = t
 
         print("DONE")
         logger.info("Manager finished the schedule; sending close to all processes")

@@ -391,7 +391,7 @@ class OMEZarrWriter(FrameWriter):
     ) -> dict:
         ev = data.event
         pos = ev.position.as_dict()
-        return {
+        row = {
             "experiment": ev.experiment_name,
             "kind": kind,
             "t": int(ev.t_index),
@@ -412,6 +412,9 @@ class OMEZarrWriter(FrameWriter):
             if ev.pixel_width_um is None
             else float(ev.pixel_width_um),
         }
+        # settings a pattern method changed at runtime, in force for this frame
+        row.update(getattr(ev, "overrides", None) or {})
+        return row
 
     def write_frame(self, data: AcquisitionData):
         try:
@@ -611,7 +614,17 @@ class OMEZarrWriter(FrameWriter):
                 ("pixel_size_um", pa.float64()),
             ]
         )
-        return pa.table(columns, schema=schema)
+        table = pa.table(columns, schema=schema)
+        # one column per setting a pattern method changed during the run
+        extras = sorted({k for r in self.rows for k in r if k not in FRAMES_COLUMNS})
+        for key in extras:
+            values = [r.get(key) for r in self.rows]
+            try:
+                column = pa.array(values)
+            except (pa.ArrowInvalid, pa.ArrowTypeError):
+                column = pa.array([None if v is None else str(v) for v in values])
+            table = table.append_column(key, column)
+        return table
 
     def _write_frames_table(self):
         if self.frames_path is None:

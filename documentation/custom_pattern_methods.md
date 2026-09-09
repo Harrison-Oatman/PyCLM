@@ -225,6 +225,10 @@ context.history(channel_name, kind="seg", n=None)   # past deliveries, oldest fi
 context.stim_history(kind="raw", n=None)
 context.last_pattern()              # the array generate() returned last time, or None
 context.pattern_history(n=None)     # previous patterns, oldest first
+
+context.settings(channel_name)      # exposure, presets, device properties in force
+context.set_exposure(channel_name, ms)                 # change settings of this experiment
+context.set_property(channel_name, device, prop, value)  # from the next timepoint on
 ```
 
 History is sampled at the pattern's own cadence: `add_requirement("545",
@@ -323,3 +327,84 @@ labels are stored as `labels/<name>` next to the default
 and warns once about the rest). To track the nuclei, set
 `segmentation = "nuclei"` in `[tracking]`. Both segmentations of a channel
 come from the same camera frame, so they line up pixel for pixel.
+
+---
+
+## Changing settings from a pattern method
+
+A method can change the acquisition settings of **its own experiment**
+while the run is in progress: a channel's exposure, a config preset, a
+device property such as a laser intensity, or the stage position. The
+structure of the experiment never changes (same channels, same cadence,
+same number of timepoints); only the values inside it do.
+
+```python
+context.settings("545")        # what is in force now: exposure_ms, binning,
+                               #   config_groups {group: preset}, device_properties {"Dev-Prop": value}
+context.settings("stimulation")   # the stimulation channel
+context.position()             # {"x", "y", "z", ...} of this experiment
+
+context.set_exposure("545", 50)                          # ms
+context.set_config("545", "Channel", "GFP")              # group, preset
+context.set_property("farred", "LaserFarRed", "Intensity", 40.0)
+context.set_position(z=1234.5)                           # any of x, y, z, pfs_offset
+```
+
+A request made while generating the pattern for timepoint `t` applies
+from the next timepoint whose acquisitions have not been sent to the
+microscope yet, usually `t + 1`, the same delay as the pattern itself. An
+invalid request (an unknown channel, a non-positive exposure) is refused
+with a warning; the pattern and the other requests still go through. A
+preset or property the hardware rejects shows up as an acquisition error.
+
+Every change is recorded twice. `events.parquet` in the experiment
+directory has one row per request with the timepoint it was made at, the
+timepoint it applied from, the old and the new value, and whether it was
+applied or refused. And the frames table gains a column for every device
+property or config group a method has changed, holding the value in force
+on each frame from the first change on (exposure and position already have
+columns), so each frame remains self-describing. See
+[Data format](data_format.md).
+
+### Example 4 — a red / far-red switch
+
+Red / far-red optogenetic tools work like a switch: red light turns them
+on, far-red turns them off. This method reads a programme string, one
+character per timepoint (`1` = red on, `0` = far-red on; the last
+character holds), and turns the two lasers on and off through a device
+property. Red goes through the DMD as the stimulation channel; far-red is
+an ordinary channel of the experiment. The pattern is the whole field, so
+the programme alone decides what the cells receive:
+
+```toml
+[channels]
+group = "Channel"
+presets = ["545", "farred"]
+
+    [channels.farred]
+    exposure = 500
+    save = false
+
+[pattern]
+method = "red_farred_switch"
+program = "111111000000111111"   # one character per timepoint
+farred_channel = "farred"
+red_device = "LaserRed"
+farred_device = "LaserFarRed"
+property = "Intensity"
+on = 100
+off = 0
+```
+
+```{literalinclude} examples/farred_patterns.py
+:language: python
+:pyobject: RedFarRedSwitch
+```
+
+One principle is at work: a setting requested at timepoint `t` applies
+from `t + 1`, so the method reads the programme one step ahead. The frames
+table then carries `LaserRed-Intensity` on every stimulation frame and
+`LaserFarRed-Intensity` on every `farred` frame from the first change on,
+and `events.parquet` lists each change with the timepoints involved. The
+method needs no image data at all; a closed-loop version would read the
+cells and choose the character itself.

@@ -109,6 +109,10 @@ class AcquisitionEvent:
 
         self.channel_id = channel_id
 
+        # settings changed at runtime for this channel and in force for this
+        # frame, {frames-table column: value} (see core/settings.py)
+        self.overrides: dict = {}
+
         self.pixel_width_um = None
 
     @property

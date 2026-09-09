@@ -179,8 +179,9 @@ class LiveExperiment:
 
 
 class ViewerApp:
-    def __init__(self, specs: list[tuple[str, str]]):
+    def __init__(self, specs: list[tuple[str, str]], status_path: Path | None = None):
         self.viewer = napari.Viewer()
+        self.status_path = status_path
         by_path: dict[str, list[str]] = {}
         for path, layer in specs:
             by_path.setdefault(path, []).append(layer)
@@ -199,7 +200,38 @@ class ViewerApp:
             pass
 
     def refresh(self):
+        self.show_status()
         return sum(1 for e in self.experiments if e.refresh())
+
+    def show_status(self):
+        """One line from status.json (written by the Manager every timepoint) in the status bar."""
+        if self.status_path is None or not self.status_path.exists():
+            return
+        try:
+            status = json.loads(self.status_path.read_text())
+        except Exception:
+            return
+        parts = [f"t {status.get('t')}/{status.get('timepoints')}"]
+        if status.get("done"):
+            parts.append("done")
+        late = [
+            f"{name} late {info['lateness_s']:.1f}s"
+            for name, info in status.get("experiments", {}).items()
+            if info.get("lateness_s")
+        ]
+        errors = sum(
+            info.get("errors", 0) for info in status.get("experiments", {}).values()
+        )
+        if late:
+            parts += late
+        if errors:
+            parts.append(f"{errors} acquisition errors")
+        if status.get("settings_applied"):
+            parts.append(f"{status['settings_applied']} settings changed")
+        try:
+            self.viewer.status = " | ".join(parts)
+        except Exception:
+            pass
 
     def close(self):
         for e in self.experiments:
@@ -240,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     if not specs:
         raise SystemExit(f"no experiment outputs found in {experiment_dir}")
 
-    ViewerApp(specs).run()
+    ViewerApp(specs, experiment_dir / "status.json").run()
     return 0
 
 

@@ -7,8 +7,12 @@
 > Stage 2 (storage: `FrameWriter`, OME-Zarr format 2, `pyclm.io`) is
 > implemented and validated on the microscope on 2026-09-07; see
 > [stage2-storage-options.md](stage2-storage-options.md). Stage 3 (router,
-> registration, pattern history, tracking) is implemented on `Stage3-router`;
-> see [stage3-router-design.md](stage3-router-design.md).
+> registration, pattern history, tracking, named segmentations, measurement
+> toolbox) is implemented and merged; see
+> [stage3-router-design.md](stage3-router-design.md). Stage 4 was narrowed
+> to runtime setting changes requested by pattern methods plus
+> acknowledgements and status, implemented 2026-09-08; see
+> [stage4-control-plane-design.md](stage4-control-plane-design.md).
 
 Scope: the core modules (Manager, MicroscopeProcess, MicroscopeOutbox,
 SLMBuffer, SegmentationProcess, PatternProcess) and the code that feeds them

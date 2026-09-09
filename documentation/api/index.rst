@@ -18,3 +18,4 @@ float32 array in ``[0, 1]`` with shape equal to the camera ROI.
    io
    tracking
    measure
+   settings

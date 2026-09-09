@@ -491,3 +491,80 @@ def test_dry_run_named_segmentations_ome_zarr(yml_experiment_dir):
             assert routes["seg:bright"] == ["pattern@pattern", "writer(record)"]
         stack = tifffile.imread(yml_experiment_dir / f"{store.stem}_imaging.tif")
         assert stack.shape[1] == 4  # raw, two label sets, pattern
+
+
+def test_dry_run_settings_requests_ome_zarr(yml_experiment_dir):
+    """
+    A pattern method that changes its experiment's exposure and a laser
+    property every time it runs: the values land in the next timepoints'
+    frames (frames table columns), the requests are in events.parquet with
+    the timepoints they applied from, and status.json is written.
+    """
+    import json
+
+    import pyclm.io as pio
+    from pyclm.core.patterns import PatternMethod
+
+    class ExposureRamp(PatternMethod):
+        name = "exposure_ramp"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", raw=True)
+
+        def generate(self, context):
+            # the stimulation channel is acquired every timepoint, so the change
+            # is visible on a frame even when the run lags
+            context.set_exposure("stimulation", 10 + 5 * context.t)
+            context.set_property(
+                "stimulation", "Laser545", "Intensity", 0.1 * (context.t + 1)
+            )
+            return np.ones(self.pattern_shape, np.float32)
+
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    for name in ("bar10", "bar025"):
+        toml = yml_experiment_dir / f"{name}.toml"
+        text = toml.read_text()
+        toml.write_text(
+            text[: text.index("[pattern]")] + '[pattern]\nmethod = "exposure_ramp"\n'
+        )
+
+    run_pyclm(
+        yml_experiment_dir, dry=True, pattern_methods={"exposure_ramp": ExposureRamp}
+    )
+
+    status = json.loads((yml_experiment_dir / "status.json").read_text())
+    assert status["done"] is True
+    assert status["timepoints"] == _STEPS
+    assert status["settings_applied"] > 0
+    assert (yml_experiment_dir / "events.parquet").exists()
+    assert (yml_experiment_dir / "events.csv").exists()
+
+    for store in sorted(yml_experiment_dir.glob("*.zarr")):
+        with pio.open(store) as exp:
+            events = exp.events.to_pylist()
+            applied = [e for e in events if e["status"] == "applied"]
+            assert {e["kind"] for e in applied} == {"exposure", "property"}
+            assert all(e["t_applied"] >= e["t_requested"] for e in applied)
+            assert all(e["channel"] == "DMD" for e in applied)
+            assert not [e for e in events if e["status"] == "refused"]
+
+            # every stimulation frame taken after the first change carries the
+            # values in force, and the frames table has the property column
+            t_first = min(e["t_applied"] for e in applied)
+            frames = [
+                r
+                for r in exp.frames.to_pylist()
+                if r["kind"] == "frame" and r["channel"] == "DMD"
+            ]
+            later = [r for r in frames if r["t"] >= t_first]
+            before = [r for r in frames if r["t"] < t_first]
+            assert all(r["exposure_ms"] == 50.0 for r in before)
+            if later:
+                assert "Laser545-Intensity" in exp.frames.column_names
+                assert all(r["Laser545-Intensity"] is not None for r in later)
+                assert all(r["exposure_ms"] != 50.0 for r in later)
+                assert all(r["Laser545-Intensity"] is None for r in before)

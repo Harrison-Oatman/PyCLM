@@ -37,6 +37,8 @@ experiment_dir/
 ├── frames.parquet            # (ome-zarr) one row per frame and stimulation event
 ├── frames.csv                # the same table as CSV, written when the run ends
 ├── tracks.parquet            # (ome-zarr, with tracking) one row per tracked object and timepoint
+├── events.parquet            # settings a pattern method changed, late timepoints, acquisition errors
+├── status.json               # progress, lateness and errors, rewritten every timepoint
 ├── plan.useq.yaml            # the acquisition plan derived from your TOMLs and positions
 ├── all_layers.txt            # layer list used by the live GUI
 └── log.log
@@ -118,6 +120,7 @@ directory:
 | `exposure_ms`, `binning`, `pixel_size_um` | acquisition settings |
 | `x`, `y`, `z`, `pfs_offset` | stage position |
 | `pattern_id`, `pattern_index` | the pattern in force (index into `patterns/dmd/0`) |
+| `<device>-<property>`, `<config group>` | one extra column per setting a pattern method changed during the run: the value in force on that frame, empty before the first change (see the events table) |
 
 ### The tracks table
 
@@ -138,6 +141,28 @@ tracked object and timepoint, for all experiments in the directory:
 The store's root attributes also record `routing`: which process received
 which kind of data for each channel during the run (for instance whether
 segmentation ran on every frame or only when a pattern was due).
+
+### The events table
+
+`events.parquet` (and `events.csv` at the end of the run) records what
+changed and what went wrong while the run was in progress, for all
+experiments in the directory: a setting a pattern method changed
+(`kind` = `exposure`, `config`, `property` or `position`, with the
+timepoint the request was made at, the timepoint it applied from, the old
+and the new value, and `status` = `applied` or `refused` with the reason),
+a focus-lock correction (`z_correction`), a timepoint that finished more
+than one interval late (`late`), and a failed acquisition
+(`acquisition_error` with the error text). `pyclm.io` exposes it as
+`exp.events`.
+
+### The status file
+
+`status.json` is rewritten before every timepoint and once more at the
+end: the current timepoint and total, elapsed seconds, per experiment the
+last acknowledged timepoint with its lateness and error count, how many
+settings were applied and refused, and process health (errors per
+process, frames nobody consumed, frames the writer dropped). The live GUI
+shows one line from it; any script can read it to watch a run.
 
 ### Opening OME-Zarr data
 
@@ -183,6 +208,7 @@ g.label_names              # e.g. ('segmentation', 'nuclei')
 g.global_t(3)              # the plan timepoint of slot 3
 exp.pattern_at(g.global_t(3))   # DMD pattern in force at that timepoint
 exp.frames                 # pyarrow.Table of the frames rows for this experiment
+exp.events                 # runtime events of this experiment, or None
 exp.frames.to_pandas()     # if pandas is installed
 exp.affine_transform       # camera → DMD affine (2×3)
 exp.plan_yaml              # the acquisition plan

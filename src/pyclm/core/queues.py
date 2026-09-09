@@ -22,7 +22,8 @@ class AllQueues:
         self.manager_to_pattern = Queue()
 
         # messages to manager
-        self.microscope_to_manager = Queue()
+        self.microscope_to_manager = Queue()  # UpdateZPositionMessage, EventDoneMessage
+        self.pattern_to_manager = Queue()  # SettingsRequestMessage
 
         # pattern to slm buffer, slm buffer to microscope (synchronous handshake)
         self.pattern_to_slm = Queue()

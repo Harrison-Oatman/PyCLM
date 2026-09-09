@@ -131,6 +131,32 @@ becomes a tagged release.
   stimulation, a three-phase per-cell intensity programme, a KTR
   nuclear/cytosolic ratio clamp (`documentation/examples/`).
 
+### Stage 4 — runtime setting changes and feedback from the microscope
+
+- **A pattern method can change settings of its own experiment** while
+  the run is in progress: `context.set_exposure`, `set_config`,
+  `set_property`, `set_position`, with `context.settings(channel)` and
+  `context.position()` for read-back. Changes apply from the next
+  timepoint (the same delay as the pattern); the schedule, channels and
+  cadence never change. The driving case is a red / far-red optogenetic
+  tool switched on and off from a programme string through the lasers'
+  device properties (documented, tested example).
+- **Provenance.** `events.parquet` / `events.csv` record every request
+  (requested and applied timepoints, old and new value, applied or
+  refused), focus-lock corrections, late timepoints and acquisition
+  errors; `pyclm.io` exposes it as `ExperimentData.events`. The frames
+  table gains one column per device property or config group a method
+  changed, holding the value in force on every later frame.
+- **Acknowledgements and status.** The microscope acknowledges every
+  acquisition; the Manager tracks lateness and errors, warns when a
+  timepoint finishes more than one interval late, and writes
+  `status.json` every timepoint (progress, per-experiment lateness and
+  errors, applied and refused settings, process health). The live GUI
+  shows a status line.
+- Deferred from the original Stage 4 plan: pause/resume, extending a run,
+  hot-reload of the experiment directory, a command file or socket, GUI
+  controls, skipping late timepoints, multiple DMDs.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,
@@ -151,6 +177,10 @@ becomes a tagged release.
   derived from `label_names`.
 - The default `[output] format` is `ome-zarr`; set `hdf5` to keep the old
   layout. HDF5 format 1 does not store tracks or named segmentations.
+- `Manager.initialize(plan, event_log=, status_path=, health=)`; the
+  microscope now sends `EventDoneMessage` after every acquisition on
+  `microscope_to_manager`; `AllQueues` gained `pattern_to_manager`;
+  `AcquisitionEvent.overrides` carries runtime-changed settings.
 - `t_delay` semantics were fixed rather than preserved (no experiment
   had used it).
 
@@ -164,8 +194,7 @@ earlier versions.
 
 ### Still to come (see `docs/assessment-2026-09.md`)
 
-Stage 4: a control plane (pause/resume, live position and parameter
-changes, hot-reload of the experiment directory, acknowledgements from the
-microscope, an events table). Stage 5: a configuration schema with
-`pyclm check`, pattern preview and interactive setup. Then z-stacks and
-grid acquisition on top of the plan.
+Stage 5: a configuration schema with `pyclm check`, pattern preview and
+interactive setup. Later: pause/resume and operator commands on the same
+boundary Stage 4 established, z-stacks and grid acquisition on top of the
+plan.

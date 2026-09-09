@@ -221,3 +221,40 @@ def test_per_cell_bases_accept_tracks_switch():
 
     _plain, reqs = setup(RotateCcwModel, exp, channel="545")
     assert [(r.needs_seg, r.needs_tracks) for r in reqs] == [(True, False)]
+
+
+# ------------------------------------------------------- red / far-red switch
+def test_red_farred_switch_reads_the_programme_one_step_ahead():
+    from pyclm.core.experiments import ConfigGroup, ImagingConfig
+
+    examples = load_example("farred_patterns")
+    exp = make_experiment("exp.00", pattern_method="red_farred_switch")
+    exp.channels["farred"] = ImagingConfig(
+        "exp.00", exposure_ms=200, config_groups=[ConfigGroup("Channel", "FarRed")]
+    )
+    method, reqs = setup(examples.RedFarRedSwitch, exp, program="1100", on=80, off=0)
+    assert reqs == []  # open loop: no image data requested
+
+    def run_at(t):
+        context = PatternContext(DataDock(0.0, reqs), exp, t=t)
+        pattern = method.generate(context)
+        assert pattern.shape == SHAPE
+        assert np.all(pattern == 1.0)
+        return {(c.channel, c.key): c.value for c in context.requests}
+
+    # at t the method sets the lasers for t + 1: "1100" -> t=0 sees '1', t=1 sees '0'
+    assert run_at(0) == {
+        ("stimulation", "LaserRed-Intensity"): 80,
+        ("farred", "LaserFarRed-Intensity"): 0,
+    }
+    assert run_at(1) == {
+        ("stimulation", "LaserRed-Intensity"): 0,
+        ("farred", "LaserFarRed-Intensity"): 80,
+    }
+    # past the end of the programme the last character holds
+    assert run_at(10)[("farred", "LaserFarRed-Intensity")] == 80
+
+    import pytest
+
+    with pytest.raises(ValueError, match="0s and 1s"):
+        examples.RedFarRedSwitch(program="10x")

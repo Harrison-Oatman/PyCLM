@@ -53,7 +53,9 @@ and `Controller.run` calls `close_files()` in its own `finally`
 The HDF5 writer counts the loss in `dropped_frames` and logs an error; the
 OME-Zarr writer (Stage 2) has no pre-allocation problem for planned frames,
 since arrays are sized from the plan and chunks are written on demand.
-Nothing upstream (Manager, GUI) is told yet; surfacing counters is Stage 4.
+**Surfaced in Stage 4 (2026-09-08):** the writer's `dropped_frames`, every
+process's `error_count` and the router's `undeliverable` count are in
+`status.json` under `health`, rewritten every timepoint.
 
 ---
 
@@ -95,7 +97,9 @@ Every `BaseProcess` and the microscope now count errors (`error_count`), and
 the writer counts `dropped_frames` and the router `undeliverable`, but nothing
 reads those counters during a run. A pattern method that throws every timepoint still means the SLM keeps
 showing the last good pattern with no indication in the GUI or to the
-Manager. Surfacing this is Stage 4.
+Manager. **Surfaced in Stage 4:** `status.json` carries the counters and the
+GUI shows a status line; acquisition failures are also `acquisition_error`
+rows in `events.parquet`.
 
 ### 12. `multiprocessing.Queue` between threads
 
@@ -212,7 +216,10 @@ kept as `print`: the operator progress line `t = N: M minutes` and `DONE` in
 `Manager.drain_inboxes` runs inside the inter-timepoint wait loop
 (`core/manager.py`). Fine for the z-correction message, but a control plane
 (pause, set position, update parameters) needs the Manager to process
-commands at defined points and acknowledge them. Stage 4.
+commands at defined points and acknowledge them. **Stage 4 (2026-09-08):**
+that loop is now the defined point. Setting requests from pattern methods
+and the microscope's acknowledgements are drained there and applied from
+`current_t`; the Manager never mutates state mid-burst.
 
 ### 27. `experiment_from_toml` mutated the parsed TOML
 

@@ -11,7 +11,7 @@ from .core_interface import MicroscopeCoreInterface
 from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
 from .experiments import ConfigGroup, DeviceProperty
-from .messages import Message, UpdateZPositionMessage
+from .messages import EventDoneMessage, Message, UpdateZPositionMessage
 from .position_mover import BasicPositionMover, PositionMover
 from .queues import AllQueues
 
@@ -144,7 +144,7 @@ class MicroscopeProcess(BaseProcess):
 
             try:
                 should_stop = self.handle_message(msg, slm_await_s)
-            except Exception:
+            except Exception as exc:
                 self.error_count += 1
                 self.consecutive_errors += 1
                 logger.error(
@@ -152,6 +152,8 @@ class MicroscopeProcess(BaseProcess):
                     f"({self.consecutive_errors} consecutive, {self.error_count} total)",
                     exc_info=True,
                 )
+                if getattr(msg, "message", None) == "acquisition_event":
+                    self.manager.put(EventDoneMessage(msg.event, error=repr(exc)))
                 if self.consecutive_errors >= self.max_consecutive_errors:
                     logger.critical(
                         f"{self.consecutive_errors} consecutive microscope errors; "
@@ -370,6 +372,8 @@ class MicroscopeProcess(BaseProcess):
             data_out = AcquisitionData(aq_event, image)
 
         self._emit(data_out)
+        # acknowledge to the Manager: lateness and errors are tracked there
+        self.manager.put(EventDoneMessage(aq_event))
 
     def snap(self):
         core = self.core

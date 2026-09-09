@@ -24,7 +24,7 @@ OS processes**, despite the naming. All processes share one
 
 | Process | Class / file | Role | Router role |
 |---|---|---|---|
-| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Own loop, not a `BaseProcess`. | none (control only) |
+| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Between timepoints it applies the setting changes pattern methods asked for (`apply_settings`, `core/settings.py`), absorbs the microscope's acknowledgements (lateness, errors) and writes `status.json`; `finish()` closes the events table. Own loop, not a `BaseProcess`. | none (control only) |
 | Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. Own loop with a per-message error guard (aborts after `max_consecutive_errors`, default 10). | produces `raw`; ends the raw stream on the Manager's close |
 | Writer | `WriterProcess`, `core/writer_process.py` (`MicroscopeOutbox` is an alias) | Hands every frame, label image and track table to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2, the default, or HDF5 format 1). | consumes `raw` for every channel and, with `demand=False`, `seg` / `tracks` where the method has `save = true`; `always_active` |
 | SLM buffer | `SLMBuffer`, `core/manager.py` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | none (the pattern → SLM → microscope path is a control handshake, not routed) |
@@ -58,7 +58,8 @@ manager → microscope     manager_to_microscope     AcquisitionEventMessage, Up
                                                    UpdatePositionEventMessage, "close"
 manager → slm_buffer     manager_to_slm_buffer     UpdatePatternEventMessage, "close"
 manager → pattern        manager_to_pattern        RequestPattern, "close"
-microscope → manager     microscope_to_manager     UpdateZPositionMessage
+microscope → manager     microscope_to_manager     UpdateZPositionMessage, EventDoneMessage (one per acquisition)
+pattern → manager        pattern_to_manager        SettingsRequestMessage (a method's setting changes)
 pattern → slm_buffer     pattern_to_slm            CameraPattern, StreamCloseMessage
 slm_buffer → microscope  slm_to_microscope         EventSLMPattern
 ```
@@ -287,11 +288,21 @@ Key properties:
 - `between` is a per-experiment offset. Nothing checks whether experiment *i*
   finished before experiment *i+1*'s scheduled time; overruns simply run late.
   The `todo: check if we are behind schedule` at `manager.py:791` is still open.
-- The Manager never receives acknowledgements. Its only inbound message is
-  `UpdateZPositionMessage` from the microscope (sent when the position mover
-  reports a z change > 1 µm), which mutates `self.positions[name].z`
-  (`manager.py:718-723`) so later events carry the corrected z. Inbound
-  messages are only drained inside the inter-timepoint wait loop.
+- The Manager receives three inbound messages, all drained only inside the
+  inter-timepoint wait loop, which makes that loop the boundary at which
+  they take effect: `UpdateZPositionMessage` from the microscope (a z
+  change > 1 µm from the position mover; mutates `positions[name].z` and
+  is recorded as a `z_correction` event), `SettingsRequestMessage` from
+  the pattern process (a method's changes to its own experiment's
+  exposure, presets, device properties or position; validated with
+  `settings.check_change`, applied to the live `ImagingConfig` /
+  `MicroscopePosition` from `current_t`, recorded in `events.parquet`, and
+  stamped as `event.overrides` on later acquisition events so the frames
+  table gets a column per changed setting), and `EventDoneMessage` from
+  the microscope after every acquisition (lateness = completed − scheduled;
+  a timepoint more than one interval late is warned about once and
+  recorded). `status.json` is written before every burst and by
+  `finish()`, which the Controller calls after all processes exit.
 - `t_index` on events and on `RequestPattern` is the **absolute** timepoint
   `t`; only the cadence decisions (`% every_t`, `% lcm`) use the
   experiment-relative `this_t`. (Before Stage 0 the request used `this_t`,
@@ -555,15 +566,16 @@ router concern, invisible to producers and to the Controller.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 170 tests, ~100 s, all passing after Stage 3
-plus named segmentations and the measurement toolbox (2026-09-08). The dry-run integration tests take almost all of that time.
+`uv run --group test pytest` — 180 tests, ~115 s, all passing after Stage 4
+(2026-09-08). The dry-run integration tests take almost all of that time.
 
 | File | Covers |
 |---|---|
-| `test_dry_run.py` | Whole pipeline against the simulated core for each position-list / discovery mode (HDF5 dataset inventory), the OME-Zarr run, and a closed loop with segmentation + tracking on OME-Zarr (tracked labels, tracks table, routing provenance, export). |
+| `test_dry_run.py` | Whole pipeline against the simulated core for each position-list / discovery mode (HDF5 dataset inventory), the OME-Zarr run, a closed loop with segmentation + tracking on OME-Zarr (tracked labels, tracks table, routing provenance, export), two named segmentations, and a method changing its stimulation channel's exposure and a laser property mid-run (events table, override columns, status file). |
 | `test_router.py` | Table resolution (pattern-only, tracking widens segmentation to every frame, recording only what is produced, shared producers), validation errors, cadence filtering and object identity on publish, undeliverable counting, stream close after the last upstream, exactly once, under concurrent producers. |
 | `test_shutdown.py` | Graceful drain of the workers after `CloseMessage` in open loop, with segmentation, and with tracking (derived upstreams); forced stop; outputs closed on both paths. |
-| `test_doc_examples.py` | The pattern methods shown in the user docs (`documentation/examples/`: leader cells, three-phase intensity programme on the toolbox, the KTR clamp on two named segmentations) against synthetic data, and the `tracks = true` switch on the per-cell base classes. |
+| `test_doc_examples.py` | The pattern methods shown in the user docs (`documentation/examples/`: leader cells, three-phase intensity programme on the toolbox, the KTR clamp on two named segmentations, the red / far-red switch that turns lasers on and off from a programme string) against synthetic data, and the `tracks = true` switch on the per-cell base classes. |
+| `test_settings.py` | Runtime setting changes: the context collecting and reading back settings, the pattern process shipping requests, the Manager applying them from `current_t` (old / new values, override stamping, the next burst), refusals, acknowledgements with lateness and errors, `status.json`, `finish()`, the frames table's override columns, the event log. |
 | `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
 | `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |
 | `test_tracking.py` | The centroid linker (id stability, new ids, µm gate, empty frames), `Tracks`, `TrackingProcess`, `[tracking]` parsing, router wiring for tracks, `context.tracks()`. |

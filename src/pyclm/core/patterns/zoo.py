@@ -104,6 +104,39 @@ class ZooContext:
 
         return Regions(self._seg)
 
+    # --- runtime settings: recorded, never applied, in the zoo ---------------
+    @property
+    def requests(self) -> list:
+        return list(getattr(self, "_requests", []))
+
+    def settings(self, channel_name: str) -> dict:
+        return {
+            "exposure_ms": 10.0,
+            "binning": 1,
+            "config_groups": {},
+            "device_properties": {},
+        }
+
+    def position(self):
+        return None
+
+    def _remember(self, change):
+        self.__dict__.setdefault("_requests", []).append(change)
+
+    def set_exposure(self, channel_name, ms):
+        self._remember(("exposure", channel_name, "exposure_ms", ms))
+
+    def set_config(self, channel_name, group, preset):
+        self._remember(("config", channel_name, group, preset))
+
+    def set_property(self, channel_name, device, prop, value):
+        self._remember(("property", channel_name, f"{device}-{prop}", value))
+
+    def set_position(self, x=None, y=None, z=None, pfs_offset=None):
+        for key, value in (("x", x), ("y", y), ("z", z), ("pfs_offset", pfs_offset)):
+            if value is not None:
+                self._remember(("position", None, key, value))
+
     def stim_raw(self) -> np.ndarray:
         return self._raw
 

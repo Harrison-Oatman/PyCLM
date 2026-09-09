@@ -14,6 +14,11 @@ from ..datatypes import AcquisitionData, SegmentationData
 from ..experiments import Experiment
 from ..kinds import DEFAULT_SEGMENTATION, base_kind, seg_kind
 from ..measure import Regions
+from ..settings import STIMULATION
+from ..settings import config as _config_change
+from ..settings import device_property as _property_change
+from ..settings import exposure as _exposure_change
+from ..settings import position as _position_change
 from ..tracking import Tracks
 
 logger = logging.getLogger(__name__)
@@ -193,11 +198,14 @@ class PatternContext:
         source: ExperimentState | DataDock,
         experiment: Experiment,
         t: int | None = None,
+        position=None,
     ):
         if isinstance(source, DataDock):
             source = ExperimentState.from_dock(source, t)
         self._state: ExperimentState = source
         self._experiment = experiment
+        self._position = position
+        self._requests: list = []
         self._channel_map = {
             name: ch.channel_id for name, ch in experiment.channels.items()
         }
@@ -324,6 +332,68 @@ class PatternContext:
         """Previous patterns, oldest first (at most ``PatternMethod.pattern_history``)."""
         patterns = [p for _, p in self._state.patterns]
         return patterns if n is None else patterns[-int(n) :]
+
+    # ---------------------------------------------------------- settings
+    # A method may change its own experiment's acquisition settings: the
+    # values apply from the next timepoint (the same delay as the pattern),
+    # are recorded in events.parquet, and appear as frames-table columns.
+    @property
+    def requests(self) -> list:
+        """Setting changes requested so far in this ``generate`` call."""
+        return list(self._requests)
+
+    def _channel_config(self, channel_name: str):
+        if channel_name == STIMULATION:
+            return self._experiment.stimulation
+        cfg = self._experiment.channels.get(channel_name)
+        if cfg is None:
+            raise ValueError(
+                f"Channel '{channel_name}' not found in experiment "
+                f"(use '{STIMULATION}' for the stimulation channel)."
+            )
+        return cfg
+
+    def settings(self, channel_name: str) -> dict:
+        """
+        The acquisition settings of one channel of this experiment as they
+        stand now: ``exposure_ms``, ``binning``, ``config_groups`` (group →
+        preset) and ``device_properties`` (``"<device>-<property>"`` → value).
+        ``"stimulation"`` names the stimulation channel.
+        """
+        cfg = self._channel_config(channel_name)
+        return {
+            "exposure_ms": float(cfg.exposure),
+            "binning": int(cfg.binning),
+            "config_groups": {g.group: g.config for g in cfg.get_config_groups()},
+            "device_properties": {
+                f"{d.device}-{d.property}": d.value for d in cfg.get_device_properties()
+            },
+        }
+
+    def position(self) -> dict | None:
+        """The stage position of this experiment (``x``, ``y``, ``z`` and extras), if known."""
+        return None if self._position is None else dict(self._position.as_dict())
+
+    def set_exposure(self, channel_name: str, ms: float) -> None:
+        """Change a channel's exposure (ms) from the next timepoint on."""
+        self._channel_config(channel_name)
+        self._requests.append(_exposure_change(channel_name, ms))
+
+    def set_config(self, channel_name: str, group: str, preset: str) -> None:
+        """Select a MicroManager preset of a config group for a channel from the next timepoint on."""
+        self._channel_config(channel_name)
+        self._requests.append(_config_change(channel_name, group, preset))
+
+    def set_property(self, channel_name: str, device: str, prop: str, value) -> None:
+        """Set a device property (e.g. a laser intensity) for a channel from the next timepoint on."""
+        self._channel_config(channel_name)
+        self._requests.append(_property_change(channel_name, device, prop, value))
+
+    def set_position(self, x=None, y=None, z=None, pfs_offset=None) -> None:
+        """Move this experiment's position (absolute stage coordinates) from the next timepoint on."""
+        for key, value in (("x", x), ("y", y), ("z", z), ("pfs_offset", pfs_offset)):
+            if value is not None:
+                self._requests.append(_position_change(key, value))
 
 
 class PatternMethod:

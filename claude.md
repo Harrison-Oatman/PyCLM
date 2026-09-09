@@ -40,7 +40,7 @@ PyCLM is a closed-loop microscopy system that runs multiple simultaneous optogen
 
 `Controller` (`controller.py`) owns all processes and runs them in a `ThreadPoolExecutor`. The processes are:
 
-1. **`Manager`** (`core/manager.py`) — Timing brain. Walks the `AcquisitionPlan` (`core/plan.py`, a useq `MDASequence` plus PyCLM cadence rules) and turns each timepoint into messages for the microscope, SLM buffer and pattern process. First to finish in a normal run; its exit triggers graceful shutdown.
+1. **`Manager`** (`core/manager.py`) — Timing brain. Walks the `AcquisitionPlan` (`core/plan.py`, a useq `MDASequence` plus PyCLM cadence rules) and turns each timepoint into messages for the microscope, SLM buffer and pattern process. Between timepoints it applies the setting changes pattern methods requested for their own experiment (`core/settings.py`: exposure, presets, device properties, position; the schedule itself never changes), absorbs the microscope's acknowledgements, and writes `status.json` and `events.parquet`. First to finish in a normal run; its exit triggers graceful shutdown.
 2. **`MicroscopeProcess`** (`core/microscope.py`) — Controls hardware via pymmcore-plus. Executes acquisition events, updates stage positions, applies SLM patterns, publishes every frame to the router.
 3. **`WriterProcess`** (`core/writer_process.py`) — Hands frames, label images and track tables to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2 by default, HDF5 format 1).
 4. **`SLMBuffer`** (`core/manager.py`) — Holds the current DMD pattern per experiment, applies the affine transform from camera to SLM coordinates, sends patterns to the microscope on demand.
@@ -78,7 +78,7 @@ Each experiment produces one output: by default an OME-Zarr store (`<experiment>
 ### Key Types
 
 - `AcquisitionEvent` — encodes a single image acquisition: identity from the plan (`index` = `{t, p, c}`), position, channel, exposure, `needs_slm`, `save_output`. Nothing about routing.
-- `PatternContext` — passed to `PatternMethod.generate()`, provides `.raw(channel)`, `.segmentation(channel, name=)`, `.regions(channel, name=)`, `.tracks(channel)`, `.stim_raw()`, `.stim_seg()`, `.history(channel, kind, n, name=)`, `.last_pattern()`, `.t`, `.time`.
+- `PatternContext` — passed to `PatternMethod.generate()`, provides `.raw(channel)`, `.segmentation(channel, name=)`, `.regions(channel, name=)`, `.tracks(channel)`, `.stim_raw()`, `.stim_seg()`, `.history(channel, kind, n, name=)`, `.last_pattern()`, `.t`, `.time`, and the runtime setting requests `.settings(channel)`, `.set_exposure()`, `.set_config()`, `.set_property()`, `.set_position()` (applied from the next timepoint, recorded in `events.parquet` and as frames-table columns).
 - `AcquisitionPlan` — the schedule as data; `events_at(t)`, `pattern_due()`, `pattern_requirements()`.
 - `ImagingConfig` — holds MicroManager config groups and device properties for a channel; supports inheritance and override.
 - `ExperimentSchedule` — aggregates all `Experiment` objects, positions, and timing.

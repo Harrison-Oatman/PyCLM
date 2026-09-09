@@ -4,7 +4,7 @@ from threading import Event
 from .base_process import PipelineProcess
 from .datatypes import AcquisitionData, CameraPattern
 from .experiments import Experiment
-from .messages import Message, StreamCloseMessage
+from .messages import Message, SettingsRequestMessage, StreamCloseMessage
 from .patterns import (
     AcquiredImageRequest,
     CameraProperties,
@@ -41,6 +41,9 @@ class PatternProcess(PipelineProcess):
 
         self.inbox = aq.manager_to_pattern
         self.slm = aq.pattern_to_slm
+        self.to_manager = aq.pattern_to_manager
+        # experiment name -> MicroscopePosition, for context.position() (set by the Controller)
+        self.positions: dict = {}
 
         self.camera_properties = None
         self.initialized = False
@@ -137,7 +140,9 @@ class PatternProcess(PipelineProcess):
                 data_dock.requirements
             )
         state.absorb(data_dock, dockname[1])
-        context = PatternContext(state, model._experiment_ref)
+        context = PatternContext(
+            state, model._experiment_ref, position=self.positions.get(experiment_name)
+        )
 
         if isinstance(model, PatternMethodReturnsSLM):
             pattern = model.generate(context)
@@ -149,6 +154,13 @@ class PatternProcess(PipelineProcess):
             )
         state.record_pattern(out.pattern_id, pattern)
         self.slm.put(out)
+
+        # setting changes the method asked for go to the Manager, which applies
+        # them at the next timepoint boundary and records them
+        if context.requests:
+            self.to_manager.put(
+                SettingsRequestMessage(experiment_name, dockname[1], context.requests)
+            )
 
     def dock_key(self, experiment_name, t) -> tuple[str, int]:
         return (experiment_name, int(t))
