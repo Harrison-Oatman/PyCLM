@@ -348,6 +348,13 @@ def check_directory(
     methods_by_stem: dict[str, object] = {}
     for stem, cfg in configs.items():
         file = f"{stem}.toml"
+        if not cfg.channels.presets:
+            report.info(
+                file,
+                "[channels]",
+                "no imaging channels: the experiment only stimulates "
+                "(the DMD frame is the only image, if [stimulation] save = true)",
+            )
         pattern_cls = patterns.get(cfg.pattern.method)
         if pattern_cls is None:
             report.error(

@@ -35,6 +35,7 @@ from .core.patterns import (
     PatternContext,
     PatternMethodReturnsSLM,
 )
+from .core.plan import _channel_group, _stim_channel_name
 from .core.queues import AllQueues
 from .core.segmentation_process import SegmentationProcess
 from .core.tracking_process import TrackingProcess
@@ -215,7 +216,15 @@ def preview(
 
     binning = int(exp.stimulation.binning)
     # the image is at the imaging binning; the camera ROI is the unbinned size
-    probe = get_frame(next(iter(exp.channels.values())))
+    # the first imaging channel, or the stimulation channel of an experiment
+    # that images nothing else
+    if exp.channels:
+        probe_channel = next(iter(exp.channels))
+        probe_cfg = exp.channels[probe_channel]
+    else:
+        probe_channel = _stim_channel_name(exp, _channel_group(exp))
+        probe_cfg = exp.stimulation
+    probe = get_frame(probe_cfg)
     h, w = probe.shape
     pp.initialize(CameraProperties(ROI(0, 0, w * binning, h * binning), px / binning))
     reqs = pp.request_method(exp)
@@ -277,7 +286,7 @@ def preview(
         raise RuntimeError(f"preview could not gather {dock.get_awaiting()}")
     if not frames:
         # an open-loop method asks for nothing; still show the image it would light
-        frames[next(iter(exp.channels))] = probe
+        frames[probe_channel] = probe
 
     # -------------------------------------------------------- pattern
     context = PatternContext(dock, exp, t=t, position=position)

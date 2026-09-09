@@ -234,6 +234,14 @@ becomes a tagged release.
   reports `source_binning`. Before this, the dry run assumed 0.33 µm and
   unbinned frames, and binned images lit almost nothing on the DMD.
 
+### Stimulation-only experiments
+
+- `[channels]` may be omitted or have `presets = []`: the experiment only
+  stimulates. The schema no longer requires at least one preset (a
+  constraint Stage 5 added without a runtime reason; the plan, storage and
+  viewer already handled a stimulation-only group), `pyclm check` reports
+  it, and `pyclm preview` probes with the stimulation frame.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,

@@ -128,3 +128,16 @@ def test_preview_errors(exp_dir, tif):
         preview(exp_dir, "nope", image=tif)
     with pytest.raises(ValueError, match="needs an image"):
         preview(exp_dir, "bar10")
+
+
+def test_stimulation_only_preview(exp_dir, tif):
+    """No [channels]: the probe is the stimulation frame and the method still runs."""
+    (exp_dir / "stim.toml").write_text(
+        "format_version = 1\n[stimulation]\nexposure = 100\n\n"
+        '    [stimulation.config_groups]\n    Channel = "DMD"\n\n'
+        '[pattern]\nmethod = "full_on"\n'
+    )
+    result = preview(exp_dir, "stim", image=tif, pixel_size_um=0.5)
+    assert "raw DMD" in result.paths
+    assert result.pattern.shape == (120, 160)
+    assert result.pattern.min() == 1.0

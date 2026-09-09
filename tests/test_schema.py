@@ -201,7 +201,6 @@ def test_every_problem_in_a_file_is_reported_together(tmp_path):
 def test_missing_required_keys(tmp_path):
     found = problems(ExperimentConfig, tmp_path, '[channels]\ngroup = "Channel"\n')
     joined = "\n".join(found)
-    assert "[channels] is missing the required key 'presets'" in joined
     assert "the file is missing the required key 'stimulation'" in joined
     assert "the file is missing the required key 'pattern'" in joined
 
@@ -292,10 +291,39 @@ def test_pyclm_config_shape_and_output_choices(tmp_path):
 def test_field_table_describes_every_key():
     rows = {r["key"]: r for r in field_table(ExperimentConfig)}
     assert rows["t_delay"]["default"] == "0"
-    assert rows["channels"]["default"] == "required"
+    assert rows["stimulation"]["default"] == "required"
+    assert rows["channels"]["default"] != "required"
     assert rows["t_stop"]["description"].startswith("stop after")
     timing = {
         r["key"]: r
         for r in field_table(ScheduleConfig.model_fields["timing"].annotation)
     }
     assert "> 0" in timing["interval_seconds"]["type"]
+
+
+def test_stimulation_only_experiment():
+    """No [channels] (or an empty presets list): the experiment only stimulates."""
+    import tomllib
+
+    text = (
+        "format_version = 1"
+        + "\n"
+        + "[stimulation]"
+        + "\n"
+        + "exposure = 100"
+        + "\n\n"
+        + "[pattern]"
+        + "\n"
+        + 'method = "full_on"'
+        + "\n"
+    )
+    cfg = ExperimentConfig.model_validate(tomllib.loads(text))
+    assert cfg.channel_names == []
+    exp = cfg.to_experiment("stim.00")
+    assert exp.channels == {}
+    with_empty = text.replace(
+        "[stimulation]", "[channels]" + "\n" + "presets = []" + "\n\n" + "[stimulation]"
+    )
+    assert (
+        ExperimentConfig.model_validate(tomllib.loads(with_empty)).channel_names == []
+    )

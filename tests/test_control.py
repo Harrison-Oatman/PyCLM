@@ -178,8 +178,9 @@ def test_experiment_form_round_trips_and_validates(app, exp_dir):
     problems = form.validate()
     assert problems == []  # the schema accepts any method name; check catches it
     imaging["exposure"].setValue(imaging["exposure"].minimum())
+    # an empty presets list is a stimulation-only experiment, not an error
     form.form.widgets["channels"].form.widgets["presets"].setText("")
-    assert any("presets" in p for p in form.validate())
+    assert not any("presets" in p for p in form.validate())
 
 
 def test_schedule_form_and_new_file(app, exp_dir):

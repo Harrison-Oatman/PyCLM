@@ -89,9 +89,13 @@ default 10), `every_t` (default 1), `save` (default true) and `binning`
 (default 1; the same for every channel).
 
 **`[channels]`**. `group` names the MicroManager config group that switches
-channels and `presets` lists the presets to image, in acquisition order.
-A table named after a preset (`[channels.638]`) overrides `exposure`,
-`every_t`, `config_groups` and `device_properties` for that channel.
+channels (default `Channel`) and `presets` lists the presets to image, in
+acquisition order. A table named after a preset (`[channels.638]`)
+overrides `exposure`, `every_t`, `config_groups` and `device_properties`
+for that channel. An experiment that only stimulates leaves `presets`
+empty or omits the table: the DMD frame is then its only image (saved when
+`[stimulation] save = true`), `pyclm check` says so, and `pyclm preview`
+uses the stimulation frame as its probe.
 
 **`[stimulation]`**. The light-delivery event: `exposure` (ms; `0` means no
 stimulation), `every_t` (default 1), `save` (default true: whether the

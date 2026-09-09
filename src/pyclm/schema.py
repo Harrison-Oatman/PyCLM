@@ -128,15 +128,20 @@ class ChannelOverride(Strict):
 
 
 class Channels(BaseModel):
-    """Which presets of which config group are the imaging channels."""
+    """
+    Which presets of which config group are the imaging channels. May be
+    empty (or the table absent) for an experiment that only stimulates.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     group: str = Field(
-        ..., description="the MicroManager config group that switches channels"
+        "Channel", description="the MicroManager config group that switches channels"
     )
     presets: list[str] = Field(
-        ..., min_length=1, description="the presets to image, in acquisition order"
+        default_factory=list,
+        description="the presets to image, in acquisition order; empty for a "
+        "stimulation-only experiment",
     )
     overrides: dict[str, ChannelOverride] = Field(
         default_factory=dict,
@@ -264,7 +269,10 @@ class ExperimentConfig(Strict):
         description='"Device-Property" = value, applied to every acquisition',
     )
     imaging: ImagingDefaults = Field(default_factory=ImagingDefaults)
-    channels: Channels
+    channels: Channels = Field(
+        default_factory=Channels,
+        description="the imaging channels; omit for a stimulation-only experiment",
+    )
     stimulation: Stimulation
     segmentation: SegmentationTable | None = Field(
         None, description="the default segmentation"
