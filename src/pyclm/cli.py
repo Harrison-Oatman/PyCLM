@@ -8,6 +8,7 @@ The ``pyclm`` command.
     pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N]
     pyclm export <dir> [channels ...] [--config FILE]
     pyclm gui <dir>
+    pyclm control <dir> [--dry] [--config FILE]
     pyclm new <dir> [--template open-loop|closed-loop] [--name NAME]
 
 ``pyclm <dir> [--dry] [--gui]`` (the form before Stage 5) still means ``run``.
@@ -21,7 +22,7 @@ import argparse
 import sys
 from pathlib import Path
 
-COMMANDS = ("run", "check", "preview", "export", "gui", "new")
+COMMANDS = ("run", "check", "preview", "export", "gui", "new", "control")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -92,6 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("gui", help="open the live viewer on an experiment directory")
     p.add_argument("directory")
     p.set_defaults(func=cmd_gui)
+
+    p = sub.add_parser("control", help="open the control window: run, positions, files")
+    p.add_argument("directory", nargs="?", default=None)
+    p.add_argument("--config", default=None, help="path to pyclm_config.toml")
+    p.add_argument("--dry", action="store_true", help="use the virtual microscope")
+    p.set_defaults(func=cmd_control)
 
     p = sub.add_parser("new", help="create an experiment directory from a template")
     p.add_argument("directory")
@@ -188,6 +195,17 @@ def cmd_gui(args) -> int:
     from .gui.gui_controller import main as gui_main
 
     return gui_main([args.directory])
+
+
+def cmd_control(args) -> int:
+    from .gui.control import main as control_main
+
+    argv = [] if args.directory is None else [args.directory]
+    if args.config:
+        argv += ["--config", args.config]
+    if args.dry:
+        argv.append("--dry")
+    return control_main(argv)
 
 
 def cmd_new(args) -> int:

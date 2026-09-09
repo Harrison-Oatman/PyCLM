@@ -168,6 +168,8 @@ class AcquisitionPlan:
         self._required = {
             name: self._resolve_requirements(name) for name in self._names
         }
+        # experiments ended early by a stop_experiment command
+        self._stopped: set[str] = set()
         self._pattern_lcm = {name: self._compute_lcm(name) for name in self._names}
 
     # ------------------------------------------------------------------ build
@@ -416,6 +418,8 @@ class AcquisitionPlan:
 
     def _relative_t(self, experiment: str, t: int) -> int | None:
         """Experiment-relative timepoint, or None when the experiment is inactive at ``t``."""
+        if experiment in self._stopped:
+            return None
         meta = self._meta[experiment]
         this_t = t - int(meta["t_delay"])
         if this_t < 0:
@@ -423,6 +427,17 @@ class AcquisitionPlan:
         if int(meta["t_stop"]) > 0 and this_t >= int(meta["t_stop"]):
             return None
         return this_t
+
+    def stop_experiment(self, experiment: str) -> bool:
+        """End one experiment: from now on it has no events. Returns False if unknown or already stopped."""
+        if experiment not in self._names or experiment in self._stopped:
+            return False
+        self._stopped.add(experiment)
+        return True
+
+    @property
+    def stopped(self) -> set[str]:
+        return set(self._stopped)
 
     def is_active(self, experiment: str, t: int) -> bool:
         return self._relative_t(experiment, t) is not None

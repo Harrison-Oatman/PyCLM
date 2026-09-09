@@ -4,7 +4,12 @@ from threading import Event
 from .base_process import PipelineProcess
 from .datatypes import AcquisitionData, CameraPattern
 from .experiments import Experiment
-from .messages import Message, SettingsRequestMessage, StreamCloseMessage
+from .messages import (
+    Message,
+    PatternParamsResultMessage,
+    SettingsRequestMessage,
+    StreamCloseMessage,
+)
 from .patterns import (
     AcquiredImageRequest,
     CameraProperties,
@@ -175,6 +180,25 @@ class PatternProcess(PipelineProcess):
     def handle_message(self, message: Message):
         match message.message:
             case "close":
+                return False
+
+            case "update_pattern_params":
+                name = message.experiment_name
+                model = self.models.get(name)
+                if model is None:
+                    result = PatternParamsResultMessage(
+                        name, {}, dict.fromkeys(message.parameters, "no pattern method")
+                    )
+                else:
+                    try:
+                        applied, refused = model.update(**message.parameters)
+                    except Exception as e:  # a method's own update() may raise
+                        applied, refused = (
+                            {},
+                            dict.fromkeys(message.parameters, repr(e)),
+                        )
+                    result = PatternParamsResultMessage(name, applied, refused)
+                self.to_manager.put(result)
                 return False
 
             case "request_pattern":

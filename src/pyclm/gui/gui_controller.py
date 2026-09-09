@@ -28,6 +28,8 @@ from qtpy import QtCore
 from pyclm import io as pyclm_io
 from pyclm.io.export import pattern_to_camera
 
+from .widgets import RunOverview
+
 logger = logging.getLogger(__name__)
 
 
@@ -179,9 +181,20 @@ class LiveExperiment:
 
 
 class ViewerApp:
-    def __init__(self, specs: list[tuple[str, str]], status_path: Path | None = None):
+    def __init__(
+        self,
+        specs: list[tuple[str, str]],
+        status_path: Path | None = None,
+        experiment_dir: Path | None = None,
+    ):
         self.viewer = napari.Viewer()
         self.status_path = status_path
+        if experiment_dir is None and status_path is not None:
+            experiment_dir = Path(status_path).parent
+        self.overview = RunOverview(experiment_dir)
+        self.viewer.window.add_dock_widget(
+            self.overview, name="Run", area="right", tabify=False
+        )
         by_path: dict[str, list[str]] = {}
         for path, layer in specs:
             by_path.setdefault(path, []).append(layer)
@@ -190,6 +203,7 @@ class ViewerApp:
             for path, layers in by_path.items()
         ]
 
+        self._fov_applied = False
         self._timer = QtCore.QTimer()
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self.refresh)
@@ -201,7 +215,29 @@ class ViewerApp:
 
     def refresh(self):
         self.show_status()
+        self.overview.refresh()
+        self._apply_fov()
         return sum(1 for e in self.experiments if e.refresh())
+
+    def _apply_fov(self):
+        """Draw each position's field of view once the stores report a shape and pixel size."""
+        if self._fov_applied or not self.overview.minimap.positions:
+            return
+        fov = {}
+        for live in self.experiments:
+            for g in live.exp.groups.values():
+                if g.shape != (0, 0) and g.pixel_size_um:
+                    fov[live.exp.name] = (
+                        g.shape[0] * g.pixel_size_um,
+                        g.shape[1] * g.pixel_size_um,
+                    )
+                    break
+        if not fov:
+            return
+        for p in self.overview.minimap.positions:
+            p.fov_um = fov.get(p.label)
+        self.overview.minimap.redraw()
+        self._fov_applied = True
 
     def show_status(self):
         """One line from status.json (written by the Manager every timepoint) in the status bar."""
@@ -272,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
     if not specs:
         raise SystemExit(f"no experiment outputs found in {experiment_dir}")
 
-    ViewerApp(specs, experiment_dir / "status.json").run()
+    ViewerApp(specs, experiment_dir / "status.json", experiment_dir).run()
     return 0
 
 

@@ -33,6 +33,7 @@ EVENT_COLUMNS = (
     "new",
     "status",
     "detail",
+    "source",
 )
 EVENT_SCHEMA = pa.schema(
     [
@@ -47,6 +48,7 @@ EVENT_SCHEMA = pa.schema(
         ("new", pa.string()),
         ("status", pa.string()),
         ("detail", pa.string()),
+        ("source", pa.string()),
     ]
 )
 
@@ -76,6 +78,7 @@ class EventLog:
         detail: str | None = None,
         t_requested: int | None = None,
         t_applied: int | None = None,
+        source: str | None = None,
     ) -> dict:
         row = {
             "wall_time": datetime.datetime.now().isoformat(timespec="milliseconds"),
@@ -89,6 +92,7 @@ class EventLog:
             "new": _text(new),
             "status": status,
             "detail": detail,
+            "source": source,
         }
         with self._lock:
             self.rows.append(row)

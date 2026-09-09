@@ -350,3 +350,58 @@ def dry_schedule_from_directory(
         return _dry_schedule_from_position_list(experiment_dir, tomls, timing)
 
     return _dry_schedule_from_tifs(experiment_dir, tomls, timing)
+
+
+def write_position_list(path, positions, xy_stage="XYStage", z_stage="ZDrive"):
+    """
+    Write positions as a MicroManager ``PositionList.pos`` (property map v2),
+    the format :func:`positions_from_pos` reads and MicroManager imports.
+    ``extras`` of a position (e.g. ``PFSOffset``) become single-axis devices.
+    """
+    path = Path(path)
+    entries = []
+    for i, pos in enumerate(positions):
+        devices = [
+            {
+                "Device": {"type": "STRING", "scalar": xy_stage},
+                "Position_um": {
+                    "type": "DOUBLE",
+                    "array": [float(pos.x), float(pos.y)],
+                },
+            },
+            {
+                "Device": {"type": "STRING", "scalar": z_stage},
+                "Position_um": {"type": "DOUBLE", "array": [float(pos.z)]},
+            },
+        ]
+        for device, value in (getattr(pos, "extras", {}) or {}).items():
+            values = list(value) if isinstance(value, (list, tuple)) else [value]
+            devices.append(
+                {
+                    "Device": {"type": "STRING", "scalar": str(device)},
+                    "Position_um": {
+                        "type": "DOUBLE",
+                        "array": [float(v) for v in values],
+                    },
+                }
+            )
+        entries.append(
+            {
+                "DefaultXYStage": {"type": "STRING", "scalar": xy_stage},
+                "DefaultZStage": {"type": "STRING", "scalar": z_stage},
+                "DevicePositions": {"type": "PROPERTY_MAP", "array": devices},
+                "GridCol": {"type": "INTEGER", "scalar": 0},
+                "GridRow": {"type": "INTEGER", "scalar": i},
+                "Label": {"type": "STRING", "scalar": str(pos.label)},
+                "Properties": {"type": "PROPERTY_MAP", "scalar": {}},
+            }
+        )
+    document = {
+        "encoding": "UTF-8",
+        "format": "Micro-Manager Property Map",
+        "major_version": 2,
+        "minor_version": 0,
+        "map": {"StagePositions": {"type": "PROPERTY_MAP", "array": entries}},
+    }
+    path.write_text(json.dumps(document, indent=2), encoding="utf-8")
+    return path

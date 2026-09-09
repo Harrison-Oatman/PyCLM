@@ -185,6 +185,34 @@ becomes a tagged release.
   `t_delay` / `t_stop` written after `[pattern]` (as the docs showed) were
   silently passed to the pattern method instead of delaying the experiment.
 
+### Stage 5b — the control window, commands during a run, the minimap
+
+- **The viewer stays on napari** (assessed against ndv and pymmcore-gui:
+  ndv is alpha without label layers, pymmcore-gui pins PyQt6 and zarr < 3)
+  and gains a dock with a status line that updates every second and a
+  **minimap** of the positions in stage coordinates, coloured by
+  experiment, the current position filled, fields of view drawn.
+- **Commands to a running experiment**: one JSON file each in
+  `commands/`, applied at the timepoint boundary, recorded in the events
+  table, moved to `commands/done/`: `pause` / `resume` (the clock shifts by
+  the paused time), `stop_run`, `stop_experiment`, `set_exposure`,
+  `set_config`, `set_property`, `set_position`, `set_pattern` (a new
+  `PatternMethod.update(**parameters)` hook). `pyclm.commands.write_command`
+  writes one from Python.
+- **`pyclm control`**, a control window in its own process: check, start
+  or rehearse a run as a subprocess, pause / resume / stop, the commands
+  above, the status line and minimap; a positions table with an experiment
+  column fed by the stage (pymmcore-widgets on the microscope, the virtual
+  microscope with `--dry`), preview at the current position, and a writer
+  for MicroManager's `PositionList.pos`; forms for the three configuration
+  files generated from the schema, saved with `tomlkit` so untouched tables
+  keep their comments. Nothing in the window can affect a run.
+- **Dependencies**: pymmcore-plus 0.18.1 (from 0.13.7), pymmcore ≥ 12.5
+  (device interface 75; the microscope's Micro-Manager adapters must
+  match), useq-schema ≥ 0.9.2, napari ≥ 0.9, and new pymmcore-widgets and
+  tomlkit. The whole suite passes on the new stack; the real core still
+  needs one run on the microscope.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,
@@ -218,6 +246,14 @@ becomes a tagged release.
   of `KeyError`. `run_pyclm(..., check=True, force=False)` runs the check
   first and raises `pyclm.check.CheckFailed` on errors.
 - The `pyclm` entry point is `pyclm.cli.main` with subcommands.
+- pymmcore 12.5 speaks Micro-Manager device interface 75: a Micro-Manager
+  installation older than that will not load through pymmcore-plus 0.18
+  until its device adapters are updated (or `mmcore install`).
+- `Manager.initialize(..., commands_dir=)`; `status.json` gained
+  `current_experiment`, `paused`, `paused_s`, `stopping`,
+  `pending_commands`, `commands_applied`; `events.parquet` gained a
+  `source` column; `AcquisitionPlan.stop_experiment`; cores gained
+  `getXYPosition`.
 
 ### Not changed
 
@@ -229,7 +265,5 @@ earlier versions.
 
 ### Still to come (see `docs/assessment-2026-09.md`)
 
-Stage 5b: interactive setup (forms from the schema, a positions editor,
-run control in the GUI) once the command line has been used by a new lab
-member. Later: pause/resume and operator commands on the same boundary
-Stage 4 established, z-stacks and grid acquisition on top of the plan.
+Later: z-stacks and grid acquisition on top of the plan; a LapTrack
+tracking method; a single window if ndv gains label layers.

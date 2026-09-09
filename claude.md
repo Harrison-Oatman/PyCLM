@@ -23,6 +23,8 @@ uv run pyclm check <dir> [--config path/to/pyclm_config.toml] [--mm-config file.
 uv run pyclm preview <dir> <experiment> --image frame.tif
 uv run pyclm run <dir> [--config path/to/pyclm_config.toml] [--dry] [--gui] [--force]
 uv run pyclm export <dir> [channels]      # ImageJ hyperstacks (convert_hdf5s is an alias)
+uv run pyclm gui <dir>                    # the live viewer (napari; status line + minimap dock)
+uv run pyclm control <dir> [--dry]        # the control window: run / commands, positions, files
 ```
 
 **Linting:** ruff (formatter + linter with rules B, I, RUF, PT, UP) and nbstripout for notebooks — configured in `.pre-commit-config.yaml`.
@@ -41,7 +43,7 @@ PyCLM is a closed-loop microscopy system that runs multiple simultaneous optogen
 
 `Controller` (`controller.py`) owns all processes and runs them in a `ThreadPoolExecutor`. The processes are:
 
-1. **`Manager`** (`core/manager.py`) — Timing brain. Walks the `AcquisitionPlan` (`core/plan.py`, a useq `MDASequence` plus PyCLM cadence rules) and turns each timepoint into messages for the microscope, SLM buffer and pattern process. Between timepoints it applies the setting changes pattern methods requested for their own experiment (`core/settings.py`: exposure, presets, device properties, position; the schedule itself never changes), absorbs the microscope's acknowledgements, and writes `status.json` and `events.parquet`. First to finish in a normal run; its exit triggers graceful shutdown.
+1. **`Manager`** (`core/manager.py`) — Timing brain. Walks the `AcquisitionPlan` (`core/plan.py`, a useq `MDASequence` plus PyCLM cadence rules) and turns each timepoint into messages for the microscope, SLM buffer and pattern process. Between timepoints it applies the setting changes pattern methods requested for their own experiment (`core/settings.py`: exposure, presets, device properties, position; the schedule itself never changes), polls `commands/` for operator commands (`commands.py`: pause/resume, stop, set_*, set_pattern), absorbs the microscope's acknowledgements, and writes `status.json` and `events.parquet`. First to finish in a normal run; its exit triggers graceful shutdown.
 2. **`MicroscopeProcess`** (`core/microscope.py`) — Controls hardware via pymmcore-plus. Executes acquisition events, updates stage positions, applies SLM patterns, publishes every frame to the router.
 3. **`WriterProcess`** (`core/writer_process.py`) — Hands frames, label images and track tables to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2 by default, HDF5 format 1).
 4. **`SLMBuffer`** (`core/manager.py`) — Holds the current DMD pattern per experiment, applies the affine transform from camera to SLM coordinates, sends patterns to the microscope on demand.
@@ -60,7 +62,7 @@ Experiments are configured entirely via TOML files in an experiment directory:
 - **`multipoints.xml`** — Imaging positions exported from MicroManager's multipoint list. Position labels link to experiment TOMLs (e.g., position `feedbackexp.1` uses `feedbackexp.toml`).
 - **`pyclm_config.toml`** — Hardware config: `config_path` (MicroManager .cfg), `affine_transform` (2×3 matrix, camera→SLM), `slm_shape_h`/`slm_shape_w`, optional `focus_device`, `settle_time_seconds`, and `[output]` (`format`, `pattern_policy`, `export_imagej`). Located at repo root or in the experiment directory.
 
-`schema.py` holds the pydantic models for the three kinds of file (`ExperimentConfig`, `ScheduleConfig`, `PyclmConfig`; unknown keys are errors, method-table extras are the method's kwargs, `format_version`); `directories.py:schedule_from_directory()` builds an `ExperimentSchedule` through them. `check.py` (`pyclm check`, also run by `pyclm run`) validates a directory: files, positions ↔ TOMLs, method names and arguments against constructor signatures, requirements against tables, presets against the MicroManager `.cfg` (`mmconfig.py`, text parsing), the timing budget, existing outputs. `preview.py` runs one experiment's methods on one image; `templates.py` backs `pyclm new`; `cli.py` is the command.
+`schema.py` holds the pydantic models for the three kinds of file (`ExperimentConfig`, `ScheduleConfig`, `PyclmConfig`; unknown keys are errors, method-table extras are the method's kwargs, `format_version`); `directories.py:schedule_from_directory()` builds an `ExperimentSchedule` through them. `check.py` (`pyclm check`, also run by `pyclm run`) validates a directory: files, positions ↔ TOMLs, method names and arguments against constructor signatures, requirements against tables, presets against the MicroManager `.cfg` (`mmconfig.py`, text parsing), the timing budget, existing outputs. `preview.py` runs one experiment's methods on one image; `templates.py` backs `pyclm new`; `cli.py` is the command. GUI: `gui/gui_controller.py` (napari viewer, read-only, own process), `gui/widgets.py` (status line, minimap; plain Qt, shared), `gui/control.py` (`pyclm control`: run panel driving `pyclm run` as a subprocess and writing command files, positions panel on `MMCoreStage` / `SimulatedStage` with pymmcore-widgets, forms), `gui/forms.py` (schema-generated forms saved with tomlkit). The GUI processes talk to a run only through files; the run has no Qt.
 
 ### Extending PyCLM
 

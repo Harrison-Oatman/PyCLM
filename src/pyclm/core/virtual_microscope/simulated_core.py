@@ -195,6 +195,9 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         return (x, y, w * 4, h * 4)
 
     # Stage/focus/positioning
+    def getXYPosition(self) -> tuple[float, float]:
+        return float(self._x), float(self._y)
+
     def getZPosition(self) -> float:
         return float(self._z)
 

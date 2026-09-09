@@ -37,7 +37,8 @@ experiment_dir/
 ├── frames.parquet            # (ome-zarr) one row per frame and stimulation event
 ├── frames.csv                # the same table as CSV, written when the run ends
 ├── tracks.parquet            # (ome-zarr, with tracking) one row per tracked object and timepoint
-├── events.parquet            # settings a pattern method changed, late timepoints, acquisition errors
+├── events.parquet            # settings changed, commands, late timepoints, acquisition errors
+├── commands/                 # commands to the running experiment (done/ holds the processed ones)
 ├── status.json               # progress, lateness and errors, rewritten every timepoint
 ├── plan.useq.yaml            # the acquisition plan derived from your TOMLs and positions
 ├── preview/                  # (pyclm preview) what a method produced on one image
@@ -153,15 +154,19 @@ timepoint the request was made at, the timepoint it applied from, the old
 and the new value, and `status` = `applied` or `refused` with the reason),
 a focus-lock correction (`z_correction`), a timepoint that finished more
 than one interval late (`late`), and a failed acquisition
-(`acquisition_error` with the error text). `pyclm.io` exposes it as
-`exp.events`.
+(`acquisition_error` with the error text), and every command from the
+control window or a script (`command`, with the settings it caused as
+further rows). `source` says who asked: `pattern` (a method during
+`generate`) or `command`. `pyclm.io` exposes it as `exp.events`.
 
 ### The status file
 
 `status.json` is rewritten before every timepoint and once more at the
 end: the current timepoint and total, elapsed seconds, per experiment the
 last acknowledged timepoint with its lateness and error count, how many
-settings were applied and refused, and process health (errors per
+settings were applied and refused, the experiment the microscope last
+acknowledged (`current_experiment`), whether the run is `paused` or
+`stopping`, pending and applied commands, and process health (errors per
 process, frames nobody consumed, frames the writer dropped). The live GUI
 shows one line from it; any script can read it to watch a run.
 

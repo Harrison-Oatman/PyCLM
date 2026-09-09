@@ -38,6 +38,7 @@ from .messages import (
     Message,
     SettingsRequestMessage,
     UpdatePatternEventMessage,
+    UpdatePatternParamsMessage,
     UpdatePositionEventMessage,
     UpdateZPositionMessage,
 )
@@ -230,6 +231,18 @@ class Manager:
         self.settings_refused = 0
         self._late_warned: set[int] = set()
         self.finished = False
+        # the experiment the microscope last acknowledged (where it is now)
+        self.current_experiment: str | None = None
+        # commands (core/commands.py): polled from a directory at the boundary
+        self.commands_dir: Path | None = None
+        self.paused = False
+        self._pause_started = 0.0
+        self.paused_s = 0.0
+        self.stopping = False
+        self.pending_commands = 0
+        self.commands_applied = 0
+        self._last_poll = 0.0
+        self.poll_interval = 0.5
 
     def initialize(
         self,
@@ -237,6 +250,7 @@ class Manager:
         event_log: EventLog | None = None,
         status_path: Path | None = None,
         health=None,
+        commands_dir: Path | None = None,
     ):
         self.plan = plan
         self.schedule = plan.schedule
@@ -247,6 +261,7 @@ class Manager:
             self.event_log = event_log
         self.status_path = None if status_path is None else Path(status_path)
         self.health = health
+        self.commands_dir = None if commands_dir is None else Path(commands_dir)
 
         self.initialized = True
 
@@ -280,6 +295,36 @@ class Manager:
                 assert isinstance(msg, EventDoneMessage)
                 self.handle_event_done(msg)
 
+            case "pattern_params_result":
+                for key, value in msg.applied.items():
+                    self.event_log.record(
+                        "pattern",
+                        msg.experiment_name,
+                        None,
+                        key,
+                        None,
+                        value,
+                        "applied",
+                        None,
+                        self.current_t,
+                        self.next_timepoint(),
+                        "command",
+                    )
+                for key, reason in msg.refused.items():
+                    self.event_log.record(
+                        "pattern",
+                        msg.experiment_name,
+                        None,
+                        key,
+                        None,
+                        None,
+                        "refused",
+                        reason,
+                        self.current_t,
+                        self.next_timepoint(),
+                        "command",
+                    )
+
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
@@ -308,7 +353,7 @@ class Manager:
             return exp.stimulation, stim or STIMULATION
         return exp.channels.get(channel), channel
 
-    def apply_settings(self, msg: SettingsRequestMessage):
+    def apply_settings(self, msg: SettingsRequestMessage, source: str = "pattern"):
         """
         Validate and apply a pattern method's requested changes to its own
         experiment. They take effect from ``current_t`` (the next timepoint
@@ -345,6 +390,7 @@ class Manager:
                     reason,
                     msg.t_requested,
                     t_apply,
+                    source,
                 )
                 continue
             old = self._apply_change(name, cfg, channel, change)
@@ -361,6 +407,7 @@ class Manager:
                 None,
                 msg.t_requested,
                 t_apply,
+                source,
             )
 
     def next_timepoint(self) -> int:
@@ -413,12 +460,124 @@ class Manager:
             UpdatePositionEventMessage(UpdateStagePositionEvent(position, name))
         )
 
+    # ------------------------------------------------------------ commands
+    def poll_commands(self) -> bool:
+        """Apply the command files waiting in ``commands_dir`` (at most every ``poll_interval`` s)."""
+        if self.commands_dir is None:
+            return False
+        now = time()
+        if now - self._last_poll < self.poll_interval:
+            return False
+        self._last_poll = now
+        from ..commands import mark_done, pending_in
+
+        found = pending_in(self.commands_dir)
+        self.pending_commands = len(found)
+        handled = False
+        for path, command, problem in found:
+            if command is None:
+                logger.warning(f"command file {path.name} refused: {problem}")
+                self.event_log.record(
+                    "command",
+                    None,
+                    None,
+                    path.name,
+                    None,
+                    None,
+                    "refused",
+                    problem,
+                    self.current_t,
+                    self.next_timepoint(),
+                    "command",
+                )
+            else:
+                self.apply_command(command, path.name)
+            mark_done(path)
+            handled = True
+        self.pending_commands = 0
+        return handled
+
+    def apply_command(self, command, name: str = "") -> bool:
+        """Apply one command; every outcome is an events row. Returns True if applied."""
+        text = command.describe()
+        t_apply = self.next_timepoint()
+
+        def record(status, detail=None, old=None, new=None):
+            self.event_log.record(
+                "command",
+                command.experiment,
+                command.channel,
+                command.command,
+                old,
+                new if new is not None else text,
+                status,
+                detail,
+                self.current_t,
+                t_apply,
+                "command",
+            )
+
+        kind = command.command
+        if kind == "pause":
+            if not self.paused:
+                self.paused = True
+                self._pause_started = time()
+            logger.warning("run paused by command")
+            record("applied")
+        elif kind == "resume":
+            if not self.paused:
+                record("refused", "not paused")
+                return False
+            shift = time() - self._pause_started
+            self.start_time += shift
+            self.paused_s += shift
+            self.paused = False
+            logger.warning(f"run resumed after {shift:.1f}s")
+            record("applied", f"paused {shift:.1f} s")
+        elif kind == "stop_run":
+            self.stopping = True
+            logger.warning("run will stop after this timepoint (command)")
+            record("applied")
+        elif kind == "stop_experiment":
+            if not self.plan.stop_experiment(command.experiment):
+                record(
+                    "refused",
+                    f"unknown or already stopped experiment {command.experiment!r}",
+                )
+                return False
+            logger.warning(f"{command.experiment} stopped by command")
+            record("applied")
+        elif kind == "set_pattern":
+            if command.experiment not in self.experiments:
+                record("refused", f"unknown experiment {command.experiment!r}")
+                return False
+            self.msgout["pattern"].put(
+                UpdatePatternParamsMessage(command.experiment, command.parameters)
+            )
+            record("applied", "sent to the pattern method; see the pattern rows")
+        else:
+            before = self.settings_refused
+            self.apply_settings(
+                SettingsRequestMessage(
+                    command.experiment, self.current_t, command.to_changes()
+                ),
+                source="command",
+            )
+            refused = self.settings_refused - before
+            if refused:
+                record("refused", f"{refused} change(s) refused; see the rows above")
+                return False
+            record("applied")
+        self.commands_applied += 1
+        return True
+
     # -------------------------------------------------- acknowledgements
     def handle_event_done(self, msg: EventDoneMessage):
         rec = self.acks.setdefault(msg.t_index, {}).setdefault(
             msg.experiment_name, {"frames": 0, "errors": 0, "lateness_s": 0.0}
         )
         rec["frames"] += 1
+        self.current_experiment = msg.experiment_name
         if msg.error:
             rec["errors"] += 1
             self.event_log.record(
@@ -474,10 +633,19 @@ class Manager:
             "t": self.current_t,
             "timepoints": self.plan.timepoints,
             "done": done,
+            "current_experiment": self.current_experiment,
             "wall_time": datetime.datetime.now().isoformat(timespec="seconds"),
             "elapsed_s": round(time() - self.start_time, 1) if self.start_time else 0.0,
             "settings_applied": self.settings_applied,
             "settings_refused": self.settings_refused,
+            "paused": self.paused,
+            "paused_s": round(
+                self.paused_s + (time() - self._pause_started if self.paused else 0.0),
+                1,
+            ),
+            "stopping": self.stopping,
+            "pending_commands": self.pending_commands,
+            "commands_applied": self.commands_applied,
             "experiments": experiments,
             "health": self.health() if self.health is not None else {},
         }
@@ -557,29 +725,36 @@ class Manager:
 
         plan = self.plan
         setup = plan.setup_s
-        start_time = time() + setup
-        self.start_time = start_time
+        self.start_time = time() + setup
 
         # time iter loop
         for t in range(plan.timepoints):
             self.current_t = t
             # operator-facing progress line (the console log handler only shows warnings)
-            print(f"t = {t}: {(time() - start_time) / 60: 0.1f} minutes")
+            print(f"t = {t}: {(time() - self.start_time) / 60: 0.1f} minutes")
 
-            # wait until preparatory phase
-            # settings requests and acknowledgements arriving here apply to
-            # (or describe) this timepoint and earlier ones
-            while (time() - start_time) < plan.time_offset_s(t) - setup:
+            # wait until the preparatory phase; settings requests, acknowledgements
+            # and command files are handled here, so they apply at this boundary
+            while True:
                 if self.stop_event and self.stop_event.is_set():
                     logger.info("force stopping manager process")
                     return
-
-                if not self.drain_inboxes():
+                due = (time() - self.start_time) >= plan.time_offset_s(t) - setup
+                if due and not self.paused:
+                    break
+                handled = self.drain_inboxes()
+                handled = self.poll_commands() or handled
+                if not handled:
                     sleep(self.sleep_interval)
+
+            if self.stopping:
+                logger.info(f"stopping before t = {t} (stop_run command)")
+                self.write_status()
+                break
 
             self.write_status()
             for ev in plan.events_at(t):
-                self.dispatch(ev, start_time)
+                self.dispatch(ev, self.start_time)
             self._last_burst_t = t
 
         print("DONE")

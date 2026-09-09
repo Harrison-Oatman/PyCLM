@@ -227,6 +227,7 @@ class Controller:
             event_log=self.event_log,
             status_path=out_path / "status.json",
             health=self.health,
+            commands_dir=out_path / "commands",
         )
         self.pattern.positions = schedule.positions
         self.slm_buffer.initialize(

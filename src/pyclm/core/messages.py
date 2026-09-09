@@ -70,6 +70,27 @@ class SettingsRequestMessage(Message):
         self.changes = list(changes)
 
 
+class UpdatePatternParamsMessage(Message):
+    """The Manager asks the pattern process to change a method's parameters (a command)."""
+
+    message = "update_pattern_params"
+
+    def __init__(self, experiment_name: str, parameters: dict):
+        self.experiment_name = experiment_name
+        self.parameters = dict(parameters)
+
+
+class PatternParamsResultMessage(Message):
+    """The pattern process's answer: which parameters were applied and which refused (with reasons)."""
+
+    message = "pattern_params_result"
+
+    def __init__(self, experiment_name: str, applied: dict, refused: dict):
+        self.experiment_name = experiment_name
+        self.applied = dict(applied)
+        self.refused = dict(refused)
+
+
 class EventDoneMessage(Message):
     """
     The microscope's acknowledgement of one acquisition event: when it was

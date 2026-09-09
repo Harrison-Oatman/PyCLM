@@ -24,7 +24,7 @@ OS processes**, despite the naming. All processes share one
 
 | Process | Class / file | Role | Router role |
 |---|---|---|---|
-| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Between timepoints it applies the setting changes pattern methods asked for (`apply_settings`, `core/settings.py`), absorbs the microscope's acknowledgements (lateness, errors) and writes `status.json`; `finish()` closes the events table. Own loop, not a `BaseProcess`. | none (control only) |
+| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Between timepoints it applies the setting changes pattern methods asked for (`apply_settings`, `core/settings.py`), polls the `commands/` directory (`poll_commands` / `apply_command`, `pyclm/commands.py`: pause shifts the clock, stop_run, stop_experiment, set_*, set_pattern), absorbs the microscope's acknowledgements (lateness, errors) and writes `status.json`; `finish()` closes the events table. Own loop, not a `BaseProcess`. | none (control only) |
 | Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. Own loop with a per-message error guard (aborts after `max_consecutive_errors`, default 10). | produces `raw`; ends the raw stream on the Manager's close |
 | Writer | `WriterProcess`, `core/writer_process.py` (`MicroscopeOutbox` is an alias) | Hands every frame, label image and track table to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2, the default, or HDF5 format 1). | consumes `raw` for every channel and, with `demand=False`, `seg` / `tracks` where the method has `save = true`; `always_active` |
 | SLM buffer | `SLMBuffer`, `core/manager.py` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | none (the pattern → SLM → microscope path is a control handshake, not routed) |
@@ -573,8 +573,8 @@ router concern, invisible to producers and to the Controller.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 215 tests, ~115 s, all passing after Stage 5
-(2026-09-08). The dry-run integration tests take almost all of that time.
+`uv run --group test pytest` — 233 tests, ~120 s, all passing after Stage 5b
+(2026-09-09) on pymmcore-plus 0.18.1 / useq-schema 0.9.2 / napari 0.9.1. The dry-run integration tests take almost all of that time.
 
 | File | Covers |
 |---|---|
@@ -586,6 +586,9 @@ router concern, invisible to producers and to the Controller.
 | `test_check.py` | `pyclm check`: a correct directory, misspelled arguments and keys with hints, positions without files and files without positions, requirements against tables, unused tables as warnings, unknown methods, existing outputs, missing files, the timing budget, the MicroManager `.cfg` reader and preset / device checks, signature checks per method kind, `run_pyclm` refusing to start on errors. |
 | `test_cli.py` | Subcommand dispatch and the old `pyclm <dir>` form, `new` templates that `check` accepts and never overwrites, `export` on an empty directory. |
 | `test_preview.py` | `pyclm preview` of an open-loop method (pattern, overlay, DMD image, summary) and of a closed-loop method with segmentation and tracking, error paths. |
+| `test_commands.py` | Command files (atomic write, ordering, refused files), the Manager applying set_* commands through `apply_settings` with `source = "command"`, stop_experiment and pause / resume, stop_run ending the loop, set_pattern round trip through the pattern process. |
+| `test_gui_widgets.py` | The status line text for every state and the minimap (positions, current, problems, positions from a plan or a position list), offscreen Qt. |
+| `test_control.py` | The control window offscreen: the run panel's check and command files, the positions panel on the simulated stage (load, add, relabel, save, move, preview here), the position-list writer round trip, the schema forms (round trip, validation, comment-preserving save, new file). |
 | `test_settings.py` | Runtime setting changes: the context collecting and reading back settings, the pattern process shipping requests, the Manager applying them from `current_t` (old / new values, override stamping, the next burst), refusals, acknowledgements with lateness and errors, `status.json`, `finish()`, the frames table's override columns, the event log. |
 | `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
 | `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |

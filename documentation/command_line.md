@@ -11,6 +11,7 @@ pyclm preview <dir> <experiment> --image frame.tif
 pyclm run <dir> [--dry] [--gui] check it, then run it
 pyclm export <dir> [channels]   write ImageJ hyperstacks for finished outputs
 pyclm gui <dir>                 open the live viewer
+pyclm control <dir> [--dry]     open the control window: run, positions, files
 ```
 
 `pyclm <dir> [--dry] [--gui]`, the form from before these subcommands
@@ -111,6 +112,17 @@ checks the directory, prints the report, and starts the run unless there
 are errors. `--dry` uses the virtual microscope, `--gui` opens the live
 viewer, `--config` names a `pyclm_config.toml` elsewhere.
 
+## `pyclm control`
+
+```bash
+uv run pyclm control my_experiment
+```
+
+opens the [control window](control_window.md): the check report, start /
+pause / resume / stop, commands to a running experiment, a positions table
+fed by the stage, and forms for the configuration files. `--dry` puts it
+on the virtual microscope.
+
 ## `pyclm export` and `pyclm gui`
 
 ```bash
@@ -119,4 +131,6 @@ uv run pyclm export my_experiment 545 stim # only these channels or groups
 uv run pyclm gui my_experiment
 ```
 
-See [Data format](data_format.md) for what the export contains.
+See [Data format](data_format.md) for what the export contains. The viewer
+shows a status line and a minimap of the positions in a dock on the right,
+refreshed from `status.json` every second.

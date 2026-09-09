@@ -77,6 +77,10 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
         return self._core.getROI()
 
     # Stage/focus/positioning
+    def getXYPosition(self) -> tuple[float, float]:
+        x, y = self._core.getXYPosition()
+        return float(x), float(y)
+
     def getZPosition(self) -> float:
         return self._core.getZPosition()
 

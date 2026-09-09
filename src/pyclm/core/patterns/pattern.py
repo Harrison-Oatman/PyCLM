@@ -525,6 +525,27 @@ class PatternMethod:
         binning = experiment.stimulation.binning
         self.update_binning(binning)
 
+    def update(self, **parameters) -> tuple[dict, dict]:
+        """
+        Change parameters while the run is in progress (a ``set_pattern``
+        command). The default sets attributes that already exist on the
+        method and refuses the rest; override it for anything smarter.
+        Returns ``(applied, refused)`` where ``refused`` maps a name to the
+        reason.
+        """
+        applied, refused = {}, {}
+        for name, value in parameters.items():
+            if (
+                name.startswith("_")
+                or not hasattr(self, name)
+                or callable(getattr(self, name))
+            ):
+                refused[name] = "unknown parameter"
+                continue
+            setattr(self, name, value)
+            applied[name] = value
+        return applied, refused
+
     def get_um_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
         h, w = self.pattern_shape
 
