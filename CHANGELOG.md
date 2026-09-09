@@ -157,6 +157,34 @@ becomes a tagged release.
   hot-reload of the experiment directory, a command file or socket, GUI
   controls, skipping late timepoints, multiple DMDs.
 
+### Stage 5 — configuration schema, `pyclm check`, one command, preview
+
+- **A schema for the three kinds of file** (`pyclm/schema.py`, pydantic,
+  already a dependency): every key has a type, a default and a limit;
+  unknown keys are errors with a did-you-mean; every problem in a file is
+  reported together in the file's own vocabulary
+  (`bar10.toml: unknown key 'exposur' in [imaging] (did you mean 'exposure'?)`).
+  `format_version` keys are accepted. The TOML reference in the docs is
+  generated from the schema.
+- **`pyclm check <dir>`**: files, positions against experiment files,
+  method names and arguments against constructor signatures, what the
+  pattern method asks for against the tables, presets and devices against
+  the MicroManager `.cfg` (parsed as text), the timing budget, existing
+  outputs; `--dry` rehearses two timepoints on the virtual microscope.
+  `pyclm run` performs the same check and refuses to start on errors.
+- **One command**: `pyclm new | check | preview | run | export | gui`
+  (`pyclm <dir>` still means `run`; `convert_hdf5s` and `gui` remain).
+- **`pyclm preview`**: the experiment's segmentation(s) and pattern method
+  on one TIF or on frames snapped from the microscope, writing the raw
+  image, labels, the pattern in camera and DMD space, an overlay, and a
+  JSON summary, through the run's own machinery.
+- **`pyclm new`**: an open-loop or closed-loop directory from the lab's
+  experiments, with a README of next steps.
+- Two long-standing configuration bugs found by the schema: per-channel
+  `config_groups` / `device_properties` overrides were never applied, and
+  `t_delay` / `t_stop` written after `[pattern]` (as the docs showed) were
+  silently passed to the pattern method instead of delaying the experiment.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,
@@ -183,6 +211,13 @@ becomes a tagged release.
   `AcquisitionEvent.overrides` carries runtime-changed settings.
 - `t_delay` semantics were fixed rather than preserved (no experiment
   had used it).
+- Configuration files: unknown keys are errors; `steps` and
+  `interval_seconds` are required in `schedule.toml`; `t_delay` / `t_stop`
+  must precede the first table. `experiment_from_toml`, `read_schedule`
+  and `run_pyclm` raise `pyclm.schema.ConfigError` (a `ValueError`) instead
+  of `KeyError`. `run_pyclm(..., check=True, force=False)` runs the check
+  first and raises `pyclm.check.CheckFailed` on errors.
+- The `pyclm` entry point is `pyclm.cli.main` with subcommands.
 
 ### Not changed
 
@@ -194,7 +229,7 @@ earlier versions.
 
 ### Still to come (see `docs/assessment-2026-09.md`)
 
-Stage 5: a configuration schema with `pyclm check`, pattern preview and
-interactive setup. Later: pause/resume and operator commands on the same
-boundary Stage 4 established, z-stacks and grid acquisition on top of the
-plan.
+Stage 5b: interactive setup (forms from the schema, a positions editor,
+run control in the GUI) once the command line has been used by a new lab
+member. Later: pause/resume and operator commands on the same boundary
+Stage 4 established, z-stacks and grid acquisition on top of the plan.

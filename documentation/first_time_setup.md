@@ -167,11 +167,20 @@ PyCLM also supports the Nikon Elements `multipoints.xml` format (exported from t
 
 ## 6. Write Experiment TOML Files
 
+`uv run pyclm new path/to/experiment_dir --name my_experiment` writes a
+starting set of files (an open-loop or a closed-loop template) with comments
+saying what to change; the rest of this section explains them.
+
 Each experiment type is described by a TOML file. Multiple positions can share the same experiment file; one experiment file can therefore run simultaneously at several locations.
 
 Below is a fully annotated example for a feedback-controlled optogenetic experiment:
 
 ```toml
+# ── Optional timing offsets (in timepoints, not seconds). Keep them above the ─
+# ── first table: a key written after a table header belongs to that table. ──
+# t_delay = 5    # wait N timepoints before starting this experiment
+# t_stop  = 100  # stop after N timepoints (0 = run until schedule ends)
+
 # ── Optional: device state applied to every channel in this experiment ──────
 [config_groups]
 # "GroupName" = "PresetName"  (MicroManager config group)
@@ -242,10 +251,6 @@ method = "cellpose"
 method = "circle"
 rad = 150            # circle radius in µm
 
-
-# ── Optional timing offsets (in timepoints, not seconds) ────────────────────
-# t_delay = 5    # wait N timepoints before starting this experiment
-# t_stop  = 100  # stop after N timepoints (0 = run until schedule ends)
 ```
 
 ---
@@ -299,24 +304,36 @@ scheduled.
 
 ---
 
-## 9. Run the Experiment
+## 9. Check, Preview, Run
+
+Before the microscope is touched:
+
+```bash
+uv run pyclm check path/to/experiment_dir
+uv run pyclm preview path/to/experiment_dir my_experiment --image a_snapped_frame.tif
+```
+
+`check` reports every problem in the files, with the file and key it
+concerns; `preview` runs the segmentation and the pattern method once on an
+image and writes what they produce. `pyclm run` performs the same check and
+refuses to start on errors. See [The pyclm command](command_line.md).
 
 **From the command line:**
 
 ```bash
-uv run pyclm path/to/experiment_dir
+uv run pyclm run path/to/experiment_dir
 ```
 
 Pass `--config` if `pyclm_config.toml` is not in the experiment directory or repository root:
 
 ```bash
-uv run pyclm path/to/experiment_dir --config path/to/pyclm_config.toml
+uv run pyclm run path/to/experiment_dir --config path/to/pyclm_config.toml
 ```
 
 Use `--dry` to run a full rehearsal without connecting to the microscope:
 
 ```bash
-uv run pyclm path/to/experiment_dir --dry
+uv run pyclm run path/to/experiment_dir --dry
 ```
 
 In dry mode, PyCLM reads simulated images from TIF files placed inside the experiment directory. Positions are loaded from `PositionList.pos` or `multipoints.xml` if present, and each TIF is matched to a position by label (e.g. `on.00.tif` matches position `on.00`) or stem (e.g. `on.tif` matches any position with stem `on`). For explicit control, add a `dry_run.yml` to the experiment directory mapping position names to TIF files:
@@ -336,7 +353,7 @@ positions:
 Add `--gui` to open a live Napari viewer that updates as data is written:
 
 ```bash
-uv run pyclm path/to/experiment_dir --dry --gui
+uv run pyclm run path/to/experiment_dir --dry --gui
 ```
 
 `--gui` can also be used during a real experiment to monitor output in real time.

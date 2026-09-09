@@ -106,7 +106,10 @@ def test_named_segmentation_tables_are_parsed(tmp_path):
             '[segmentation.nuclei]\nmethod = "cellpose"\n', "[segmentation.nuclei]\n"
         )
     )
-    with pytest.raises(ValueError, match="needs a method"):
+    with pytest.raises(
+        ValueError,
+        match=r"\[segmentation.nuclei\] is missing the required key 'method'",
+    ):
         experiment_from_toml(toml, "exp")
 
 

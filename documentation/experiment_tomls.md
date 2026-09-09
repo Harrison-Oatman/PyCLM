@@ -8,6 +8,11 @@ timing shared by every experiment lives in `schedule.toml`.
 A complete example:
 
 ```toml
+# Optional timing offsets in timepoints. They must come before the first
+# table: a key written after a table header belongs to that table.
+t_delay = 0               # wait this many timepoints before this experiment starts
+t_stop = 0                # stop after this many of its own timepoints (0 = run to the end)
+
 # Applied to every acquisition of this experiment
 [config_groups]
 Objective = "1-Plan Apo LmbdD0.80 20x"
@@ -69,9 +74,6 @@ max_distance_um = 20      # remaining keys are the method's keyword arguments
 method = "move_out"       # a built-in or registered PatternMethod
 every_t = 1               # regenerate the pattern every timepoint
 channel = "545"           # remaining keys are the method's keyword arguments
-
-t_delay = 0               # timepoints to wait before this experiment starts
-t_stop = 0                # stop after this many of its own timepoints (0 = run to the end)
 ```
 
 ## Sections
@@ -133,7 +135,9 @@ timepoints runs every 5.
 
 **`t_delay`, `t_stop`** (optional, timepoints). The experiment starts at
 timepoint `t_delay` and its cadences are counted from there; with `t_stop`
-greater than 0 it ends after that many of its own timepoints.
+greater than 0 it ends after that many of its own timepoints. Write them
+at the top of the file, before the first table; written after `[pattern]`
+they would be keys of that table, and `pyclm check` says so.
 
 ## `schedule.toml`
 
@@ -148,3 +152,70 @@ time_between_positions = 10   # offset between successive experiments within a t
 The plan PyCLM derives from these files is written to `plan.useq.yaml` in
 the experiment directory and embedded in every output (see
 [Data format](data_format.md)).
+
+## Reference
+
+Generated from the schema (`pyclm.schema`) at build time, so it matches the
+code. Unknown keys are errors everywhere except in the three method tables,
+whose other keys are the method's arguments; `pyclm check` compares those
+with the method's constructor.
+
+### The experiment file
+
+```{pyclm-schema} ExperimentConfig
+```
+
+`[imaging]`:
+
+```{pyclm-schema} ImagingDefaults
+```
+
+`[channels]`:
+
+```{pyclm-schema} Channels
+```
+
+`[channels.<preset>]`:
+
+```{pyclm-schema} ChannelOverride
+```
+
+`[stimulation]`:
+
+```{pyclm-schema} Stimulation
+```
+
+`[segmentation]` and `[segmentation.<name>]`:
+
+```{pyclm-schema} SegmentationTable
+```
+
+`[tracking]`:
+
+```{pyclm-schema} TrackingTable
+```
+
+`[pattern]`:
+
+```{pyclm-schema} PatternTable
+```
+
+### `schedule.toml`
+
+```{pyclm-schema} ScheduleConfig
+```
+
+`[timing]`:
+
+```{pyclm-schema} Timing
+```
+
+### `pyclm_config.toml`
+
+```{pyclm-schema} PyclmConfig
+```
+
+`[output]`:
+
+```{pyclm-schema} OutputConfig
+```

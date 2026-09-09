@@ -40,6 +40,7 @@ experiment_dir/
 ├── events.parquet            # settings a pattern method changed, late timepoints, acquisition errors
 ├── status.json               # progress, lateness and errors, rewritten every timepoint
 ├── plan.useq.yaml            # the acquisition plan derived from your TOMLs and positions
+├── preview/                  # (pyclm preview) what a method produced on one image
 ├── all_layers.txt            # layer list used by the live GUI
 └── log.log
 ```

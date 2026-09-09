@@ -240,3 +240,20 @@ and the routing kind `seg` was one per channel, so two models on one frame
 channel could not be configured. Named `[segmentation.<name>]` tables,
 kind `seg:<name>`, `Experiment.segmentations` and one label image per table
 in OME-Zarr (see stage3-router-design.md §9) remove the limit.
+
+### 30. Per-channel `config_groups` / `device_properties` overrides were never applied
+
+**Fixed in Stage 5 (2026-09-08).** `experiment_from_toml` looked for a
+`config_groups` key *inside* `[channels.<preset>.config_groups]` (and the
+same for device properties), so the documented per-channel tables were
+always empty. The schema (`ExperimentConfig.to_experiment`) applies them;
+`tests/test_schema.py` covers it.
+
+### 31. `t_delay` / `t_stop` after `[pattern]` were pattern arguments
+
+**Fixed in Stage 5 (2026-09-08).** A TOML key written after a table header
+belongs to that table, so the documented placement of `t_delay` and
+`t_stop` at the end of the file made them `[pattern]` keys that the
+method's `**kwargs` swallowed; the experiment kept `t_delay = 0`. The
+schema refuses them in any method table with a message saying where they
+go, and the documented examples put them at the top of the file.

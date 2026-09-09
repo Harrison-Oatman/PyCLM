@@ -19,6 +19,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
     "zoo_gallery",
+    "schema_tables",
 ]
 
 templates_path = ["_templates"]

@@ -17,11 +17,12 @@ uv run --group test pytest tests/test_base_process.py
 # Lint (via pre-commit)
 uv run pre-commit run --all-files
 
-# Run pyclm
-uv run pyclm <experiment_directory> [--config path/to/pyclm_config.toml] [--dry]
-
-# Convert HDF5 outputs to TIFF
-uv run convert_hdf5s
+# The pyclm command (see documentation/command_line.md)
+uv run pyclm new <dir> [--template open-loop|closed-loop] [--name NAME]
+uv run pyclm check <dir> [--config path/to/pyclm_config.toml] [--mm-config file.cfg] [--dry]
+uv run pyclm preview <dir> <experiment> --image frame.tif
+uv run pyclm run <dir> [--config path/to/pyclm_config.toml] [--dry] [--gui] [--force]
+uv run pyclm export <dir> [channels]      # ImageJ hyperstacks (convert_hdf5s is an alias)
 ```
 
 **Linting:** ruff (formatter + linter with rules B, I, RUF, PT, UP) and nbstripout for notebooks — configured in `.pre-commit-config.yaml`.
@@ -59,7 +60,7 @@ Experiments are configured entirely via TOML files in an experiment directory:
 - **`multipoints.xml`** — Imaging positions exported from MicroManager's multipoint list. Position labels link to experiment TOMLs (e.g., position `feedbackexp.1` uses `feedbackexp.toml`).
 - **`pyclm_config.toml`** — Hardware config: `config_path` (MicroManager .cfg), `affine_transform` (2×3 matrix, camera→SLM), `slm_shape_h`/`slm_shape_w`, optional `focus_device`, `settle_time_seconds`, and `[output]` (`format`, `pattern_policy`, `export_imagej`). Located at repo root or in the experiment directory.
 
-`directories.py:schedule_from_directory()` parses all of the above into an `ExperimentSchedule`.
+`schema.py` holds the pydantic models for the three kinds of file (`ExperimentConfig`, `ScheduleConfig`, `PyclmConfig`; unknown keys are errors, method-table extras are the method's kwargs, `format_version`); `directories.py:schedule_from_directory()` builds an `ExperimentSchedule` through them. `check.py` (`pyclm check`, also run by `pyclm run`) validates a directory: files, positions ↔ TOMLs, method names and arguments against constructor signatures, requirements against tables, presets against the MicroManager `.cfg` (`mmconfig.py`, text parsing), the timing budget, existing outputs. `preview.py` runs one experiment's methods on one image; `templates.py` backs `pyclm new`; `cli.py` is the command.
 
 ### Extending PyCLM
 

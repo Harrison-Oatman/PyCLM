@@ -14,6 +14,8 @@ Multiple experiments can be run simultaneously using PyCLM, without any programm
 
 ## 2. Running a multi-experiment
 
+Start with `pyclm check <dir>`, which reports every problem in the files, and `pyclm preview` to see what a pattern method will do on an image; `pyclm run` checks again and refuses to start on errors. All of these are described in [The pyclm command](command_line.md).
+
 Once a directory for the multi-experiment has been set up, close out of all existing microscope control software, activate your venv or conda environment, and run main.py with command-line arguments.
 
 - Data is saved continuously during the multi-experiment, and the code execution can be aborted at any time without data loss.

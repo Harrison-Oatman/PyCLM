@@ -140,7 +140,11 @@ writer has compressed it.
 ## 3. Configuration → schedule → plan
 
 `directories.py:schedule_from_directory()` builds an `ExperimentSchedule`
-(`core/experiments.py`) from an experiment directory, and
+(`core/experiments.py`) from an experiment directory, validating every file
+through the pydantic models in `schema.py` (`ExperimentConfig`,
+`ScheduleConfig`, `PyclmConfig`; unknown keys are errors, the three method
+tables' extra keys are the method's kwargs, `format_version` accepted;
+`ConfigError` lists every problem in a file), and
 `AcquisitionPlan.from_schedule()` (`core/plan.py`) turns that into the plan
 the pipeline runs from (see the end of this section).
 
@@ -245,8 +249,11 @@ matching, then TIF file names as positions) and builds a
    `plan.expected_datasets()` entry** (see §7), then enables SWMR. Returns the `(file, channel)` layer list that is written to
    `all_layers.txt` (JSON) for the GUI subprocess.
 
-`run_pyclm()` (`run_pyclm.py`) is the front door: finds `pyclm_config.toml`
-(experiment dir, then CWD), sets up per-run logging (`set_logging` replaces
+`run_pyclm()` (`run_pyclm.py`) is the front door (`pyclm run` in `cli.py`,
+which also offers `check`, `preview`, `new`, `export`, `gui`): finds
+`pyclm_config.toml` (given, experiment dir, then CWD), sets up per-run
+logging, runs `check.check_directory` and raises `CheckFailed` on errors
+unless `force`, reads the config through `PyclmConfig` (`set_logging` replaces
 the handlers from any previous run in the same interpreter), reads the
 optional `focus_device` (default `"ZDrive"`) and `settle_time_seconds`
 (default 1.0) keys, builds the schedule, constructs `Controller`, registers
@@ -566,7 +573,7 @@ router concern, invisible to producers and to the Controller.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 180 tests, ~115 s, all passing after Stage 4
+`uv run --group test pytest` — 215 tests, ~115 s, all passing after Stage 5
 (2026-09-08). The dry-run integration tests take almost all of that time.
 
 | File | Covers |
@@ -575,6 +582,10 @@ router concern, invisible to producers and to the Controller.
 | `test_router.py` | Table resolution (pattern-only, tracking widens segmentation to every frame, recording only what is produced, shared producers), validation errors, cadence filtering and object identity on publish, undeliverable counting, stream close after the last upstream, exactly once, under concurrent producers. |
 | `test_shutdown.py` | Graceful drain of the workers after `CloseMessage` in open loop, with segmentation, and with tracking (derived upstreams); forced stop; outputs closed on both paths. |
 | `test_doc_examples.py` | The pattern methods shown in the user docs (`documentation/examples/`: leader cells, three-phase intensity programme on the toolbox, the KTR clamp on two named segmentations, the red / far-red switch that turns lasers on and off from a programme string) against synthetic data, and the `tracks = true` switch on the per-cell base classes. |
+| `test_schema.py` | The schema: the same `Experiment` as the hand parser built (per-channel overrides now applied), defaults, every problem reported together with readable messages, misplaced `t_delay`, `save_output` alias, `format_version`, schedule and config models, the generated field table. |
+| `test_check.py` | `pyclm check`: a correct directory, misspelled arguments and keys with hints, positions without files and files without positions, requirements against tables, unused tables as warnings, unknown methods, existing outputs, missing files, the timing budget, the MicroManager `.cfg` reader and preset / device checks, signature checks per method kind, `run_pyclm` refusing to start on errors. |
+| `test_cli.py` | Subcommand dispatch and the old `pyclm <dir>` form, `new` templates that `check` accepts and never overwrites, `export` on an empty directory. |
+| `test_preview.py` | `pyclm preview` of an open-loop method (pattern, overlay, DMD image, summary) and of a closed-loop method with segmentation and tracking, error paths. |
 | `test_settings.py` | Runtime setting changes: the context collecting and reading back settings, the pattern process shipping requests, the Manager applying them from `current_t` (old / new values, override stamping, the next burst), refusals, acknowledgements with lateness and errors, `status.json`, `finish()`, the frames table's override columns, the event log. |
 | `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
 | `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |

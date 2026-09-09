@@ -12,7 +12,10 @@
 > [stage3-router-design.md](stage3-router-design.md). Stage 4 was narrowed
 > to runtime setting changes requested by pattern methods plus
 > acknowledgements and status, implemented 2026-09-08; see
-> [stage4-control-plane-design.md](stage4-control-plane-design.md).
+> [stage4-control-plane-design.md](stage4-control-plane-design.md). Stage 5
+> (configuration schema, `pyclm check`, one `pyclm` command, `pyclm preview`,
+> `pyclm new`) is implemented; interactive setup remains as 5b; see
+> [stage5-schema-setup-design.md](stage5-schema-setup-design.md).
 
 Scope: the core modules (Manager, MicroscopeProcess, MicroscopeOutbox,
 SLMBuffer, SegmentationProcess, PatternProcess) and the code that feeds them

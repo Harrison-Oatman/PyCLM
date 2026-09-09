@@ -7,23 +7,19 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
-from toml import load
 
+from .check import CheckFailed, check_directory, find_pyclm_config
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .core.position_mover import PositionMover
 from .core.tracking import TrackingMethod
 from .directories import dry_schedule_from_directory, schedule_from_directory
+from .schema import PyclmConfig
 
 logger = logging.getLogger(__name__)
 
 # marks the handlers installed by set_logging so a later call can replace them
 _PYCLM_HANDLER_FLAG = "_pyclm_run_handler"
-
-DEFAULT_FOCUS_DEVICE = "ZDrive"
-DEFAULT_SETTLE_TIME_S = 1.0
-DEFAULT_STORAGE_FORMAT = "ome-zarr"
-DEFAULT_PATTERN_POLICY = "on_change"
 
 
 def remove_pyclm_log_handlers():
@@ -105,6 +101,8 @@ def run_pyclm(
     tracking_methods: dict[str, type[TrackingMethod]] | None = None,
     dry: bool = False,
     gui: bool = False,
+    check: bool = True,
+    force: bool = False,
 ):
     """
     Run a pyclm experiment from a given directory and configuration file.
@@ -123,15 +121,10 @@ def run_pyclm(
     experiment_directory = Path(experiment_directory)
     print(f"experiment directory: {experiment_directory}")
 
-    # search for config file if not provided
+    # the config file: given, in the experiment directory, or in the working directory
+    config_path = find_pyclm_config(experiment_directory, config_path)
     if config_path is None:
-        # look in the experiment directory for pyclm_config.toml
         config_path = experiment_directory / "pyclm_config.toml"
-
-        # look in the current working directory for pyclm_config.toml
-        if not config_path.exists():
-            config_path = Path("pyclm_config.toml")
-
     config_path = Path(config_path)
 
     assert experiment_directory.exists(), (
@@ -144,22 +137,27 @@ def run_pyclm(
 
     set_logging(experiment_directory)
 
-    config = load(config_path)
+    # the same check as `pyclm check`; errors stop the run unless forced
+    if check:
+        report = check_directory(
+            experiment_directory,
+            config_path,
+            pattern_methods=pattern_methods,
+            segmentation_methods=segmentation_methods,
+            tracking_methods=tracking_methods,
+        )
+        print(report.text())
+        if report.errors and not force:
+            raise CheckFailed(report)
+
+    config = PyclmConfig.from_file(config_path)
     logger.info(f"loaded config from {config_path}")
 
-    # hardware timing / device options with backwards-compatible defaults
-    if "focus_device" not in config:
-        logger.info(
-            f"pyclm_config.toml has no 'focus_device'; using '{DEFAULT_FOCUS_DEVICE}'"
-        )
-    focus_device = config.get("focus_device", DEFAULT_FOCUS_DEVICE)
-    settle_time_s = float(config.get("settle_time_seconds", DEFAULT_SETTLE_TIME_S))
-
-    # [output] section: storage format, pattern policy, automatic ImageJ export
-    output_cfg = config.get("output", {})
-    storage_format = output_cfg.get("format", DEFAULT_STORAGE_FORMAT)
-    pattern_policy = output_cfg.get("pattern_policy", DEFAULT_PATTERN_POLICY)
-    export_imagej = bool(output_cfg.get("export_imagej", True))
+    focus_device = config.focus_device
+    settle_time_s = config.settle_time_seconds
+    storage_format = config.output.format
+    pattern_policy = config.output.pattern_policy
+    export_imagej = config.output.export_imagej
     logger.info(f"output format {storage_format}, pattern policy {pattern_policy}")
 
     base_path = experiment_directory
@@ -172,7 +170,7 @@ def run_pyclm(
         schedule = schedule_from_directory(base_path)
 
     c = Controller(
-        config["config_path"],
+        config.config_path,
         dry,
         position_mover=position_mover,
         dry_image_source=dry_image_source,
@@ -206,8 +204,8 @@ def run_pyclm(
         cg = core.getConfigGroupObject(group, False)
         print(cg.name, list(cg.items()))
 
-    slm_shape = config["slm_shape_h"], config["slm_shape_w"]
-    at = np.array(config["affine_transform"], dtype=np.float32)
+    slm_shape = config.slm_shape
+    at = config.affine
 
     c.initialize(schedule, slm_shape, at, base_path)
 
