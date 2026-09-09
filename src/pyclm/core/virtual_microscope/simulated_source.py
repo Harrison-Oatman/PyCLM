@@ -4,8 +4,21 @@ import numpy as np
 import tifffile as tiff
 import yaml
 
+DEFAULT_PIXEL_SIZE_UM = 0.33
+
 
 class TimeSeriesImageSource:
+    """
+    Frames for the virtual microscope, per position.  ``pixel_size_um`` is
+    the size of one pixel of the TIFs; ``binning`` is the binning the TIFs
+    were acquired at relative to the camera the affine transform of
+    ``pyclm_config.toml`` was calibrated for (the dry run scales the affine
+    by it).
+    """
+
+    pixel_size_um: float = DEFAULT_PIXEL_SIZE_UM
+    binning: int = 1
+
     def __init__(self, folder: Path, loop: bool = True):
         self._loop = loop
         self._pos_map: dict[tuple[float, float], str] = {}
@@ -21,10 +34,14 @@ class TimeSeriesImageSource:
         cls,
         pos_to_tif: dict[tuple[float, float], Path],
         loop: bool = True,
+        pixel_size_um: float = DEFAULT_PIXEL_SIZE_UM,
+        binning: int = 1,
     ) -> "TimeSeriesImageSource":
         """Build a source directly from a coordinate → TIF-path mapping."""
         instance = cls.__new__(cls)
         instance._loop = loop
+        instance.pixel_size_um = float(pixel_size_um)
+        instance.binning = int(binning)
         instance._pos_map = {}
         instance._index_map = {}
         instance._frames_map = {}

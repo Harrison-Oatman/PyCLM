@@ -213,6 +213,16 @@ becomes a tagged release.
   tomlkit. The whole suite passes on the new stack; the real core still
   needs one run on the microscope.
 
+### Dry run: pixel size and binning of the TIFs
+
+- `dry_run.yml` accepts `pixel_size_um` and `binning` (top level, optional,
+  also without `positions`). The virtual microscope reports the pixel size,
+  and the camera-to-DMD affine is scaled by the binning, so 4x-binned test
+  images map onto the DMD the way the unbinned camera does. `pyclm preview
+  --image` reads the same keys when `--pixel-size-um` is not given and
+  reports `source_binning`. Before this, the dry run assumed 0.33 µm and
+  unbinned frames, and binned images lit almost nothing on the DMD.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,

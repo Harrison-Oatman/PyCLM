@@ -38,6 +38,7 @@ from .core.patterns import (
 from .core.queues import AllQueues
 from .core.segmentation_process import SegmentationProcess
 from .core.tracking_process import TrackingProcess
+from .directories import dry_settings_from_directory
 from .schema import ConfigError, ExperimentConfig, PyclmConfig, ScheduleConfig
 
 logger = logging.getLogger(__name__)
@@ -154,9 +155,14 @@ def preview(
 
     # ---------------------------------------------------- image source
     core = None
+    dry = dry_settings_from_directory(directory)
+    source_binning = 1
     if image is not None:
         frame = _load_image(Path(image))
-        px = 1.0 if pixel_size_um is None else float(pixel_size_um)
+        # no pixel size given: the directory's dry_run.yml (or its defaults)
+        # says what the TIFs are
+        px = dry.pixel_size_um if pixel_size_um is None else float(pixel_size_um)
+        source_binning = dry.binning
 
         def get_frame(channel_cfg: ImagingConfig) -> np.ndarray:
             return frame
@@ -305,7 +311,7 @@ def preview(
     if config is not None:
         slm = SLMBuffer(AllQueues())
         slm.initialize(config.slm_shape, config.affine, [label])
-        dmd = slm.pattern_to_slm(pattern, slm_coords, model.binning)
+        dmd = slm.pattern_to_slm(pattern, slm_coords, model.binning * source_binning)
         path = out_dir / "pattern_dmd.tif"
         tifffile.imwrite(path, np.asarray(dmd, dtype=np.uint8))
         result.paths["pattern (DMD)"] = path
@@ -322,6 +328,7 @@ def preview(
         "source": source,
         "pixel_size_um": px,
         "binning": binning,
+        "source_binning": source_binning,
         "method": exp.pattern.method_name,
         "kwargs": exp.pattern.kwargs,
         "requirements": {by_id[r.id][0]: list(r.kinds) for r in reqs},

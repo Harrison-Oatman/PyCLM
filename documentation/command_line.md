@@ -98,7 +98,10 @@ into `my_experiment/preview/<label>/`:
 
 The experiment is a position label from the position list or a TOML stem;
 `--t N` sets the timepoint the method believes it is at (for methods that
-depend on time). The machinery is the run's own, so what preview shows is
+depend on time). Without `--pixel-size-um`, a TIF is taken to be what the
+directory's `dry_run.yml` says (`pixel_size_um`, `binning`; see the dry run
+notes in [first-time setup](first_time_setup.md)), so the DMD pattern of a
+preview matches the dry run's. The machinery is the run's own, so what preview shows is
 what the run does.
 
 ## `pyclm run`

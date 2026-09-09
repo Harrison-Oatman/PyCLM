@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -7,7 +8,10 @@ import yaml
 
 from .core import ExperimentSchedule
 from .core.experiments import MicroscopePosition, PositionWithAutoFocus
-from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
+from .core.virtual_microscope.simulated_source import (
+    DEFAULT_PIXEL_SIZE_UM,
+    TimeSeriesImageSource,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,11 +181,12 @@ def _dry_schedule_from_yml(
     fields override the placeholder coordinates.
     """
     with open(yml_path) as f:
-        data = yaml.safe_load(f)
+        data = yaml.safe_load(f) or {}
 
     entries = data.get("positions", [])
     if not entries:
         raise ValueError(f"{yml_path} contains no positions")
+    settings = DrySettings.from_mapping(data, yml_path)
 
     positions: dict[str, MicroscopePosition] = {}
     experiments: dict[str, object] = {}
@@ -214,7 +219,9 @@ def _dry_schedule_from_yml(
         pos_to_tif[(x, y)] = tif_path
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
-    image_source = TimeSeriesImageSource.from_mapping(pos_to_tif, loop=True)
+    image_source = TimeSeriesImageSource.from_mapping(
+        pos_to_tif, loop=True, **settings.as_kwargs()
+    )
     return schedule, image_source
 
 
@@ -222,6 +229,7 @@ def _dry_schedule_from_position_list(
     experiment_dir: Path,
     tomls: dict[str, str],
     timing: dict,
+    settings: "DrySettings | None" = None,
 ) -> tuple[ExperimentSchedule, TimeSeriesImageSource]:
     """Build a dry-run schedule from an existing position list (pos/xml).
 
@@ -274,7 +282,9 @@ def _dry_schedule_from_position_list(
         )
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
-    image_source = TimeSeriesImageSource.from_mapping(pos_to_tif, loop=True)
+    image_source = TimeSeriesImageSource.from_mapping(
+        pos_to_tif, loop=True, **(settings or DrySettings()).as_kwargs()
+    )
     return schedule, image_source
 
 
@@ -282,6 +292,7 @@ def _dry_schedule_from_tifs(
     experiment_dir: Path,
     tomls: dict[str, str],
     timing: dict,
+    settings: "DrySettings | None" = None,
 ) -> tuple[ExperimentSchedule, TimeSeriesImageSource]:
     """Build a dry-run schedule from TIF filenames alone.
 
@@ -320,8 +331,55 @@ def _dry_schedule_from_tifs(
         )
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
-    image_source = TimeSeriesImageSource.from_mapping(pos_to_tif, loop=True)
+    image_source = TimeSeriesImageSource.from_mapping(
+        pos_to_tif, loop=True, **(settings or DrySettings()).as_kwargs()
+    )
     return schedule, image_source
+
+
+@dataclass
+class DrySettings:
+    """
+    The optional top-level keys of ``dry_run.yml``: ``pixel_size_um``, the
+    size of one pixel of the TIFs (default 0.33), and ``binning``, the
+    binning the TIFs were acquired at relative to the camera the affine
+    transform was calibrated for (default 1; the dry run scales the affine).
+    """
+
+    pixel_size_um: float = DEFAULT_PIXEL_SIZE_UM
+    binning: int = 1
+
+    @classmethod
+    def from_mapping(cls, data: dict, path=None) -> "DrySettings":
+        where = f"{path}: " if path else ""
+        px = data.get("pixel_size_um", DEFAULT_PIXEL_SIZE_UM)
+        binning = data.get("binning", 1)
+        try:
+            px = float(px)
+            binning = int(binning)
+        except (TypeError, ValueError) as e:
+            raise ValueError(
+                f"{where}pixel_size_um must be a number and binning an integer"
+            ) from e
+        if px <= 0 or binning < 1:
+            raise ValueError(
+                f"{where}pixel_size_um must be > 0 and binning >= 1 "
+                f"(got {px}, {binning})"
+            )
+        return cls(px, binning)
+
+    def as_kwargs(self) -> dict:
+        return {"pixel_size_um": self.pixel_size_um, "binning": self.binning}
+
+
+def dry_settings_from_directory(experiment_dir: Path) -> DrySettings:
+    """The dry-run pixel size and binning of a directory (its ``dry_run.yml``, if any)."""
+    yml_path = Path(experiment_dir) / "dry_run.yml"
+    if not yml_path.exists():
+        return DrySettings()
+    with open(yml_path) as f:
+        data = yaml.safe_load(f) or {}
+    return DrySettings.from_mapping(data, yml_path)
 
 
 def dry_schedule_from_directory(
@@ -343,13 +401,20 @@ def dry_schedule_from_directory(
     pos_path = experiment_dir / "PositionList.pos"
     xml_path = experiment_dir / "multipoints.xml"
 
+    settings = DrySettings()
     if yml_path.exists():
-        return _dry_schedule_from_yml(experiment_dir, yml_path, tomls, timing)
+        with open(yml_path) as f:
+            data = yaml.safe_load(f) or {}
+        if data.get("positions"):
+            return _dry_schedule_from_yml(experiment_dir, yml_path, tomls, timing)
+        # a dry_run.yml with only pixel_size_um / binning applies to the
+        # positions found the other two ways
+        settings = DrySettings.from_mapping(data, yml_path)
 
     if pos_path.exists() or xml_path.exists():
-        return _dry_schedule_from_position_list(experiment_dir, tomls, timing)
+        return _dry_schedule_from_position_list(experiment_dir, tomls, timing, settings)
 
-    return _dry_schedule_from_tifs(experiment_dir, tomls, timing)
+    return _dry_schedule_from_tifs(experiment_dir, tomls, timing, settings)
 
 
 def write_position_list(path, positions, xy_stage="XYStage", z_stage="ZDrive"):

@@ -27,12 +27,18 @@ Make a scratch copy of a real experiment directory, or build one:
 uv run pyclm new scratch_dry --template open-loop --name bar
 # copy two TIFs into scratch_dry/ (any 2D or stack TIF; the test ones are in
 # tests/dry_run_resources/tifs) and write scratch_dry/dry_run.yml:
+#   pixel_size_um: 1.333      # the test TIFs are 4x binned frames of the
+#   binning: 4                # camera the template's affine was calibrated on
 #   positions:
 #     - name: bar.00
 #       source: mdck_fast_bar.tif
 #     - name: bar.01
 #       source: mdck_slow_bar.tif
 ```
+
+Without the first two lines the calibrated affine puts the bar almost
+entirely off the DMD (the DMD lit fraction in `preview.json` is 0
+instead of about 0.2), which is what you saw.
 
 ### 1.1 The check
 
@@ -49,11 +55,13 @@ error naming the file and key, with a suggestion where there is one.
 ### 1.2 Preview
 
 ```bash
-uv run pyclm preview scratch_dry bar --image scratch_dry/mdck_fast_bar.tif --pixel-size-um 0.33
+uv run pyclm preview scratch_dry bar --image scratch_dry/mdck_fast_bar.tif
 ```
 
 Open `scratch_dry/preview/bar.preview/pattern_overlay.png`: the bar over
-the image. `preview.json` has the timings and the fraction lit.
+the image, and `pattern_dmd.tif`: the same bar on the DMD. `preview.json`
+has the timings, the pixel size and binning it used, and the fractions lit
+in camera and DMD space.
 
 ### 1.3 A rehearsal with commands
 

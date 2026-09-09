@@ -72,7 +72,7 @@ Experiments are configured entirely via TOML files in an experiment directory:
 
 **Custom tracking methods:** Subclass `TrackingMethod` (`core/tracking/tracking.py`, `track(labels, t, pixel_size_um) -> (relabelled, rows)`). Register with `Controller.register_tracking_method(name, cls)`; enable with a `[tracking]` table in the experiment TOML.
 
-**Virtual microscope (dry run):** `--dry` flag activates `SimulatedMicroscopeCore` + `TimeSeriesImageSource` (feeds from a `tif-source/` folder). Useful for testing pattern logic without hardware.
+**Virtual microscope (dry run):** `--dry` flag activates `SimulatedMicroscopeCore` + `TimeSeriesImageSource` (TIFs in the experiment directory, mapped by `dry_run.yml`, a position list, or TIF names; `dry_run.yml` may also set `pixel_size_um` and `binning` of the TIFs, and the Controller scales the affine by that binning). Useful for testing pattern logic without hardware.
 
 ### Data Output
 

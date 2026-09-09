@@ -568,3 +568,54 @@ def test_dry_run_settings_requests_ome_zarr(yml_experiment_dir):
                 assert all(r["Laser545-Intensity"] is not None for r in later)
                 assert all(r["exposure_ms"] != 50.0 for r in later)
                 assert all(r["Laser545-Intensity"] is None for r in before)
+
+
+def test_dry_run_pixel_size_and_binning(yml_experiment_dir):
+    """
+    dry_run.yml can say what the TIFs are: ``pixel_size_um`` (recorded with
+    the frames) and ``binning`` relative to the camera the affine was
+    calibrated for.  With the test images (4x binned) and the calibrated
+    affine unscaled, the bar lands almost entirely off the DMD; scaled by
+    the binning, the DMD shows it.
+    """
+    from pyclm.directories import dry_schedule_from_directory
+
+    yml = yml_experiment_dir / "dry_run.yml"
+    yml.write_text("pixel_size_um: 1.333\nbinning: 4\n" + yml.read_text())
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+
+    _schedule, source = dry_schedule_from_directory(yml_experiment_dir)
+    assert source.pixel_size_um == 1.333
+    assert source.binning == 4
+
+    run_pyclm(yml_experiment_dir, dry=True)
+
+    import pyarrow.parquet as pq
+
+    import pyclm.io as pio
+
+    frames = pq.read_table(yml_experiment_dir / "frames.parquet").to_pandas()
+    assert set(frames["pixel_size_um"].round(3)) == {1.333}
+    with pio.open(yml_experiment_dir / "bar10.00.zarr") as exp:
+        dmd = np.asarray(exp.pattern_at(_STEPS - 1))
+    assert dmd.shape == _SLM_SHAPE
+    lit = float((dmd > 0).mean())
+    assert 0.05 < lit < 0.5, f"DMD lit fraction {lit}: the affine was not scaled"
+
+
+def test_dry_settings_without_positions(tif_name_experiment_dir):
+    """A dry_run.yml with only the two keys applies to TIF-named positions."""
+    from pyclm.directories import dry_schedule_from_directory
+
+    (tif_name_experiment_dir / "dry_run.yml").write_text("binning: 4\n")
+    schedule, source = dry_schedule_from_directory(tif_name_experiment_dir)
+    assert sorted(schedule.positions) == ["bar025.00", "bar10.00"]
+    assert source.binning == 4
+    assert source.pixel_size_um == 0.33
+
+    (tif_name_experiment_dir / "dry_run.yml").write_text("binning: 0\n")
+    with pytest.raises(ValueError, match="binning"):
+        dry_schedule_from_directory(tif_name_experiment_dir)

@@ -339,6 +339,9 @@ uv run pyclm run path/to/experiment_dir --dry
 In dry mode, PyCLM reads simulated images from TIF files placed inside the experiment directory. Positions are loaded from `PositionList.pos` or `multipoints.xml` if present, and each TIF is matched to a position by label (e.g. `on.00.tif` matches position `on.00`) or stem (e.g. `on.tif` matches any position with stem `on`). For explicit control, add a `dry_run.yml` to the experiment directory mapping position names to TIF files:
 
 ```yaml
+pixel_size_um: 1.333   # the size of one pixel of the TIFs (default 0.33)
+binning: 4             # how the TIFs were binned, relative to the camera the
+                       # affine transform was calibrated for (default 1)
 positions:
   - name: on.00
     x: 0.0
@@ -349,6 +352,16 @@ positions:
     y: 0.0
     source: off.tif
 ```
+
+The two top-level keys are optional and may also stand alone in a
+`dry_run.yml` without `positions`, in which case the positions come from the
+position list or the TIF names as above. `pixel_size_um` is what the pattern
+methods and the output metadata see; `binning` scales the camera-to-DMD
+affine of `pyclm_config.toml`, which was calibrated on the unbinned camera.
+Without it, images binned 4x land mostly off the DMD and the stored DMD
+pattern is nearly empty even though the pattern in camera coordinates is
+fine. `pyclm preview --image` uses the same two keys when
+`--pixel-size-um` is not given.
 
 Add `--gui` to open a live Napari viewer that updates as data is written:
 

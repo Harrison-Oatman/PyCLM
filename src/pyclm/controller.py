@@ -68,8 +68,11 @@ class Controller:
             if dry_image_source is None:
                 raise ValueError("dry_image_source must be provided when dry=True.")
             self.core = SimulatedMicroscopeCore(
-                dry_image_source, slm_device="SimulatedSLM"
+                dry_image_source,
+                pixel_size_um=getattr(dry_image_source, "pixel_size_um", 0.33),
+                slm_device="SimulatedSLM",
             )
+            self.dry_binning = int(getattr(dry_image_source, "binning", 1))
         self.core.loadSystemConfiguration(config)
         self.all_queues = AllQueues()
 
@@ -168,6 +171,15 @@ class Controller:
 
         if isinstance(self.core, SimulatedMicroscopeCore):
             self.core._slm_h, self.core._slm_w = int(slm_shape[0]), int(slm_shape[1])
+            binning = getattr(self, "dry_binning", 1)
+            if binning != 1:
+                # the TIFs are binned relative to the camera the affine was
+                # calibrated for: scale the camera -> SLM affine to match
+                affine_transform = np.array(affine_transform, dtype=np.float32)
+                affine_transform[:, :2] *= binning
+                logger.info(
+                    f"dry run: affine transform scaled by the source binning {binning}"
+                )
 
         self.microscope.set_binning(1)
 

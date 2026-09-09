@@ -714,7 +714,9 @@ class ControlWindow(QtWidgets.QMainWindow):
                 from ..directories import dry_schedule_from_directory
 
                 _schedule, source = dry_schedule_from_directory(self.directory)
-                core = SimulatedMicroscopeCore(source)
+                core = SimulatedMicroscopeCore(
+                    source, pixel_size_um=source.pixel_size_um
+                )
                 self._core = core
                 self.positions_panel.set_stage(
                     SimulatedStage(core), [QtWidgets.QLabel("virtual microscope")]
