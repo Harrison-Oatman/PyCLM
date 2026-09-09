@@ -9,15 +9,15 @@ scope. Do the dry part first; it takes about twenty minutes.*
 ```bash
 git pull                     # branch core-refactor, commit after Stage 5b
 uv sync --group test
-uv run --group test pytest   # expect 233 passed, ~2 min
+uv run --group test pytest   # expect 236 passed, ~2 min
 ```
 
-The dependency upgrade in this stage is the one thing that can bite:
-pymmcore-plus 0.13.7 → 0.18.1 and pymmcore 11.2 → 12.5, which speaks
-**Micro-Manager device interface 75** (the old one spoke 71). On the
-microscope PC the installed Micro-Manager's device adapters must match, or
-the configuration will not load (see §2.1 for how to tell and what to do).
-The suite cannot check this; it is the first thing to test at the scope.
+pymmcore must speak the same **Micro-Manager device interface** as the
+installed device adapters. The Mightex Polygon adapter is built for
+interface 71, so the lock now resolves to the last interface-71 stack
+(pymmcore 11.2.1.71.0, pymmcore-plus 0.14.0, pymmcore-widgets 0.10.1); the
+suite passes on it. `pyclm check` prints the interface pymmcore speaks.
+§2.1 is what to run if a configuration still fails to load.
 
 ## 1. Dry
 
@@ -78,9 +78,15 @@ uv run pyclm gui scratch_dry
 ```
 
 Expect the napari window with a **Run** dock on the right: the status line
-(`t n/N | at bar.00 ...`) updating every second and the minimap with the two
-positions, the current one filled. Then, in a third terminal or a Python
-prompt:
+(`t n/N | at bar.00 ...`) updating every second, the minimap with the two
+positions (the current one filled), and the positions list. The layer list
+has one `imaging/545` layer and one `imaging/pattern` layer, not one per
+position: the position slider under the canvas, the list, a click on the
+minimap and the `[` / `]` keys switch between `bar.00` and `bar.01`. Tick
+**Follow the run** and the viewer should jump to whichever position is
+being acquired. Drag the contrast slider: it should stay where you put it
+as new frames arrive (the **Auto-contrast** box unticks itself); **Normalise
+now** resets it. Then, in a third terminal or a Python prompt:
 
 ```python
 from pyclm.commands import write_command
@@ -142,17 +148,13 @@ uv run python -c "import pymmcore; print(pymmcore.__version__)"
 uv run python -c "from pymmcore_plus import CMMCorePlus; c = CMMCorePlus(); c.loadSystemConfiguration(r'C:\Program Files\Micro-Manager-2.0\<your>.cfg'); print(c.getLoadedDevices())"
 ```
 
-If the second line fails with a *device interface version* error, the
-installed Micro-Manager is older than pymmcore 12.5 expects. Two ways out:
-install a current Micro-Manager 2.0 nightly next to the old one and point
-`config_path` at a copy of the configuration there (vendor SDKs the old
-install relied on, such as Nikon's, must be present for that install too),
-or run `uv run mmcore install` to fetch matching device adapters into your
-user directory. If neither is possible on that PC on the day, roll the
-pins back (`git checkout a8e7df7 -- pyproject.toml uv.lock` is not enough:
-edit `pyproject.toml` to `pymmcore-plus==0.13.7`, `pymmcore==11.2.1.71.0`,
-remove `pymmcore-widgets`, then `uv sync`), and everything except the
-positions tab's stage widgets keeps working.
+If the second line fails with a *device interface* error, the message now
+names the interface pymmcore speaks (71 with the current lock). Every
+adapter DLL in the Micro-Manager install must be built for that interface:
+use the Micro-Manager install the Polygon adapter came with. When Mightex
+ships an interface-75 adapter, delete the three `constraint-dependencies`
+lines in `pyproject.toml`, run `uv lock` and `uv sync`, and repeat this
+section on the interface-75 stack (the suite already passes on it).
 
 ### 2.2 A snap through the new stack
 

@@ -17,7 +17,32 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
         self._core = CMMCorePlus()
 
     def loadSystemConfiguration(self, configuration):
-        self._core.loadSystemConfiguration(str(configuration))
+        try:
+            self._core.loadSystemConfiguration(str(configuration))
+        except Exception as e:
+            if "interface" in str(e).lower():
+                raise RuntimeError(f"{e}" + chr(10) + device_interface_hint()) from e
+            raise
+
+
+def device_interface() -> int | None:
+    """The Micro-Manager device interface version this pymmcore was built for."""
+    try:
+        import pymmcore
+
+        return int(pymmcore.__version__.split(".")[3])
+    except Exception:
+        return None
+
+
+def device_interface_hint() -> str:
+    di = device_interface()
+    return (
+        f"pymmcore speaks Micro-Manager device interface {di}: every device "
+        "adapter DLL it loads must be built for the same interface. Install a "
+        "Micro-Manager build of that interface (or the vendor's matching adapter), "
+        "or change the pymmcore pin (see pyproject.toml, [tool.uv])."
+    )
 
     # SLM-related
     def getSLMDevice(self) -> str:

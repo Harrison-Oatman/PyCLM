@@ -501,6 +501,17 @@ def check_directory(
         mm_path = Path(mm_config)
     elif config is not None:
         mm_path = Path(config.config_path)
+    if mm_path is not None:
+        from .core.real_core import device_interface
+
+        di = device_interface()
+        if di is not None:
+            report.info(
+                "pymmcore",
+                "",
+                f"device interface {di}: the Micro-Manager adapters at "
+                f"{mm_path.parent} must be built for interface {di}",
+            )
     if mm_path is not None and mm_path.exists():
         try:
             mm = MMConfig.from_file(mm_path)

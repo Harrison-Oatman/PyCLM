@@ -192,6 +192,13 @@ becomes a tagged release.
   and gains a dock with a status line that updates every second and a
   **minimap** of the positions in stage coordinates, coloured by
   experiment, the current position filled, fields of view drawn.
+- **Positions are an axis in the viewer**, not layers: one layer per
+  channel stacked over (position, t, y, x), so contrast is one setting per
+  channel for every position and the layer list stays short. A positions
+  list in the dock, the minimap, the position slider and the `[` / `]`
+  keys switch position; **Follow the run** tracks the acquisition.
+  Auto-contrast stops once you move a slider (before, every new frame reset
+  it) and can be turned back on or applied once.
 - **Commands to a running experiment**: one JSON file each in
   `commands/`, applied at the timepoint boundary, recorded in the events
   table, moved to `commands/done/`: `pause` / `resume` (the clock shifts by
@@ -207,11 +214,15 @@ becomes a tagged release.
   for MicroManager's `PositionList.pos`; forms for the three configuration
   files generated from the schema, saved with `tomlkit` so untouched tables
   keep their comments. Nothing in the window can affect a run.
-- **Dependencies**: pymmcore-plus 0.18.1 (from 0.13.7), pymmcore ≥ 12.5
-  (device interface 75; the microscope's Micro-Manager adapters must
-  match), useq-schema ≥ 0.9.2, napari ≥ 0.9, and new pymmcore-widgets and
-  tomlkit. The whole suite passes on the new stack; the real core still
-  needs one run on the microscope.
+- **Dependencies**: useq-schema ≥ 0.9.2, napari ≥ 0.9, and new
+  pymmcore-widgets and tomlkit. pymmcore / pymmcore-plus ranges are open
+  (≥ 11.2.1.71.0 / ≥ 0.14.0) and the lock is constrained to the last
+  **Micro-Manager device interface 71** stack (pymmcore 11.2.1.71.0,
+  pymmcore-plus 0.14.0, pymmcore-widgets 0.10.1) because the lab's Mightex
+  Polygon adapter is a closed DLL built for interface 71. The suite passes
+  on that stack and on the current interface-75 stack (pymmcore 12.5,
+  pymmcore-plus 0.18.1, pymmcore-widgets 0.12.1); `pyclm check` prints the
+  interface in use and a mismatched configuration load says why it failed.
 
 ### Dry run: pixel size and binning of the TIFs
 
@@ -256,9 +267,11 @@ becomes a tagged release.
   of `KeyError`. `run_pyclm(..., check=True, force=False)` runs the check
   first and raises `pyclm.check.CheckFailed` on errors.
 - The `pyclm` entry point is `pyclm.cli.main` with subcommands.
-- pymmcore 12.5 speaks Micro-Manager device interface 75: a Micro-Manager
-  installation older than that will not load through pymmcore-plus 0.18
-  until its device adapters are updated (or `mmcore install`).
+- pymmcore and the Micro-Manager device adapters must share a device
+  interface. `uv.lock` is held at interface 71 by `[tool.uv]
+  constraint-dependencies` in `pyproject.toml`; delete them and `uv lock`
+  to move to the current stack. Do not pair pymmcore-plus 0.15.0 with
+  pymmcore 11.2.1: it fails on import.
 - `Manager.initialize(..., commands_dir=)`; `status.json` gained
   `current_experiment`, `paused`, `paused_s`, `stopping`,
   `pending_commands`, `commands_applied`; `events.parquet` gained a

@@ -134,6 +134,17 @@ uv run pyclm export my_experiment 545 stim # only these channels or groups
 uv run pyclm gui my_experiment
 ```
 
-See [Data format](data_format.md) for what the export contains. The viewer
-shows a status line and a minimap of the positions in a dock on the right,
-refreshed from `status.json` every second.
+See [Data format](data_format.md) for what the export contains.
+
+In the viewer, positions are an axis, not layers: each channel is one layer
+stacked over (position, t), so the layer list has one entry per channel
+however many positions there are, and contrast limits are one setting per
+channel that applies to every position. Switch position with the slider,
+the positions list in the dock on the right, a click on the minimap, or the
+`[` and `]` keys; **Follow the run** keeps the viewer on the position the
+microscope is acquiring. Contrast is normalised as frames arrive until you
+move a slider, then it stays where you put it (**Auto-contrast** turns that
+back on; **Normalise now** resets every channel once). The dock also shows
+the status line and the minimap, refreshed from `status.json` every second.
+Experiments with the same group name at different cadences get separate
+layers (`imaging@5/545`).

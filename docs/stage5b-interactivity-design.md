@@ -21,6 +21,36 @@ installed on the development PC, so the pymmcore-widgets pane was written
 but only exercised by import; the positions logic is tested on the
 simulated stage.
 
+## Device interface (2026-09-09, after the first test at the microscope)
+
+pymmcore bundles its own MMCore and loads the device adapter DLLs of the
+Micro-Manager installation named by `config_path`; the two must be built
+for the same **device interface** (the third number of the pymmcore
+version: `11.2.1.71.0` is interface 71, `12.5.0.75.0` is 75). The lab's
+Mightex Polygon DMD adapter is a closed vendor DLL built for interface 71
+(the open Micro-Manager repository only carries Mightex's LED-driver and
+camera adapters), so the interface-75 stack this stage first pinned cannot
+load the lab's configuration until Mightex ships a newer build (asked).
+
+The lock therefore resolves to the last interface-71 stack, through
+`[tool.uv] constraint-dependencies` in `pyproject.toml` (constraints shape
+`uv lock` only; the published version ranges stay open):
+
+| Package | Locked (interface 71) | Newest verified (interface 75) |
+|---|---|---|
+| pymmcore | 11.2.1.71.0 (2025-01) | 12.5.0.75.0 |
+| pymmcore-plus | 0.14.0 (the newest that runs on it; 0.15.0 declares `pymmcore>=11.2.1.71.0` but fails on import over a renamed core constant) | 0.18.1 |
+| pymmcore-widgets | 0.10.1 (the newest accepting pymmcore-plus 0.14) | 0.12.1 |
+| napari, useq-schema, tomlkit | unchanged (0.9.1, 0.9.2, 0.13) | unchanged |
+
+The suite passes on both stacks (236 tests). Users elsewhere with a newer
+Micro-Manager get the current stack from `pip install`, or from `uv` by
+deleting the three constraint lines and running `uv lock`; `pyclm check`
+prints the interface pymmcore speaks next to the adapter directory, and a
+configuration that fails to load over an interface mismatch now says so.
+pymmcore-plus 0.15.0 must not be paired with pymmcore 11.2.1 (see above);
+a mismatched pair fails at import, not at the microscope.
+
 The question this stage answers first is which tools to stand on. The
 current viewer (`gui/gui_controller.py`, ~250 lines of napari) is a good
 read-only viewer of a run, live or finished, and the user's instinct is to
