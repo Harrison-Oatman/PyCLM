@@ -12,7 +12,6 @@ resolution-markers = [
 constraints = [
     { name = "pymmcore", specifier = "==11.2.1.71.0" },
     { name = "pymmcore-plus", specifier = "==0.14.0" },
-    { name = "pymmcore-widgets", specifier = "==0.10.1" },
 ]
 
 [[package]]
@@ -403,19 +402,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/27/fb/576f067976d320f5f0114a8d9fa1215425441bb35627b1993e5afd8111e5/cloudpickle-3.1.2.tar.gz", hash = "sha256:7fda9eb655c9c230dab534f1983763de5835249750e85fbcef43aaa30a9a2414", size = 22330, upload-time = "2025-11-03T09:25:26.604Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl", hash = "sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a", size = 22228, upload-time = "2025-11-03T09:25:25.534Z" },
-]
-
-[[package]]
-name = "cmap"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/37/85/5c31c565c68807e525cb268d783e62b1f4a46b97d301d991f6b4ffbd52d6/cmap-0.7.2.tar.gz", hash = "sha256:9501cec4d5c2b7a821479aec3282b3d8b42fda983bad055e0f9dbc19cf7bc5b1", size = 949039, upload-time = "2026-02-24T13:18:33.729Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/b6/0f760b625233ae39ed7df1069e11edd8c2f8807acac75e40f6228507238c/cmap-0.7.2-py3-none-any.whl", hash = "sha256:ad85bcc2327351bb72ff41516d4116d74b0af89258b35a323fcccb655a64f1f2", size = 995915, upload-time = "2026-02-24T13:18:31.346Z" },
 ]
 
 [[package]]
@@ -2892,13 +2878,11 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pymmcore" },
     { name = "pymmcore-plus" },
-    { name = "pymmcore-widgets" },
     { name = "pyside6" },
     { name = "pyyaml" },
     { name = "scikit-image" },
     { name = "tifffile" },
     { name = "toml" },
-    { name = "tomlkit" },
     { name = "useq-schema" },
     { name = "zarr", version = "3.1.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "zarr", version = "3.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -2961,13 +2945,11 @@ requires-dist = [
     { name = "pycromanager", marker = "extra == 'calibration'", specifier = ">=1.0.2" },
     { name = "pymmcore", specifier = ">=11.2.1.71.0" },
     { name = "pymmcore-plus", specifier = ">=0.14.0" },
-    { name = "pymmcore-widgets", specifier = ">=0.10.1" },
     { name = "pyside6", specifier = ">=6.10.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "scikit-image", specifier = ">=0.25.2" },
     { name = "tifffile", specifier = ">=2025.9.20" },
     { name = "toml", specifier = ">=0.10.2" },
-    { name = "tomlkit", specifier = ">=0.13.2" },
     { name = "torch", marker = "extra == 'cellpose'", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torchvision", marker = "extra == 'cellpose'", index = "https://download.pytorch.org/whl/cu128" },
     { name = "useq-schema", specifier = ">=0.9.2" },
@@ -3256,31 +3238,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5f/47/060ec8fde7f47d7a6b6ac0131eedf510de9d0ad68127e3fa5df3cba582c6/pymmcore_plus-0.14.0.tar.gz", hash = "sha256:89b41a28edee5788b729e28ba92b2d550c584dcff1d169b42f3a0916b327b5d8", size = 181299, upload-time = "2025-05-05T18:24:08.206Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/26/ef/45824320daf03cdaa4cfb24a37f878082900cf474e406d105090cb11108c/pymmcore_plus-0.14.0-py3-none-any.whl", hash = "sha256:9440029523ac904d88ed5c49e3759afe002f3e64522f23bc511aa35447c27d21", size = 182626, upload-time = "2025-05-05T18:24:06.03Z" },
-]
-
-[package.optional-dependencies]
-cli = [
-    { name = "rich" },
-    { name = "typer" },
-]
-
-[[package]]
-name = "pymmcore-widgets"
-version = "0.10.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pymmcore-plus", extra = ["cli"] },
-    { name = "pyopengl", marker = "sys_platform == 'darwin'" },
-    { name = "qtpy" },
-    { name = "shapely", version = "2.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
-    { name = "shapely", version = "2.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
-    { name = "superqt", extra = ["cmap", "iconify", "quantity"] },
-    { name = "useq-schema" },
-    { name = "vispy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/50/16/6b91263088dc97e2575d02806628b981ff66bcf92e39af564becdbbfba45/pymmcore_widgets-0.10.1.tar.gz", hash = "sha256:884d7e41382384e27fcbd69871f77d8416b526e03f4643166f0a24a45b27cb27", size = 223432, upload-time = "2025-07-30T17:39:26.835Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/ce/628caeababe31687f97e8d2c45c729a2705fc1c9fe43bfd83257f1b651bf/pymmcore_widgets-0.10.1-py3-none-any.whl", hash = "sha256:0bd8522473002be5c5342e4b558abc8b78b6ab59abb7d8d1e98eb40bf8a444bf", size = 249707, upload-time = "2025-07-30T17:39:25.247Z" },
 ]
 
 [[package]]
@@ -4335,14 +4292,8 @@ wheels = [
 ]
 
 [package.optional-dependencies]
-cmap = [
-    { name = "cmap" },
-]
 iconify = [
     { name = "pyconify" },
-]
-quantity = [
-    { name = "pint" },
 ]
 
 [[package]]
@@ -4458,15 +4409,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/75/241269d1da26b624c0d5e110e8149093c759b7a286138f4efd61a60e75fe/tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021", size = 7184, upload-time = "2025-01-15T12:07:24.262Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/18/c86eb8e0202e32dd3df50d43d7ff9854f8e0603945ff398974c1d91ac1ef/tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90", size = 6675, upload-time = "2025-01-15T12:07:22.074Z" },
-]
-
-[[package]]
-name = "tomlkit"
-version = "0.15.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/94/96/e07752635b98536177fa1f37671c8f3cdde2e724c6bcf6034b2cfb571565/tomlkit-0.15.1.tar.gz", hash = "sha256:e25bbf38843005246210a12982776f27f99cb9be67160e14434d0c0d21ee1e97", size = 180129, upload-time = "2026-07-17T01:48:04.562Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/13/bc/8c13eb66537dce1d2bd3a57132902f38d0e7f5bb46fa9f4daed9fe9d76ee/tomlkit-0.15.1-py3-none-any.whl", hash = "sha256:177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304", size = 49449, upload-time = "2026-07-17T01:48:05.728Z" },
 ]
 
 [[package]]

@@ -200,7 +200,17 @@ def run_pyclm(
         logger.info(f"focus device set to '{focus_device}'")
 
     print("---listing available config groups---")
-    for group in core.getAvailableConfigGroups():
+    groups = core.getAvailableConfigGroups()
+    if not groups:
+        # an empty tuple means no configuration is loaded; None has been seen
+        # with a pymmcore-plus / pymmcore pair that do not belong together
+        logger.warning(
+            "no config groups reported by the core "
+            f"(getAvailableConfigGroups returned {groups!r}); "
+            "is the MicroManager configuration loaded, and do the installed "
+            "pymmcore and pymmcore-plus match (see pyproject.toml, [tool.uv])?"
+        )
+    for group in groups or ():
         cg = core.getConfigGroupObject(group, False)
         print(cg.name, list(cg.items()))
 

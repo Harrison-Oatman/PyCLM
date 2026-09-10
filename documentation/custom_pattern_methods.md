@@ -358,7 +358,7 @@ with a warning; the pattern and the other requests still go through. A
 preset or property the hardware rejects shows up as an acquisition error.
 
 A method can also be *told* to change from outside: a `set_pattern`
-command (see [the control window](control_window.md)) calls its
+command (see [commands to a running experiment](command_line.md)) calls its
 `update(**parameters)`; the default implementation sets attributes that
 already exist on the method and refuses unknown names, and a method may
 override it.

@@ -9,13 +9,13 @@ scope. Do the dry part first; it takes about twenty minutes.*
 ```bash
 git pull                     # branch core-refactor, commit after Stage 5b
 uv sync --group test
-uv run --group test pytest   # expect 236 passed, ~2 min
+uv run --group test pytest   # expect 232 passed, ~2 min
 ```
 
 pymmcore must speak the same **Micro-Manager device interface** as the
 installed device adapters. The Mightex Polygon adapter is built for
 interface 71, so the lock now resolves to the last interface-71 stack
-(pymmcore 11.2.1.71.0, pymmcore-plus 0.14.0, pymmcore-widgets 0.10.1); the
+(pymmcore 11.2.1.71.0, pymmcore-plus 0.14.0); the
 suite passes on it. `pyclm check` prints the interface pymmcore speaks.
 §2.1 is what to run if a configuration still fails to load.
 
@@ -109,33 +109,11 @@ with pyclm.io.open("scratch_dry/bar.00.zarr") as exp:
 and look at `scratch_dry/commands/done/` (the processed command files) and
 `status.json` (`done: true`, `commands_applied`).
 
-### 1.4 The control window on the virtual microscope
+### 1.4 The unit tests behind all of this
 
-```bash
-uv run pyclm control scratch_dry --dry
-```
-
-- **Run tab**: Check → report. Rehearse (dry) → output scrolls, the buttons
-  flip to Pause / Resume / Stop, the minimap and status line update. Try
-  Pause, Resume, Set exposure (80 ms on 545), Set pattern parameter
-  (`bar_speed` = `0.5`), Stop run. Each action appears in the output log as
-  a written command file; the events table shows them afterwards.
-- **Positions tab**: Load list is empty (a dry directory has none). Add
-  current position (a row `bar.00` appears at the virtual stage's
-  coordinates); change the experiment dropdown; Add again (`bar.01`);
-  Preview here (a preview is written and summarised in the message line);
-  Save → `PositionList.pos` appears; `pyclm check scratch_dry` now lists the
-  positions.
-- **Files tab**: open `bar.toml`, change the imaging exposure, add a
-  `period` argument to the pattern, Validate, Save. Open the file in an
-  editor: the value changed, the comments of the other tables are intact.
-  Set an exposure to 0 and Validate: the schema's message appears.
-
-### 1.5 The unit tests behind all of this
-
-`tests/test_commands.py`, `tests/test_gui_widgets.py`, `tests/test_control.py`
-(the window runs offscreen), `tests/test_schema.py`, `tests/test_check.py`,
-`tests/test_preview.py`. `pytest -q tests/test_control.py` is the quick one.
+`tests/test_commands.py`, `tests/test_gui_widgets.py`, `tests/test_viewer.py`,
+`tests/test_schema.py`, `tests/test_check.py`, `tests/test_preview.py`.
+`pytest -q tests/test_commands.py` is the quick one.
 
 ## 2. At the microscope
 
@@ -189,23 +167,9 @@ z change. Confirm in `events.parquet` that each was applied at the next
 timepoint, and in the frames table that the new value is in force from
 that timepoint on.
 
-### 2.5 The control window
+### 2.5 What to report back
 
-```bash
-uv run pyclm control <dir>
-```
-
-- **Positions**: the stage widgets move the stage and snap; Add current
-  position after moving; Preview here; Save. Start MicroManager afterwards
-  (or `pyclm check`) to confirm the saved list is read correctly, including
-  the PFS offset if your stage reports one.
-- **Run**: Start run (the window releases the microscope first; if it does
-  not, the run's log will say the device is in use). Pause, Resume, Stop.
-  When the run ends, the Positions tab should be live again.
-
-### 2.6 What to report back
-
-For each of 2.1 to 2.5: worked / did not, and for failures the traceback
+For each of 2.1 to 2.4: worked / did not, and for failures the traceback
 or the line from `log.log`. For 2.3, whether the images match the
 previous run. Anything that surprised you in the window's behaviour, even
 if it worked.

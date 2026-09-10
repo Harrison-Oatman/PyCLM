@@ -5,7 +5,7 @@ A command is one small JSON file in ``<experiment directory>/commands/``,
 written atomically (a temporary name, then a rename). The Manager lists the
 directory at the timepoint boundary, applies each command in name order,
 records it in ``events.parquet`` and moves the file to ``commands/done/``.
-Anything can write one: the control window, a script, a person with an
+Anything can write one: a script, a person with an
 editor::
 
     {"command": "set_exposure", "experiment": "bar10.00", "channel": "545", "ms": 80}

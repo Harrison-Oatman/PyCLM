@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from pyclm import BasicPositionMover, PFSPositionMover, run_pyclm
+from pyclm.core.experiments import MicroscopePosition
 from pyclm.core.virtual_microscope.simulated_source import TimeSeriesImageSource
 
 # ---------------------------------------------------------------------------
@@ -619,3 +620,21 @@ def test_dry_settings_without_positions(tif_name_experiment_dir):
     (tif_name_experiment_dir / "dry_run.yml").write_text("binning: 0\n")
     with pytest.raises(ValueError, match="binning"):
         dry_schedule_from_directory(tif_name_experiment_dir)
+
+
+def test_position_list_round_trip(tmp_path):
+    """write_position_list produces the MicroManager format positions_from_pos reads."""
+    from pyclm.directories import positions_from_pos, write_position_list
+
+    positions = [
+        MicroscopePosition(10.0, 20.0, 30.0, label="a.00", extras={"PFSOffset": 5.5}),
+        MicroscopePosition(-1.5, 2.5, 0.0, label="b.01"),
+    ]
+    path = write_position_list(tmp_path / "PositionList.pos", positions, "XY", "Z")
+    back = positions_from_pos(str(path))
+    assert [(p.label, p.x, p.y, p.z) for p in back] == [
+        ("a.00", 10.0, 20.0, 30.0),
+        ("b.01", -1.5, 2.5, 0.0),
+    ]
+    assert back[0].extras == {"PFSOffset": 5.5}
+    assert back[1].extras == {}

@@ -573,7 +573,7 @@ router concern, invisible to producers and to the Controller.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 236 tests, ~135 s, all passing after Stage 5b
+`uv run --group test pytest` — 232 tests, ~135 s, all passing after Stage 5b
 (2026-09-09) on the locked interface-71 stack (pymmcore 11.2.1.71.0 / pymmcore-plus 0.14.0) and on pymmcore 12.5 / pymmcore-plus 0.18.1; useq-schema 0.9.2, napari 0.9.1. The dry-run integration tests take almost all of that time.
 
 | File | Covers |
@@ -589,7 +589,6 @@ router concern, invisible to producers and to the Controller.
 | `test_commands.py` | Command files (atomic write, ordering, refused files), the Manager applying set_* commands through `apply_settings` with `source = "command"`, stop_experiment and pause / resume, stop_run ending the loop, set_pattern round trip through the pattern process. |
 | `test_gui_widgets.py` | The status line text for every state and the minimap (positions, current, problems, positions from a plan or a position list), offscreen Qt. |
 | `test_viewer.py` | The napari viewer on two written outputs, in a subprocess with a hidden window (napari needs OpenGL, which offscreen Qt lacks on Windows; skipped without a display): one layer per channel stacked over positions, the pattern overlay, position selection by list / minimap / keys / slider, follow-the-run, and contrast limits that survive refreshes once moved. |
-| `test_control.py` | The control window offscreen: the run panel's check and command files, the positions panel on the simulated stage (load, add, relabel, save, move, preview here), the position-list writer round trip, the schema forms (round trip, validation, comment-preserving save, new file). |
 | `test_settings.py` | Runtime setting changes: the context collecting and reading back settings, the pattern process shipping requests, the Manager applying them from `current_t` (old / new values, override stamping, the next burst), refusals, acknowledgements with lateness and errors, `status.json`, `finish()`, the frames table's override columns, the event log. |
 | `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
 | `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |

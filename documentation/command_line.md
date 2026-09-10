@@ -11,7 +11,6 @@ pyclm preview <dir> <experiment> --image frame.tif
 pyclm run <dir> [--dry] [--gui] check it, then run it
 pyclm export <dir> [channels]   write ImageJ hyperstacks for finished outputs
 pyclm gui <dir>                 open the live viewer
-pyclm control <dir> [--dry]     open the control window: run, positions, files
 ```
 
 `pyclm <dir> [--dry] [--gui]`, the form from before these subcommands
@@ -115,17 +114,6 @@ checks the directory, prints the report, and starts the run unless there
 are errors. `--dry` uses the virtual microscope, `--gui` opens the live
 viewer, `--config` names a `pyclm_config.toml` elsewhere.
 
-## `pyclm control`
-
-```bash
-uv run pyclm control my_experiment
-```
-
-opens the [control window](control_window.md): the check report, start /
-pause / resume / stop, commands to a running experiment, a positions table
-fed by the stage, and forms for the configuration files. `--dry` puts it
-on the virtual microscope.
-
 ## `pyclm export` and `pyclm gui`
 
 ```bash
@@ -148,3 +136,37 @@ back on; **Normalise now** resets every channel once). The dock also shows
 the status line and the minimap, refreshed from `status.json` every second.
 Experiments with the same group name at different cadences get separate
 layers (`imaging@5/545`).
+
+## Commands to a running experiment
+
+A run reads commands from files, so a script or a person with a text editor
+can steer it. Write one JSON file into `<experiment dir>/commands/`; the run
+picks it up at the next timepoint boundary, applies it, records it in
+`events.parquet` (`kind = "command"`, with the settings it caused as further
+rows, `source = "command"`) and moves the file to `commands/done/`.
+
+| Command | Fields | Effect |
+|---|---|---|
+| `pause` | | hold before the next timepoint |
+| `resume` | | continue; the clock is shifted by the paused time |
+| `stop_run` | | end after the current timepoint |
+| `stop_experiment` | `experiment` | end that experiment; the others continue |
+| `set_exposure` | `experiment`, `channel`, `ms` | as a pattern method's `set_exposure` |
+| `set_config` | `experiment`, `channel`, `group`, `preset` | as `set_config` |
+| `set_property` | `experiment`, `channel`, `device`, `property`, `value` | as `set_property` |
+| `set_position` | `experiment`, any of `x`, `y`, `z`, `pfs_offset` | as `set_position` |
+| `set_pattern` | `experiment`, `parameters` | calls the method's `update(**parameters)`; the default sets existing attributes and refuses unknown names |
+
+`channel` is a preset name or `"stimulation"`. For example:
+
+```python
+from pyclm.commands import write_command
+
+write_command("path/to/experiment_dir", {"command": "set_exposure",
+                                          "experiment": "bar10.00", "channel": "545", "ms": 80})
+```
+
+or, by hand, a file `commands/anything.json` containing
+`{"command": "pause"}`. `status.json` reports `paused`, `stopping`,
+`pending_commands` and `commands_applied`, and the viewer's status line
+shows them.

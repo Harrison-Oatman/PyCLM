@@ -185,7 +185,7 @@ becomes a tagged release.
   `t_delay` / `t_stop` written after `[pattern]` (as the docs showed) were
   silently passed to the pattern method instead of delaying the experiment.
 
-### Stage 5b — the control window, commands during a run, the minimap
+### Stage 5b — commands during a run, the viewer's minimap and positions axis
 
 - **The viewer stays on napari** (assessed against ndv and pymmcore-gui:
   ndv is alpha without label layers, pymmcore-gui pins PyQt6 and zarr < 3)
@@ -206,22 +206,21 @@ becomes a tagged release.
   `set_config`, `set_property`, `set_position`, `set_pattern` (a new
   `PatternMethod.update(**parameters)` hook). `pyclm.commands.write_command`
   writes one from Python.
-- **`pyclm control`**, a control window in its own process: check, start
-  or rehearse a run as a subprocess, pause / resume / stop, the commands
-  above, the status line and minimap; a positions table with an experiment
-  column fed by the stage (pymmcore-widgets on the microscope, the virtual
-  microscope with `--dry`), preview at the current position, and a writer
-  for MicroManager's `PositionList.pos`; forms for the three configuration
-  files generated from the schema, saved with `tomlkit` so untouched tables
-  keep their comments. Nothing in the window can affect a run.
-- **Dependencies**: useq-schema ≥ 0.9.2, napari ≥ 0.9, and new
-  pymmcore-widgets and tomlkit. pymmcore / pymmcore-plus ranges are open
+- **A control window (`pyclm control`) was built and withdrawn** the same
+  day, at Harrison's request, before it had been used at the microscope:
+  a run panel driving `pyclm run` as a subprocess with the commands above,
+  a positions table fed by the stage with a `PositionList.pos` writer, and
+  configuration forms generated from the schema (pymmcore-widgets panes
+  for stage, snap and live were part of it). It lives in the git history
+  of `gui/control.py`, `gui/forms.py` and `tests/test_control.py` should
+  it come back. `directories.write_position_list` stays.
+- **Dependencies**: useq-schema ≥ 0.9.2, napari ≥ 0.9. pymmcore / pymmcore-plus ranges are open
   (≥ 11.2.1.71.0 / ≥ 0.14.0) and the lock is constrained to the last
   **Micro-Manager device interface 71** stack (pymmcore 11.2.1.71.0,
-  pymmcore-plus 0.14.0, pymmcore-widgets 0.10.1) because the lab's Mightex
+  pymmcore-plus 0.14.0) because the lab's Mightex
   Polygon adapter is a closed DLL built for interface 71. The suite passes
   on that stack and on the current interface-75 stack (pymmcore 12.5,
-  pymmcore-plus 0.18.1, pymmcore-widgets 0.12.1); `pyclm check` prints the
+  pymmcore-plus 0.18.1); `pyclm check` prints the
   interface in use and a mismatched configuration load says why it failed.
 
 ### Dry run: pixel size and binning of the TIFs

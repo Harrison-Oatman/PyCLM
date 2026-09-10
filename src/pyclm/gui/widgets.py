@@ -1,8 +1,8 @@
 """
-Plain Qt widgets shared by the viewer (as napari dock widgets) and the
-control window: a status line built from ``status.json`` and a minimap of
-the positions in stage coordinates. They depend on qtpy only, so either
-host can show them and neither can break the run.
+Plain Qt widgets the viewer shows as a napari dock: a status line built
+from ``status.json`` and a minimap of the positions in stage coordinates.
+They depend on qtpy only, so any host can show them and none can break the
+run.
 """
 
 from __future__ import annotations

@@ -9,11 +9,11 @@ directory polled at the boundary; pause shifts the clock, `stop_run`,
 through `apply_settings` with `source = "command"`, `set_pattern` through
 `PatternMethod.update`), `gui/control.py` (`pyclm control`: run panel with
 a `pyclm run` subprocess, positions panel on `MMCoreStage` /
-`SimulatedStage` with pymmcore-widgets for the real stage,
+`SimulatedStage` (the pymmcore-widgets panes were withdrawn, see the end),
 `directories.write_position_list`), `gui/forms.py` (schema-generated forms,
 `tomlkit` merge that changes only what changed). Dependencies: pymmcore-plus
 0.18.1, pymmcore ≥ 12.5, useq-schema ≥ 0.9.2, napari ≥ 0.9,
-pymmcore-widgets ≥ 0.12.1, tomlkit. Tests: `tests/test_gui_widgets.py`,
+tomlkit. Tests: `tests/test_gui_widgets.py`,
 `tests/test_commands.py`, `tests/test_control.py` (offscreen Qt); the
 microscope validation is in [testing-guide-stage5b.md](testing-guide-stage5b.md).
 One deviation from §5: the Micro-Manager demo configuration is not
@@ -40,7 +40,6 @@ The lock therefore resolves to the last interface-71 stack, through
 |---|---|---|
 | pymmcore | 11.2.1.71.0 (2025-01) | 12.5.0.75.0 |
 | pymmcore-plus | 0.14.0 (the newest that runs on it; 0.15.0 declares `pymmcore>=11.2.1.71.0` but fails on import over a renamed core constant) | 0.18.1 |
-| pymmcore-widgets | 0.10.1 (the newest accepting pymmcore-plus 0.14) | 0.12.1 |
 | napari, useq-schema, tomlkit | unchanged (0.9.1, 0.9.2, 0.13) | unchanged |
 
 The suite passes on both stacks (236 tests). Users elsewhere with a newer
@@ -264,3 +263,27 @@ known run, before any other Stage 5b work lands on the scope.
 5. **Order of work**: minimap + updating status in the viewer (small,
    immediately useful) → the upgrade → commands and the run panel →
    positions window → forms.
+
+## pymmcore-widgets withdrawn (2026-09-09)
+
+The stage, snap, live, exposure and image-preview panes of the positions
+tab were pymmcore-widgets; they were never exercised on hardware (no demo
+configuration here, and the microscope was blocked by the device interface)
+and pinning back to interface 71 forced them onto pymmcore-widgets 0.10.1.
+Harrison chose to drop the widget interaction for now and keep the viewer
+work. The positions tab keeps everything else: it reads and moves the stage
+through pymmcore-plus (`MMCoreStage`), adds the current position, previews
+there, and writes `PositionList.pos`; live view and focusing stay in
+MicroManager. pymmcore-widgets is out of `pyproject.toml` and the lock.
+Bringing it back is `_hardware_widgets` in the git history of
+`gui/control.py` plus the dependency.
+
+## The control window withdrawn (2026-09-09)
+
+Harrison asked for `pyclm control` to be removed entirely, keeping the
+viewer work and the command-file protocol. `gui/control.py`, `gui/forms.py`,
+`tests/test_control.py`, `documentation/control_window.md` and the `tomlkit`
+dependency are gone; `commands.py`, the Manager's polling, `write_command`
+and `directories.write_position_list` remain, and the commands table moved
+to `documentation/command_line.md`. The last commit with the window is the
+one before this removal.
