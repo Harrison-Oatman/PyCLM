@@ -251,6 +251,17 @@ class MicroscopeProcess(BaseProcess):
             allowed = core.getAllowedPropertyValues(camera, "Binning")
         except Exception:
             return None
+        if allowed is None:
+            # seen with a pymmcore-plus / pymmcore pair that do not belong
+            # together (the real core refuses to load in that state; this is
+            # a last line of defence for other cores)
+            if not self.warned_binning:
+                logger.warning(
+                    f"camera {camera!r} reported no allowed binnings (None); "
+                    "binning left as it is"
+                )
+                self.warned_binning = True
+            return None
 
         binning_str = f"{binning}x{binning}"
 

@@ -257,3 +257,18 @@ belongs to that table, so the documented placement of `t_delay` and
 method's `**kwargs` swallowed; the experiment kept `t_delay = 0`. The
 schema refuses them in any method table with a message saying where they
 go, and the documented examples put them at the top of the file.
+
+### 32. `RealMicroscopeCore` lost most of its methods to a mis-placed helper (Stage 6)
+
+**Fixed 2026-09-12.** The device-interface hint added on 2026-09-09 put two
+module-level functions into `core/real_core.py` between
+`loadSystemConfiguration` and the rest of the class, so every method after
+them (`getCameraDevice`, `getAvailableConfigGroups`, the stage, SLM and
+camera calls) silently became a dead nested function and the interface's
+stubs, which return None, answered instead. Only the real microscope was
+affected; the suite never instantiates the real core. Found by Harrison on
+the scope as `TypeError: argument of type 'NoneType' is not iterable` in
+`set_binning`. The helpers now live below the class and
+`tests/test_microscope_process.py` asserts that the real core defines every
+interface method itself.
+

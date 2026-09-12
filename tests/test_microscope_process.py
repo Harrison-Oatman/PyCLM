@@ -190,3 +190,46 @@ def test_position_update_reports_z_correction():
     assert isinstance(msg, UpdateZPositionMessage)
     assert msg.new_z_position == 13.0
     assert msg.experiment_name == "exp.00"
+
+
+def test_binning_tolerates_a_core_that_reports_no_allowed_values(caplog):
+    """A mismatched pymmcore pair answers None; the microscope warns once and carries on."""
+    _aq, microscope, core = make_microscope()
+    core.getAllowedPropertyValues = lambda device, prop: None
+    with caplog.at_level(logging.WARNING):
+        microscope.set_binning(2)
+        microscope.set_binning(2)
+    assert caplog.text.count("reported no allowed binnings") == 1
+
+
+def test_real_core_refuses_a_mismatched_pymmcore_pair():
+    from pyclm.core.real_core import RealMicroscopeCore
+
+    class Inner:
+        def loadSystemConfiguration(self, path):
+            pass
+
+        def getAvailableConfigGroups(self):
+            return None
+
+    core = RealMicroscopeCore.__new__(RealMicroscopeCore)
+    core._core = Inner()
+    with pytest.raises(RuntimeError, match="do not belong together"):
+        core.loadSystemConfiguration("x.cfg")
+
+
+def test_real_core_implements_every_interface_method():
+    """Every method of the interface is defined on the real core itself (a
+    module-level helper once split the class in two and the stubs, which
+    return None, took over on the microscope)."""
+    from pyclm.core.core_interface import MicroscopeCoreInterface
+    from pyclm.core.real_core import RealMicroscopeCore
+
+    missing = [
+        name
+        for name, value in vars(MicroscopeCoreInterface).items()
+        if callable(value)
+        and not name.startswith("_")
+        and name not in vars(RealMicroscopeCore)
+    ]
+    assert missing == []

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from typing import Any
 
 from pymmcore_plus import CMMCorePlus
 
 from .core_interface import MicroscopeCoreInterface
+
+logger = logging.getLogger(__name__)
 
 
 class RealMicroscopeCore(MicroscopeCoreInterface):
@@ -23,28 +26,20 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
             if "interface" in str(e).lower():
                 raise RuntimeError(f"{e}" + chr(10) + device_interface_hint()) from e
             raise
+        # a pymmcore-plus that does not belong with the installed pymmcore
+        # answers list-returning calls with None instead of a tuple; catch it
+        # here, once, rather than in every caller
+        groups = self._core.getAvailableConfigGroups()
+        if groups is None:
+            raise RuntimeError(
+                "the microscope core returned None for getAvailableConfigGroups "
+                "after loading the configuration: the installed pymmcore-plus and "
+                f"pymmcore do not belong together ({versions_hint()}). Run "
+                "`uv sync` in the repository to install the locked pair "
+                "(pyproject.toml, [tool.uv])."
+            )
+        logger.info(f"microscope core: {versions_hint()}; {len(groups)} config groups")
 
-
-def device_interface() -> int | None:
-    """The Micro-Manager device interface version this pymmcore was built for."""
-    try:
-        import pymmcore
-
-        return int(pymmcore.__version__.split(".")[3])
-    except Exception:
-        return None
-
-
-def device_interface_hint() -> str:
-    di = device_interface()
-    return (
-        f"pymmcore speaks Micro-Manager device interface {di}: every device "
-        "adapter DLL it loads must be built for the same interface. Install a "
-        "Micro-Manager build of that interface (or the vendor's matching adapter), "
-        "or change the pymmcore pin (see pyproject.toml, [tool.uv])."
-    )
-
-    # SLM-related
     def getSLMDevice(self) -> str:
         return self._core.getSLMDevice()
 
@@ -124,3 +119,40 @@ def device_interface_hint() -> str:
     # Synchronization
     def waitForSystem(self) -> None:
         self._core.waitForSystem()
+
+
+def versions_hint() -> str:
+    import importlib.metadata as md
+
+    def v(name):
+        try:
+            return md.version(name)
+        except Exception:
+            return "?"
+
+    return (
+        f"pymmcore {v('pymmcore')}, pymmcore-plus {v('pymmcore-plus')}, "
+        f"device interface {device_interface()}"
+    )
+
+
+def device_interface() -> int | None:
+    """The Micro-Manager device interface version this pymmcore was built for."""
+    try:
+        import pymmcore
+
+        return int(pymmcore.__version__.split(".")[3])
+    except Exception:
+        return None
+
+
+def device_interface_hint() -> str:
+    di = device_interface()
+    return (
+        f"pymmcore speaks Micro-Manager device interface {di}: every device "
+        "adapter DLL it loads must be built for the same interface. Install a "
+        "Micro-Manager build of that interface (or the vendor's matching adapter), "
+        "or change the pymmcore pin (see pyproject.toml, [tool.uv])."
+    )
+
+    # SLM-related
