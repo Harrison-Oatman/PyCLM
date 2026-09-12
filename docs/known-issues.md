@@ -43,7 +43,7 @@ previous call, so each `run_pyclm()` logs to its own directory
 and `Controller.run` calls `close_files()` in its own `finally`
 (`tests/test_shutdown.py::test_forced_stop_closes_files`).
 
-### 5. `PatternReview` could not be constructed through the normal path
+### 5. `PatternReview` could not be constructed through the normal path (method removed in Stage 6)
 
 **Fixed in Stage 0.** Constructor now takes only `h5fp`, `channel`, `**kwargs`
 (`tests/test_pattern_method.py`).

@@ -323,7 +323,7 @@ def test_dry_run_ome_zarr(yml_experiment_dir):
 
     for store in stores:
         with pio.open(store) as exp:
-            assert exp.format == 2
+            assert exp.format == 3
             g = exp.groups["imaging"]
             assert g.every_t == _IMAGING_EVERY_T
             assert g.acquired() == list(range(_STEPS // _IMAGING_EVERY_T))

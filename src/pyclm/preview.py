@@ -25,6 +25,7 @@ from .check import find_pyclm_config
 from .core.datatypes import AcquisitionData, TrackingData
 from .core.events import AcquisitionEvent
 from .core.experiments import ImagingConfig, MicroscopePosition
+from .core.grid import cut, geometry_for, stitch
 from .core.kinds import is_seg_kind, seg_name
 from .core.manager import SLMBuffer
 from .core.pattern_process import PatternProcess
@@ -33,7 +34,6 @@ from .core.patterns import (
     CameraProperties,
     DataDock,
     PatternContext,
-    PatternMethodReturnsSLM,
 )
 from .core.plan import _channel_group, _stim_channel_name
 from .core.queues import AllQueues
@@ -82,6 +82,20 @@ def _resolve_experiment(directory: Path, experiment: str) -> tuple[Path, str]:
         raise ConfigError(toml, [f"no experiment file for '{experiment}'"])
     label = experiment if "." in experiment else f"{stem}.preview"
     return toml, label
+
+
+def _position_for(directory: Path, label: str) -> MicroscopePosition:
+    """The directory's position with this label (a grid keeps its tiles), else a stand-in."""
+    from .check import _load_positions
+
+    try:
+        _name, positions = _load_positions(directory)
+    except Exception:
+        positions = None
+    for pos in positions or ():
+        if pos.label == label:
+            return pos
+    return MicroscopePosition(0.0, 0.0, 0.0, label=label)
 
 
 def _load_image(path: Path) -> np.ndarray:
@@ -183,6 +197,8 @@ def preview(
         core.loadSystemConfiguration(config.config_path)
         if config.focus_device:
             core.setFocusDevice(config.focus_device)
+        if config.camera_roi is not None:
+            core.setROI(*[int(v) for v in config.camera_roi])
         px = (
             float(core.getPixelSizeUm())
             if pixel_size_um is None
@@ -226,14 +242,44 @@ def preview(
         probe_cfg = exp.stimulation
     probe = get_frame(probe_cfg)
     h, w = probe.shape
-    pp.initialize(CameraProperties(ROI(0, 0, w * binning, h * binning), px / binning))
+
+    # a grid position: the method sees the stitched frame. A tile-sized image
+    # is tiled rows x columns; a stitched-size one is used as it is.
+    position = _position_for(directory, label)
+    geometry = None
+    if position.is_grid:
+        tile_h, tile_w = h * binning, w * binning
+        stitched = geometry_for(position, (0, 0, tile_w, tile_h), px)
+        if (h, w) == tuple(stitched.shape(binning)):
+            # already stitched: the tile is the frame divided by the layout
+            tile_h = (h * binning - (stitched.rows - 1) * stitched.pitch(1)[0]) // 1
+            tile_w = (w * binning - (stitched.columns - 1) * stitched.pitch(1)[1]) // 1
+            geometry = geometry_for(position, (0, 0, tile_w, tile_h), px)
+        else:
+            geometry = stitched
+            tiles = [probe] * len(geometry.tiles)
+            probe = stitch(tiles, geometry, binning)
+
+            def get_frame(channel_cfg: ImagingConfig, _f=get_frame) -> np.ndarray:
+                return stitch(
+                    [_f(channel_cfg)] * len(geometry.tiles), geometry, binning
+                )
+
+            h, w = probe.shape
+        position.geometry = geometry
+        pp.grids = {label: geometry}
+        tile_h, tile_w = geometry.tile_shape(1)
+        pp.initialize(CameraProperties(ROI(0, 0, tile_w, tile_h), px / binning))
+    else:
+        pp.initialize(
+            CameraProperties(ROI(0, 0, w * binning, h * binning), px / binning)
+        )
     reqs = pp.request_method(exp)
     pp.initialize_models()
     model = pp.models[label]
 
     by_id = {c.channel_id: (name, c) for name, c in exp.channels.items()}
     by_id[exp.stimulation.channel_id] = ("stimulation", exp.stimulation)
-    position = MicroscopePosition(0.0, 0.0, 0.0, label=label)
     pp.positions = {label: position}
 
     dock = DataDock(t * interval_s, reqs)
@@ -293,7 +339,6 @@ def preview(
     started = time.perf_counter()
     pattern = np.asarray(model.generate(context), dtype=np.float32)
     generate_s = time.perf_counter() - started
-    slm_coords = isinstance(model, PatternMethodReturnsSLM)
     result.pattern = pattern
     result.requests = [c.describe() for c in context.requests]
 
@@ -306,21 +351,28 @@ def preview(
         path = out_dir / f"labels_{channel}_{name}.tif"
         tifffile.imwrite(path, lab.astype(np.uint32 if name == "tracks" else np.uint16))
         result.paths[f"labels {channel} {name}"] = path
-    camera_pattern = None
-    if not slm_coords:
-        camera_pattern = np.clip(pattern, 0, 1)
-        path = out_dir / "pattern_camera.tif"
-        tifffile.imwrite(path, camera_pattern.astype(np.float32))
-        result.paths["pattern (camera)"] = path
-        first = next(iter(frames.values()), None)
-        if first is not None:
-            path = out_dir / "pattern_overlay.png"
-            imsave(path, _overlay(first, camera_pattern), check_contrast=False)
-            result.paths["overlay"] = path
+    camera_pattern = np.clip(pattern, 0, 1)
+    path = out_dir / "pattern_camera.tif"
+    tifffile.imwrite(path, camera_pattern.astype(np.float32))
+    result.paths["pattern (camera)"] = path
+    first = next(iter(frames.values()), None)
+    if first is not None:
+        path = out_dir / "pattern_overlay.png"
+        imsave(path, _overlay(first, camera_pattern), check_contrast=False)
+        result.paths["overlay"] = path
     if config is not None:
         slm = SLMBuffer(AllQueues())
-        slm.initialize(config.slm_shape, config.affine, [label])
-        dmd = slm.pattern_to_slm(pattern, slm_coords, model.binning * source_binning)
+        slm.initialize(config.slm_shape, config.affine, [label], roi=config.camera_roi)
+        if geometry is not None:
+            # one DMD image per tile, stacked in tile order
+            dmd = np.stack(
+                [
+                    slm.pattern_to_slm(tile, model.binning * source_binning)
+                    for tile in cut(pattern, geometry, model.binning * source_binning)
+                ]
+            )
+        else:
+            dmd = slm.pattern_to_slm(pattern, model.binning * source_binning)
         path = out_dir / "pattern_dmd.tif"
         tifffile.imwrite(path, np.asarray(dmd, dtype=np.uint8))
         result.paths["pattern (DMD)"] = path
@@ -338,6 +390,7 @@ def preview(
         "pixel_size_um": px,
         "binning": binning,
         "source_binning": source_binning,
+        "grid": None if geometry is None else geometry.as_dict(),
         "method": exp.pattern.method_name,
         "kwargs": exp.pattern.kwargs,
         "requirements": {by_id[r.id][0]: list(r.kinds) for r in reqs},

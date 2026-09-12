@@ -64,7 +64,11 @@ What it checks:
   MicroManager configuration, when the `.cfg` at `config_path` (or
   `--mm-config FILE`) can be read; otherwise a line says they were not
   checked;
-- the timing budget: timepoints estimated to take longer than the interval;
+- the timing budget: timepoints estimated to take longer than the interval
+  (a grid's tiles each count a move, the settle time and the exposure);
+- the camera ROI against the region the DMD can light, and each grid in
+  the position list (rows × columns, spacing; with `camera_roi` set and
+  `--pixel-size-um` given, whether the tiles abut, overlap or leave gaps);
 - outputs that already exist.
 
 `--dry` additionally copies the directory, shortens it to two timepoints,
@@ -97,7 +101,9 @@ into `my_experiment/preview/<label>/`:
 
 The experiment is a position label from the position list or a TOML stem;
 `--t N` sets the timepoint the method believes it is at (for methods that
-depend on time). Without `--pixel-size-um`, a TIF is taken to be what the
+depend on time). For a grid position the method sees the stitched frame: a
+tile-sized `--image` is tiled rows × columns, a stitched-size one is used
+as it is, and `pattern_dmd.tif` holds one DMD image per tile. Without `--pixel-size-um`, a TIF is taken to be what the
 directory's `dry_run.yml` says (`pixel_size_um`, `binning`; see the dry run
 notes in [first-time setup](first_time_setup.md)), so the DMD pattern of a
 preview matches the dry run's. The machinery is the run's own, so what preview shows is

@@ -106,6 +106,16 @@ class HDF5WriterV1(FrameWriter):
 
                 self.open_files[exp_name] = f
 
+            grids = [
+                name
+                for name, pos in plan.schedule.positions.items()
+                if getattr(pos, "tiles", None)
+            ]
+            if grids:
+                raise ValueError(
+                    f"grid positions ({', '.join(grids)}) need [output] format = "
+                    '"ome-zarr": HDF5 format 1 has no place for a stitched pattern'
+                )
             slm_device = core.getSLMDevice()
             dmd_shape = None
             if slm_device:
@@ -128,8 +138,14 @@ class HDF5WriterV1(FrameWriter):
                         f, f"{prefix}/seg", shape, np.uint16, ds.config
                     )
                 if ds.is_stim and dmd_shape is not None:
+                    # binary patterns compress ~50x; raw they dominated the file
                     self._create_frame_dataset(
-                        f, f"{prefix}/dmd", dmd_shape, np.uint8, ds.config
+                        f,
+                        f"{prefix}/dmd",
+                        dmd_shape,
+                        np.uint8,
+                        ds.config,
+                        compress=True,
                     )
 
             # Enable SWMR only after all datasets exist
@@ -153,9 +169,12 @@ class HDF5WriterV1(FrameWriter):
                 all_layers.append((filepath, "stim_aq"))
         return all_layers
 
-    def _create_frame_dataset(self, f, path, maxshape, dtype, config: ImagingConfig):
+    def _create_frame_dataset(
+        self, f, path, maxshape, dtype, config: ImagingConfig, compress: bool = False
+    ):
+        extra = {"compression": "gzip", "compression_opts": 4} if compress else {}
         dset = f.create_dataset(
-            path, shape=(0, 0), maxshape=maxshape, dtype=dtype, chunks=True
+            path, shape=(0, 0), maxshape=maxshape, dtype=dtype, chunks=True, **extra
         )
         self._preallocate_attrs(dset, config)
 
@@ -167,6 +186,7 @@ class HDF5WriterV1(FrameWriter):
         dset.attrs["time_since_start"] = ""
         dset.attrs["time_completed"] = ""
         dset.attrs["complete"] = False
+        dset.attrs["skipped"] = False
         dset.attrs["exposure_time_ms"] = 0.0
         dset.attrs["needs_slm"] = False
         dset.attrs["binning"] = 1
@@ -204,11 +224,45 @@ class HDF5WriterV1(FrameWriter):
                 continue
             path = f"{ds.t:05d}/{ds.group}/data"
             try:
-                if f[path].shape == (0, 0):
+                dset = f[path]
+                if dset.shape == (0, 0) and not bool(dset.attrs.get("skipped", False)):
                     return False
             except KeyError:
                 return False
         return True
+
+    def write_skipped(self, data):
+        """Mark a pre-allocated dataset as skipped so the timepoint can complete."""
+        aq_event = data.event
+        exp_name = aq_event.experiment_name
+        try:
+            f = self.open_files.get(exp_name)
+            if f is None:
+                return
+            path = aq_event.get_rel_path() + "data"
+            if path in f:
+                dset = f[path]
+
+                def mark():
+                    dset.attrs["skipped"] = True
+                    f.flush()
+
+                self._retry(mark)
+            self._bump_progress(f, aq_event.t_index, exp_name)
+        except Exception as e:
+            self.error_count += 1
+            logger.error(f"Failed to record a skipped frame: {e}", exc_info=True)
+
+    def _bump_progress(self, f, t_index: int, exp_name: str) -> None:
+        if f["current_t_index"][()] < t_index and self._timepoint_complete(
+            f, t_index, exp_name
+        ):
+
+            def bump():
+                f["current_t_index"][...] = np.int32(t_index)
+                f.flush()
+
+            self._retry(bump)
 
     @staticmethod
     def _retry(fn):
@@ -265,16 +319,7 @@ class HDF5WriterV1(FrameWriter):
 
                     self._retry(put_dmd)
 
-            t_index = aq_event.t_index
-            if f["current_t_index"][()] < t_index and self._timepoint_complete(
-                f, t_index, exp_name
-            ):
-
-                def bump():
-                    f["current_t_index"][...] = np.int32(t_index)
-                    f.flush()
-
-                self._retry(bump)
+            self._bump_progress(f, aq_event.t_index, exp_name)
 
         except Exception as e:
             self.error_count += 1

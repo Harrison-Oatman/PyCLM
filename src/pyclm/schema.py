@@ -493,8 +493,11 @@ class OutputConfig(Strict):
     format: Literal["ome-zarr", "hdf5"] = Field(
         "ome-zarr", description="storage format"
     )
-    pattern_policy: Literal["on_change", "all", "none"] = Field(
-        "on_change", description="which DMD patterns to store (ome-zarr only)"
+    pattern_policy: Literal["on_change", "imaging", "none"] = Field(
+        "on_change",
+        description="which patterns to store (ome-zarr only): every distinct one "
+        "(on_change), only the one in force at timepoints where an imaging frame "
+        "is saved (imaging), or none",
     )
     export_imagej: bool = Field(
         True, description="write ImageJ hyperstacks when the run ends"
@@ -521,6 +524,12 @@ class PyclmConfig(Strict):
         ge=0,
         description="seconds to wait after the hardware reports ready, before each snap",
     )
+    camera_roi: list[int] | None = Field(
+        None,
+        description="camera ROI [x, y, width, height] in unbinned pixels, set when a run "
+        "starts (for example the region the DMD covers; pyclm check prints it); "
+        "omit to leave the camera as it is",
+    )
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     @model_validator(mode="after")
@@ -531,7 +540,30 @@ class PyclmConfig(Strict):
             raise ValueError(
                 "affine_transform must be a 2 x 3 matrix [[a, b, tx], [c, d, ty]]"
             )
+        roi = self.camera_roi
+        if roi is not None:
+            if len(roi) != 4 or roi[0] < 0 or roi[1] < 0 or roi[2] <= 0 or roi[3] <= 0:
+                raise ValueError(
+                    "camera_roi must be [x, y, width, height] with x, y >= 0 and "
+                    "width, height > 0 (unbinned pixels)"
+                )
         return self
+
+    def dmd_footprint(self) -> tuple[int, int, int, int]:
+        """
+        The camera region the DMD can reach, ``[x, y, width, height]`` in
+        unbinned camera pixels: the DMD rectangle mapped through the inverse
+        of the camera-to-SLM affine.
+        """
+        import cv2
+
+        h, w = self.slm_shape
+        inv = cv2.invertAffineTransform(self.affine)
+        corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float32)
+        cam = corners @ inv[:, :2].T + inv[:, 2]
+        x0, y0 = np.floor(cam.min(axis=0))
+        x1, y1 = np.ceil(cam.max(axis=0))
+        return (int(x0), int(y0), int(x1 - x0), int(y1 - y0))
 
     @property
     def affine(self) -> np.ndarray:

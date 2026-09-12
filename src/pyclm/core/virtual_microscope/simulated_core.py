@@ -161,8 +161,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
     def snapImage(self) -> None:
         frame = np.asarray(self._image_source.next_frame([self._x, self._y]))
-        x, y, w, h = self._roi
-        frame = frame[y : y + h, x : x + w, ...] if frame.ndim >= 2 else frame
+        frame = self._window(frame)
         logger.debug(f"Simulated image shape: {frame.shape}")
 
         # binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
@@ -178,6 +177,36 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
         self._last_image = frame
 
+    def _window(self, frame: np.ndarray) -> np.ndarray:
+        """
+        The part of the source frame the camera sees. A frame of the ROI's
+        size is the camera frame; a larger one is a region the stage moves
+        over (a grid's TIF): the window is centred on the listed position
+        and shifted by the stage's offset from it, in the TIF's pixels.
+        """
+        if frame.ndim < 2:
+            return frame
+        x, y, w, h = self._roi
+        fh, fw = frame.shape[:2]
+        if (fh, fw) == (h, w) or fh < h or fw < w:
+            return frame[y : y + h, x : x + w, ...]
+        nearest = getattr(self._image_source, "nearest", None)
+        ref = nearest([self._x, self._y]) if nearest is not None else None
+        px = float(getattr(self._image_source, "pixel_size_um", 0.0) or 0.0)
+        dx = dy = 0.0
+        if ref is not None and px > 0:
+            # stage um -> reported camera pixels -> TIF pixels (ROI_FACTOR smaller)
+            dx = (self._x - ref[0]) / px / self.ROI_FACTOR
+            dy = (self._y - ref[1]) / px / self.ROI_FACTOR
+        ox = round(fw / 2 + dx - w / 2)
+        oy = round(fh / 2 + dy - h / 2)
+        out = np.zeros((h, w, *frame.shape[2:]), dtype=frame.dtype)
+        sy0, sx0 = max(oy, 0), max(ox, 0)
+        sy1, sx1 = min(oy + h, fh), min(ox + w, fw)
+        if sy1 > sy0 and sx1 > sx0:
+            out[sy0 - oy : sy1 - oy, sx0 - ox : sx1 - ox] = frame[sy0:sy1, sx0:sx1]
+        return out
+
     def getImage(self) -> Any:
         if self._last_image is None:
             self.snapImage()
@@ -188,11 +217,27 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         binning = int(binning_str.split("x")[0])
         return self._pixel_size_um * binning
 
+    # the TIFs stand for a camera ROI_FACTOR times larger (the frames of the
+    # dry-run resources are 4x binned), so the reported ROI is scaled up and a
+    # requested ROI is scaled down onto the TIF
+    ROI_FACTOR = 4
+
     def getROI(self):
-        binning_str = self._properties.get(self._camera_name, {}).get("Binning", "1x1")
-        binning = int(binning_str.split("x")[0])
         x, y, w, h = self._roi
-        return (x, y, w * 4, h * 4)
+        f = self.ROI_FACTOR
+        return (x * f, y * f, w * f, h * f)
+
+    def setROI(self, x: int, y: int, width: int, height: int) -> None:
+        f = self.ROI_FACTOR
+        h_src, w_src = self._image_source.shape[:2]
+        x0, y0 = int(x) // f, int(y) // f
+        w0, h0 = max(1, int(width) // f), max(1, int(height) // f)
+        if x0 + w0 > w_src or y0 + h0 > h_src:
+            raise ValueError(
+                f"ROI {(x, y, width, height)} exceeds the virtual camera "
+                f"{(w_src * f, h_src * f)} (unbinned pixels)"
+            )
+        self._roi = (x0, y0, w0, h0)
 
     # Stage/focus/positioning
     def getXYPosition(self) -> tuple[float, float]:

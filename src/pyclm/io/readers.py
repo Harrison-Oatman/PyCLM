@@ -91,6 +91,7 @@ class ExperimentData(ABC):
     name: str
     groups: dict[str, GroupData]
     affine_transform: np.ndarray | None
+    camera_roi: tuple[int, int, int, int] | None = None
     slm_shape: tuple[int, int] | None
     plan_yaml: str | None
 
@@ -102,6 +103,14 @@ class ExperimentData(ABC):
     @abstractmethod
     def pattern_at(self, t: int) -> np.ndarray | None:
         """DMD-space pattern in force at plan timepoint ``t`` (latest at or before ``t``)."""
+
+    def camera_pattern_at(self, t: int) -> np.ndarray | None:
+        """
+        Camera-space pattern (uint8 0-255, stimulation binning, ROI frame) in
+        force at plan timepoint ``t``; None when the store has none (HDF5, or
+        OME-Zarr written before format 3).
+        """
+        return None
 
     @property
     def frames(self):
@@ -257,6 +266,7 @@ class ZarrExperiment(ExperimentData):
         self._root = zarr.open_group(str(self.path), mode="r")
         meta = dict(self._root.attrs["pyclm"])
         self._meta = meta
+        self.format = int(meta.get("format", 2))
         self.name = meta["experiment"]
         self.plan_yaml = meta.get("plan")
         at = meta.get("affine_transform")
@@ -264,6 +274,10 @@ class ZarrExperiment(ExperimentData):
         self.slm_shape = (
             None if meta.get("slm_shape") is None else tuple(meta["slm_shape"])
         )
+        roi = meta.get("camera_roi")
+        self.camera_roi = None if roi is None else tuple(int(v) for v in roi)
+        # rows, columns, pitch, tile shape and tile order of a grid experiment
+        self.grid = meta.get("grid")
         self.groups = {
             name: _ZarrGroup(
                 self.path,
@@ -282,6 +296,11 @@ class ZarrExperiment(ExperimentData):
         if (self.path / "patterns" / "dmd" / "0").exists():
             self._pattern_arr = zarr.open_array(
                 str(self.path / "patterns" / "dmd" / "0"), mode="r"
+            )
+        self._camera_arr = None
+        if (self.path / "patterns" / "camera" / "0").exists():
+            self._camera_arr = zarr.open_array(
+                str(self.path / "patterns" / "camera" / "0"), mode="r"
             )
 
     @staticmethod
@@ -321,6 +340,10 @@ class ZarrExperiment(ExperimentData):
             self._pattern_arr = zarr.open_array(
                 str(self.path / "patterns" / "dmd" / "0"), mode="r"
             )
+        if self._camera_arr is not None:
+            self._camera_arr = zarr.open_array(
+                str(self.path / "patterns" / "camera" / "0"), mode="r"
+            )
 
     @property
     def current_t(self):
@@ -352,13 +375,13 @@ class ZarrExperiment(ExperimentData):
         """The resolved routing table recorded at the start of the run, if any."""
         return self._meta.get("routing")
 
-    def _pattern_index_at(self, t: int) -> int | None:
+    def _pattern_index_at(self, t: int, column: str = "pattern_index") -> int | None:
         table = self.frames
-        if table is None or table.num_rows == 0:
+        if table is None or table.num_rows == 0 or column not in table.column_names:
             return None
         kinds = table["kind"].to_pylist()
         ts = table["t"].to_pylist()
-        idx = table["pattern_index"].to_pylist()
+        idx = table[column].to_pylist()
         best = None
         for k, tt, pi in zip(kinds, ts, idx, strict=False):
             if (
@@ -373,10 +396,20 @@ class ZarrExperiment(ExperimentData):
     def pattern_at(self, t):
         if self._pattern_arr is None:
             return None
-        i = self._pattern_index_at(t)
+        # format 2 stores indexed the DMD array with pattern_index
+        column = "dmd_index" if self.format >= 3 else "pattern_index"
+        i = self._pattern_index_at(t, column)
         if i is None or i >= self._pattern_arr.shape[0]:
             return None
         return np.asarray(self._pattern_arr[i])
+
+    def camera_pattern_at(self, t):
+        if self._camera_arr is None:
+            return None
+        i = self._pattern_index_at(t, "pattern_index")
+        if i is None or i >= self._camera_arr.shape[0]:
+            return None
+        return np.asarray(self._camera_arr[i])
 
     @property
     def pattern_ids(self) -> list[str]:

@@ -111,6 +111,105 @@ class CheckReport:
 
 
 # --------------------------------------------------------------- helpers
+def _check_grids(report, list_name, positions, config, directory, pixel_size_um):
+    """Describe each grid; compare its pitch with the camera ROI when the pixel size is known."""
+    from .directories import dry_settings_from_directory
+
+    grids = [p for p in positions if getattr(p, "tiles", None)]
+    if not grids:
+        return
+    if pixel_size_um is None:
+        try:
+            dry = dry_settings_from_directory(directory)
+            if (directory / "dry_run.yml").exists():
+                pixel_size_um = dry.pixel_size_um * dry.binning
+        except Exception:
+            pixel_size_um = None
+    if config is not None and config.output.format == "hdf5":
+        report.error(
+            CONFIG_NAME,
+            "[output] format",
+            f"grid positions ({', '.join(g.label for g in grids)}) need "
+            'format = "ome-zarr"',
+        )
+    for g in grids:
+        info = g.grid
+        col_um, row_um = info["pitch_um"]
+        line = (
+            f"grid of {info['rows']} x {info['columns']} tiles, spacing "
+            f"{col_um:.1f} x {row_um:.1f} um"
+        )
+        roi = None if config is None else config.camera_roi
+        if roi is not None and pixel_size_um:
+            w_um, h_um = roi[2] * pixel_size_um, roi[3] * pixel_size_um
+            ox, oy = w_um - col_um, h_um - row_um
+            line += (
+                f"; with camera_roi {roi[2]} x {roi[3]} px at {pixel_size_um:g} um/px "
+                f"the tiles overlap {ox:.1f} x {oy:.1f} um"
+            )
+            if ox < -0.5 or oy < -0.5:
+                report.warning(
+                    list_name,
+                    g.label,
+                    "the tiles are spaced wider than the camera ROI: the stitched "
+                    "frame will have gaps (was the grid created with this ROI?)",
+                )
+            elif (ox > 0.5 or oy > 0.5) and any(
+                cfg.stimulation.exposure > 0
+                for stem, cfg in _configs_for(directory, g.label).items()
+            ):
+                report.warning(
+                    list_name,
+                    g.label,
+                    "the tiles overlap and this experiment stimulates: the overlap "
+                    "strips are lit from two tiles (overlap 0 is recommended)",
+                )
+        elif roi is None:
+            line += "; set camera_roi to check the spacing against the camera"
+        else:
+            line += "; give --pixel-size-um to check the spacing against the camera"
+        report.info(list_name, g.label, line)
+
+
+def _configs_for(directory: Path, label: str) -> dict:
+    from .schema import ExperimentConfig
+
+    stem = label.split(".")[0]
+    path = directory / f"{stem}.toml"
+    try:
+        return {stem: ExperimentConfig.from_file(path)}
+    except Exception:
+        return {}
+
+
+def _check_camera_roi(report: CheckReport, file: str, config: PyclmConfig) -> None:
+    """Report the DMD's footprint on the camera and how the configured ROI relates to it."""
+    fx, fy, fw, fh = config.dmd_footprint()
+    footprint = f"x {fx}..{fx + fw}, y {fy}..{fy + fh} ({fw} x {fh} unbinned pixels)"
+    roi = config.camera_roi
+    if roi is None:
+        report.info(
+            file,
+            "camera_roi",
+            f"not set: the camera keeps its current ROI; the DMD covers {footprint}, "
+            f"so camera_roi = [{max(fx, 0)}, {max(fy, 0)}, {fw}, {fh}] would image "
+            "exactly the region it can light",
+        )
+        return
+    x, y, w, h = roi
+    report.info(
+        file, "camera_roi", f"{list(roi)} will be set; the DMD covers {footprint}"
+    )
+    if x < fx or y < fy or x + w > fx + fw or y + h > fy + fh:
+        report.warning(
+            file,
+            "camera_roi",
+            "extends beyond the region the DMD can light: part of every frame "
+            "can never be stimulated (a grid stimulated with overlap 0 will have "
+            "dark strips)",
+        )
+
+
 def find_pyclm_config(directory: Path, config_path=None) -> Path | None:
     """``pyclm_config.toml``: the given path, else the directory's, else the working directory's."""
     if config_path is not None:
@@ -233,8 +332,14 @@ def check_directory(
     segmentation_methods=None,
     tracking_methods=None,
     dry: bool = False,
+    pixel_size_um: float | None = None,
 ) -> CheckReport:
-    """Check an experiment directory; see the module docstring for what is covered."""
+    """
+    Check an experiment directory; see the module docstring for what is covered.
+    ``pixel_size_um`` (unbinned) lets a grid's tile spacing be compared with
+    the camera ROI; without it the directory's ``dry_run.yml`` value is used
+    when there is one.
+    """
     directory = Path(directory)
     report = CheckReport(directory)
     if not directory.is_dir():
@@ -256,6 +361,7 @@ def check_directory(
         try:
             config = PyclmConfig.from_file(cfg_path)
             report.info(cfg_path.name, "", f"ok ({cfg_path})")
+            _check_camera_roi(report, cfg_path.name, config)
         except ConfigError as e:
             for problem in e.problems:
                 report.error(cfg_path.name, "", problem)
@@ -319,6 +425,7 @@ def check_directory(
                     f"no experiment file '{stem}.toml' for this position "
                     f"(files: {', '.join(p.stem for p in toml_paths) or 'none'})",
                 )
+        _check_grids(report, list_name, positions, config, directory, pixel_size_um)
         used = {stem for stem in labels.values()}
         for path in toml_paths:
             if path.stem not in used:

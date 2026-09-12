@@ -98,13 +98,13 @@ def test_event_order_indices_and_offsets():
     events = plan.events_at(1)
     assert [(e.kind, e.experiment) for e in events] == [
         ("request_pattern", "a.00"),
+        ("update_pattern", "a.00"),  # the SLM handshake precedes the move
         ("position", "a.00"),
-        ("update_pattern", "a.00"),
         ("acquire", "a.00"),
         ("acquire", "a.00"),
         ("request_pattern", "b.00"),
-        ("position", "b.00"),
         ("update_pattern", "b.00"),
+        ("position", "b.00"),
         ("acquire", "b.00"),
         ("acquire", "b.00"),
     ]

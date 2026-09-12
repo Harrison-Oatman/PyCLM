@@ -11,12 +11,12 @@ from .messages import (
     StreamCloseMessage,
 )
 from .patterns import (
+    ROI,
     AcquiredImageRequest,
     CameraProperties,
     DataDock,
     PatternContext,
     PatternMethod,
-    PatternMethodReturnsSLM,
     known_models,
 )
 from .patterns.pattern import ExperimentState
@@ -51,6 +51,8 @@ class PatternProcess(PipelineProcess):
         self.positions: dict = {}
 
         self.camera_properties = None
+        # {experiment: GridGeometry} for grid experiments (set by the Controller)
+        self.grids: dict = {}
         self.initialized = False
 
         self.models = {}
@@ -109,7 +111,13 @@ class PatternProcess(PipelineProcess):
         for experiment_name in self.models:
             model: PatternMethod = self.models[experiment_name]
             experiment: Experiment = self.experiments[experiment_name]
-            model.configure_system(experiment_name, self.camera_properties, experiment)
+            props = self.camera_properties
+            geom = self.grids.get(experiment_name)
+            if geom is not None and props is not None:
+                # a grid experiment's method sees, and returns, the stitched frame
+                h, w = geom.shape(1)
+                props = CameraProperties(ROI(0, 0, int(w), int(h)), props.pixel_size_um)
+            model.configure_system(experiment_name, props, experiment)
 
     def register_method(self, model: type, name: str | None = None):
         assert issubclass(model, PatternMethod), (
@@ -149,14 +157,8 @@ class PatternProcess(PipelineProcess):
             state, model._experiment_ref, position=self.positions.get(experiment_name)
         )
 
-        if isinstance(model, PatternMethodReturnsSLM):
-            pattern = model.generate(context)
-            out = CameraPattern(experiment_name, pattern, slm_coords=True)
-        else:
-            pattern = model.generate(context)
-            out = CameraPattern(
-                experiment_name, pattern, slm_coords=False, binning=model.binning
-            )
+        pattern = model.generate(context)
+        out = CameraPattern(experiment_name, pattern, binning=model.binning)
         state.record_pattern(out.pattern_id, pattern)
         self.slm.put(out)
 

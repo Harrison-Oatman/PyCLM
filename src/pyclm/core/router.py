@@ -44,7 +44,8 @@ logger = logging.getLogger(__name__)
 
 # base kinds; a segmentation from a named [segmentation.<name>] table travels
 # as "seg:<name>" and is produced by the "seg" producer (see core/kinds.py)
-KINDS = ("raw", "seg", "tracks")
+# "skipped": a planned frame the microscope did not take (the writer records it)
+KINDS = ("raw", "seg", "tracks", "skipped")
 CADENCES = ("always", "pattern")
 
 

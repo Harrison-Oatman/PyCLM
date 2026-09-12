@@ -217,7 +217,7 @@ def run_pyclm(
     slm_shape = config.slm_shape
     at = config.affine
 
-    c.initialize(schedule, slm_shape, at, base_path)
+    c.initialize(schedule, slm_shape, at, base_path, camera_roi=config.camera_roi)
 
     all_layers = c.all_layers
     t_gcd = c.t_gcd

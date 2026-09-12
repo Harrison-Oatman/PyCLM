@@ -53,6 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also run two timepoints on the virtual microscope",
     )
+    p.add_argument(
+        "--pixel-size-um",
+        type=float,
+        default=None,
+        help="unbinned camera pixel size, to compare a grid's spacing with camera_roi",
+    )
     p.set_defaults(func=cmd_check)
 
     p = sub.add_parser(
@@ -132,7 +138,11 @@ def cmd_check(args) -> int:
     from .check import check_directory
 
     report = check_directory(
-        Path(args.directory), args.config, mm_config=args.mm_config, dry=args.dry
+        Path(args.directory),
+        args.config,
+        mm_config=args.mm_config,
+        dry=args.dry,
+        pixel_size_um=args.pixel_size_um,
     )
     print(report.text())
     return 0 if report.ok else 1

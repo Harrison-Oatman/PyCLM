@@ -50,10 +50,17 @@ DEFAULT_STIM_CHANNEL_NAME = "stimulation"
 class PlannedEvent:
     """One step the Manager carries out at timepoint ``t`` for one experiment.
 
-    ``kind`` is one of ``"request_pattern"``, ``"position"``,
-    ``"update_pattern"``, ``"acquire"``. ``index`` identifies the frame
+    ``kind`` is one of ``"request_pattern"``, ``"update_pattern"``,
+    ``"position"``, ``"acquire"``, in that order per position: the SLM
+    handshake precedes the stage move. ``index`` identifies the frame
     (``{"t", "p", "c"}``; ``c`` absent for non-acquisition events). Who
     consumes the frame is the Router's decision, not the event's.
+
+    ``skippable`` marks the events of a position whose only acquisition at
+    ``t`` is the stimulation frame and whose pattern method does not need
+    that frame: if the pattern the handshake delivers is blank, the
+    microscope skips the move and the exposure (and acknowledges the
+    acquisition as skipped).
     """
 
     kind: str
@@ -64,6 +71,7 @@ class PlannedEvent:
     channel: str | None = None
     is_stim: bool = False
     save: bool = True
+    skippable: bool = False
 
 
 @dataclass(frozen=True)
@@ -486,22 +494,44 @@ class AcquisitionPlan:
             offset = t_offset + p_index * self.between_s
             make_pattern = this_t % self._pattern_lcm[name] == 0
             base_index = {"t": t, "p": name}
+            stim_name = self._meta[name]["stim_channel"]
+
+            # only the stimulation frame is due and nothing waits for it: a
+            # blank pattern lets the microscope skip this position
+            stim_only = all(e.channel.config == stim_name for e in acquisitions)
+            stim_needed = make_pattern and stim_name in self._required[name]
+            skippable = stim_only and not stim_needed
 
             if make_pattern:
                 out.append(PlannedEvent("request_pattern", t, name, base_index, offset))
-            out.append(PlannedEvent("position", t, name, base_index, offset))
+            # the SLM handshake comes before the stage move: the pattern is
+            # then in hand before anything is spent on the position
+            for e in acquisitions:
+                channel = e.channel.config
+                if channel == stim_name:
+                    out.append(
+                        PlannedEvent(
+                            "update_pattern",
+                            t,
+                            name,
+                            {**base_index, "c": channel},
+                            offset,
+                            channel,
+                            True,
+                            skippable=skippable,
+                        )
+                    )
+            out.append(
+                PlannedEvent(
+                    "position", t, name, base_index, offset, skippable=skippable
+                )
+            )
 
             for e in acquisitions:
                 channel = e.channel.config
-                is_stim = channel == self._meta[name]["stim_channel"]
+                is_stim = channel == stim_name
                 index = {**base_index, "c": channel}
                 config = self.imaging_config(name, channel)
-                if is_stim:
-                    out.append(
-                        PlannedEvent(
-                            "update_pattern", t, name, index, offset, channel, True
-                        )
-                    )
                 out.append(
                     PlannedEvent(
                         "acquire",
@@ -512,6 +542,7 @@ class AcquisitionPlan:
                         channel,
                         is_stim,
                         save=bool(config.save),
+                        skippable=skippable and is_stim,
                     )
                 )
         return out
@@ -557,10 +588,14 @@ class AcquisitionPlan:
             if ev.kind == "position":
                 total += move_s
             elif ev.kind == "acquire":
-                total += (
+                per_frame = (
                     settle_s
                     + self.imaging_config(ev.experiment, ev.channel).exposure / 1000.0
                 )
+                tiles = getattr(self.schedule.positions[ev.experiment], "tiles", None)
+                n = len(tiles) if tiles else 1
+                # a grid: every tile is moved to, settled and exposed
+                total += n * per_frame + (n - 1) * move_s
         return total
 
     def over_budget(

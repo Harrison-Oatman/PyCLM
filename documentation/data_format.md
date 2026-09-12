@@ -7,11 +7,11 @@ formats are available, selected in `pyclm_config.toml`:
 ```toml
 [output]
 format = "ome-zarr"          # "ome-zarr" (default) or "hdf5"
-pattern_policy = "on_change" # ome-zarr only: "on_change", "all", or "none"
+pattern_policy = "on_change" # ome-zarr only: "on_change", "imaging", or "none"
 export_imagej = true         # write ImageJ hyperstacks when the run ends
 ```
 
-| | `ome-zarr` (format 2) | `hdf5` (format 1) |
+| | `ome-zarr` (format 3) | `hdf5` (format 1) |
 |---|---|---|
 | Output per experiment | `<experiment>.zarr/` folder | `<experiment>.hdf5` file |
 | Opens without PyCLM in | Fiji, napari, QuPath, Python (`zarr`, `dask`) | Python (`h5py`) only; layout is PyCLM-specific |
@@ -57,14 +57,16 @@ it is moved on its own.
 ```
 bar10.pos1.zarr/
 ├── .zattrs                       pyclm: format, plan, experiment and schedule metadata,
-│                                 affine_transform, slm_shape, groups, routing, current_t
+│                                 affine_transform, slm_shape, camera_roi, grid, groups, routing, current_t
 ├── imaging/                      one OME-NGFF image per cadence group
 │   ├── .zattrs                   multiscales (axes t, c, y, x; time scale in seconds), omero
 │   ├── 0/                        (T, C, Y, X) uint16, one compressed chunk per frame
 │   ├── labels/segmentation/0/    (T, C, Y, X) uint16 label images, if segmentation is saved
 │   ├── labels/<name>/0/          the same for each named [segmentation.<name>] table
 │   └── labels/tracks/0/          (T, C, Y, X) uint32 tracked labels, if tracking is saved
-└── patterns/dmd/0/               (N, H_slm, W_slm) uint8 DMD patterns, one per distinct pattern
+├── patterns/camera/0/            (N, H, W) uint8 patterns as the method returned them (camera
+│                                 coordinates at the stimulation binning, within the camera ROI)
+└── patterns/dmd/0/               (M, H_slm, W_slm) uint8 DMD images, one per distinct pattern
 ```
 
 ### Cadence groups
@@ -91,24 +93,56 @@ is the last channel of the group of its own cadence.
 
 ### Patterns
 
-`patterns/dmd/0` holds the DMD-space patterns that were uploaded to the
-light modulator. With `pattern_policy = "on_change"` (default) each distinct
-pattern is stored once; the frames table records which pattern was in force
-at every stimulation event. In a closed-loop experiment this is one pattern
+Patterns are stored in both coordinate systems. `patterns/camera/0` holds
+what the pattern method returned: values 0–255 (from the method's 0–1
+floats), in camera coordinates at the stimulation binning, within the
+camera ROI, so it overlays the frames directly; this is what the viewer and
+the ImageJ export draw. `patterns/dmd/0` holds the image the light
+modulator was given, the camera pattern warped through the affine. For a
+plain experiment the two arrays are parallel (entry *i* of one is entry *i*
+of the other); the frames table's `pattern_index` points into the camera
+array and `dmd_index` into the DMD array. (For a grid experiment the DMD
+array has one image per tile: see the grid section.) The `patterns/dmd`
+attributes list `pattern_ids`, the `camera_ids` each DMD image came from,
+and `tiles`.
+
+With `pattern_policy = "on_change"` (default) each distinct pattern is
+stored once and the frames table records which pattern was in force at
+every stimulation event. In a closed-loop experiment this is one pattern
 per imaging frame; in an open-loop experiment with a moving pattern it is
-one per timepoint, because there the pattern is the stimulus. `"all"` stores
-one entry per stimulation event regardless; `"none"` stores no patterns.
+one per timepoint, because there the pattern is the stimulus. Patterns
+compress well (a bar pattern is a few kilobytes, a few hundred cells some
+tens; a binned imaging frame is a few hundred kilobytes), so this costs
+little. `"imaging"` stores only the pattern in force at timepoints where an
+imaging frame of the experiment is saved (the other stimulation rows have
+no index); `"none"` stores no patterns. Stores written before format 3 have
+only `patterns/dmd/0`, indexed by `pattern_index`; `pyclm.io` reads both.
 Patterns compress extremely well: a full 1080-timepoint run costs a few
 megabytes.
 
 The pattern in camera coordinates is not stored; it is computed on export
 and in the GUI from the affine transform saved in the store's attributes.
 
+### Grids
+
+A grid experiment (a position made of tiles, see the first-time setup)
+stores its frames **stitched**: every group's frame is the whole grid, and
+the store's `pyclm.grid` attribute records rows, columns, the pitch in
+pixels, the tile shape and the tiles' order. The camera-space pattern is
+the stitched pattern the method returned; `patterns/dmd/0` holds one image
+per tile, the `rows × columns` images of one pattern stored contiguously
+in the tiles' order, so `dmd_index + k` is tile `k` and the `tiles`
+attribute says which row and column each is. The frames table's `x`, `y`
+are the grid's centre.
+
 ### The frames table
 
 `frames.parquet` (rewritten as the run proceeds) and `frames.csv` (written
-at the end) have one row per acquired frame (`kind = "frame"`) and one row
-per stimulation event (`kind = "stim_event"`), for all experiments in the
+at the end) have one row per acquired frame (`kind = "frame"`), one row
+per stimulation event (`kind = "stim_event"`), and one row per planned
+frame the microscope skipped (`kind = "skipped"`: only the stimulation
+frame was due at the position and its pattern was blank, so neither the
+stage move nor the exposure happened), for all experiments in the
 directory:
 
 | Column | Meaning |
@@ -121,7 +155,7 @@ directory:
 | `scheduled_at`, `completed_at` | wall-clock timestamps (ISO 8601) |
 | `exposure_ms`, `binning`, `pixel_size_um` | acquisition settings |
 | `x`, `y`, `z`, `pfs_offset` | stage position |
-| `pattern_id`, `pattern_index` | the pattern in force (index into `patterns/dmd/0`) |
+| `pattern_id`, `pattern_index`, `dmd_index` | the pattern in force: its id, its index into `patterns/camera/0`, and into `patterns/dmd/0` |
 | `<device>-<property>`, `<config group>` | one extra column per setting a pattern method changed during the run: the value in force on that frame, empty before the first change (see the events table) |
 
 ### The tracks table
@@ -153,9 +187,10 @@ experiments in the directory: a setting a pattern method changed
 timepoint the request was made at, the timepoint it applied from, the old
 and the new value, and `status` = `applied` or `refused` with the reason),
 a focus-lock correction (`z_correction`), a timepoint that finished more
-than one interval late (`late`), and a failed acquisition
-(`acquisition_error` with the error text), and every command from the
-control window or a script (`command`, with the settings it caused as
+than one interval late (`late`), a failed acquisition (`acquisition_error`
+with the error text), a position the microscope skipped because only its
+stimulation frame was due and the pattern was blank (`position_skipped`),
+and every command from a script (`command`, with the settings it caused as
 further rows). `source` says who asked: `pattern` (a method during
 `generate`) or `command`. `pyclm.io` exposes it as `exp.events`.
 
@@ -166,7 +201,9 @@ end: the current timepoint and total, elapsed seconds, per experiment the
 last acknowledged timepoint with its lateness and error count, how many
 settings were applied and refused, the experiment the microscope last
 acknowledged (`current_experiment`), whether the run is `paused` or
-`stopping`, pending and applied commands, and process health (errors per
+`stopping`, pending and applied commands, how many planned frames were
+`skipped` (blank pattern, stimulation only; also per experiment), and
+process health (errors per
 process, frames nobody consumed, frames the writer dropped). The live GUI
 shows one line from it; any script can read it to watch a run.
 
@@ -193,7 +230,7 @@ store = zarr.open_group("bar10.pos1.zarr", mode="r")
 img = store["imaging/0"]           # (T, C, Y, X)
 frame = img[3, 0]                  # slot 3 of channel 0 as a numpy array
 labels = store["imaging/labels/segmentation/0"][3, 0]
-patterns = store["patterns/dmd/0"] # (N, H, W)
+patterns = store["patterns/camera/0"] # (N, H, W) as the method returned them; patterns/dmd/0 as the DMD saw them
 info = store.attrs["pyclm"]        # plan YAML, groups, affine transform, ...
 ```
 

@@ -16,11 +16,40 @@ from .kinds import DEFAULT_SEGMENTATION, seg_kind
 
 
 class EventSLMPattern:
-    def __init__(self, event_id, pattern, pattern_unique_id=0):
-        self.event_id = event_id
-        self.pattern = pattern
+    """
+    The SLM buffer's reply to an update-pattern handshake: the DMD image to
+    apply, its id, and the camera-space pattern (uint8, at the stimulation
+    binning) it was made from, for the record.
+    """
 
+    def __init__(
+        self,
+        event_id,
+        pattern,
+        pattern_unique_id=0,
+        camera_pattern=None,
+        dmd_ids=None,
+    ):
+        self.event_id = event_id
+        # one DMD image, or a list of them (one per tile of a grid experiment)
+        self.pattern = pattern
         self.pattern_unique_id = pattern_unique_id
+        self.camera_pattern = camera_pattern
+        # the per-tile DMD image ids of a grid experiment, else None
+        self.dmd_ids = dmd_ids
+
+
+class SkippedAcquisition:
+    """
+    A planned frame the microscope did not take: the position's only
+    acquisition was the stimulation frame and the pattern was blank. The
+    Manager hands it to the writer so the timepoint still completes.
+    """
+
+    kind = "skipped"
+
+    def __init__(self, event: AcquisitionEvent):
+        self.event = event
 
 
 class GenericData:
@@ -42,7 +71,10 @@ class AcquisitionData(GenericData):
 
 
 class StimulationData(AcquisitionData):
-    """A camera frame taken during stimulation, with the DMD pattern that was applied."""
+    """
+    A camera frame taken during stimulation, with the DMD pattern that was
+    applied and, when known, the camera-space pattern it came from.
+    """
 
     def __init__(
         self,
@@ -50,10 +82,15 @@ class StimulationData(AcquisitionData):
         data: np.ndarray,
         dmd_pattern: np.ndarray,
         pattern_id,
+        camera_pattern: np.ndarray | None = None,
+        dmd_ids=None,
     ):
         super().__init__(event, data)
+        # one DMD image, or a list of them (one per tile of a grid experiment)
         self.dmd_pattern = dmd_pattern
         self.pattern_id = pattern_id
+        self.camera_pattern = camera_pattern
+        self.dmd_ids = dmd_ids
 
 
 class SegmentationData(AcquisitionData):
@@ -95,11 +132,11 @@ class TrackingData(AcquisitionData):
 
 
 class CameraPattern(GenericData):
-    def __init__(self, experiment_name, data: np.ndarray, slm_coords=False, binning=1):
+    """A pattern in camera coordinates (0-1 floats at ``binning``) from a pattern method."""
+
+    def __init__(self, experiment_name, data: np.ndarray, binning=1):
         super().__init__(data)
 
         self.experiment = experiment_name
         self.pattern_id = uuid4()
-
-        self.slm_coords = slm_coords
         self.binning = binning

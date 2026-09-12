@@ -29,7 +29,7 @@ def core_with(shape=(16, 16)):
     return core
 
 
-def acquire(plan, name, t, channel, image, pattern=None, pattern_id=None):
+def acquire(plan, name, t, channel, image, pattern=None, pattern_id=None, camera=None):
     """Build the data object the microscope would deliver for one planned frame."""
     ev = next(
         e
@@ -50,7 +50,7 @@ def acquire(plan, name, t, channel, image, pattern=None, pattern_id=None):
     )
     event.completed_time = 1_700_000_000 + t + 0.5
     if ev.is_stim:
-        return StimulationData(event, image, pattern, pattern_id)
+        return StimulationData(event, image, pattern, pattern_id, camera_pattern=camera)
     return AcquisitionData(event, image)
 
 
@@ -88,7 +88,11 @@ def test_cadence_groups_saved_stimulation_frame():
 
 # ------------------------------------------------------------- zarr writer
 def write_run(
-    tmp_path, pattern_policy="on_change", segmentation=False, save_stim=False
+    tmp_path,
+    pattern_policy="on_change",
+    segmentation=False,
+    save_stim=False,
+    distinct_ids=False,
 ):
     exp = make_experiment("exp.00", every_t=2, stim_every_t=1)
     exp.stimulation.save = save_stim
@@ -100,9 +104,11 @@ def write_run(
     layers = writer.open(plan, core, tmp_path, AFFINE, SLM)
 
     pats = [np.full(SLM, v, np.uint8) for v in (1, 2, 3)]
+    cams = [np.full((16, 16), v, np.uint8) for v in (1, 2, 3)]
     for t in range(4):
         # stimulation every t; the pattern only changes at t=0 and t=2
-        pid = "p0" if t < 2 else "p2"
+        # (or every t when distinct_ids, to tell the policies apart)
+        pid = f"p{t}" if distinct_ids else ("p0" if t < 2 else "p2")
         writer.write_frame(
             acquire(
                 plan,
@@ -112,6 +118,7 @@ def write_run(
                 np.full((16, 16), 9, np.uint16),
                 pats[0 if t < 2 else 2],
                 pid,
+                cams[0 if t < 2 else 2],
             )
         )
         if t % 2 == 0:
@@ -134,7 +141,7 @@ def test_zarr_layout_and_readback(tmp_path):
 
     g = zarr.open_group(str(root), mode="r")
     meta = g.attrs["pyclm"]
-    assert meta["format"] == 2
+    assert meta["format"] == 3
     assert meta["ngff_version"] == "0.4"
     assert meta["groups"]["imaging"]["every_t"] == 2
     assert meta["current_t"] == 3
@@ -152,16 +159,20 @@ def test_zarr_layout_and_readback(tmp_path):
     assert g["imaging"].attrs["omero"]["channels"][0]["label"] == "545"
     assert g["imaging/labels/segmentation/0"][1, 0].max() == 3
 
-    # pattern saved on change: two distinct ids across four stimulation events
+    # pattern saved on change: two distinct ids across four stimulation events,
+    # in both spaces
     assert g["patterns/dmd/0"].shape == (2, *SLM)
     assert g["patterns/dmd"].attrs["pyclm"]["pattern_ids"] == ["p0", "p2"]
+    assert g["patterns/dmd"].attrs["pyclm"]["camera_ids"] == ["p0", "p2"]
+    assert g["patterns/camera/0"].shape == (2, 16, 16)
+    assert g["patterns/camera"].attrs["pyclm"]["pattern_ids"] == ["p0", "p2"]
 
     # frames table: 4 stimulation events + 2 frames, parquet and csv
     assert (tmp_path / "frames.parquet").exists()
     assert (tmp_path / "frames.csv").exists()
 
     exp = pio.open(root)
-    assert exp.format == 2
+    assert exp.format == 3
     assert exp.name == "exp.00"
     grp = exp.groups["imaging"]
     assert grp.acquired() == [0, 1]
@@ -171,19 +182,31 @@ def test_zarr_layout_and_readback(tmp_path):
     assert exp.current_t == 3
     assert exp.pattern_at(1).max() == 1
     assert exp.pattern_at(3).max() == 3
+    assert exp.camera_pattern_at(1).max() == 1
+    assert exp.camera_pattern_at(3).max() == 3
+    assert exp.camera_pattern_at(3).shape == (16, 16)
+    assert (
+        exp.frames["dmd_index"].to_pylist() == exp.frames["pattern_index"].to_pylist()
+    )
     assert exp.frames.num_rows == 6
     assert set(exp.frames["kind"].to_pylist()) == {"stim_event", "frame"}
     assert np.allclose(exp.affine_transform, AFFINE)
 
 
-def test_zarr_pattern_policy_all_and_none(tmp_path):
-    write_run(tmp_path / "all", pattern_policy="all")
-    assert (
-        zarr.open_array(
-            str(tmp_path / "all" / "exp.00.zarr" / "patterns/dmd/0"), mode="r"
-        ).shape[0]
-        == 4
-    )
+def test_zarr_pattern_policy_imaging_and_none(tmp_path):
+    # four distinct patterns, imaging frames saved at t = 0 and 2 only
+    write_run(tmp_path / "change", pattern_policy="on_change", distinct_ids=True)
+    write_run(tmp_path / "imaging", pattern_policy="imaging", distinct_ids=True)
+    n = lambda d: zarr.open_array(
+        str(tmp_path / d / "exp.00.zarr" / "patterns/dmd/0"), mode="r"
+    ).shape[0]
+    assert n("change") == 4
+    assert n("imaging") == 2
+    exp = pio.open(tmp_path / "imaging" / "exp.00.zarr")
+    rows = exp.frames.to_pylist()
+    stim = {r["t"]: r["pattern_index"] for r in rows if r["kind"] == "stim_event"}
+    assert stim == {0: 0, 1: None, 2: 1, 3: None}
+    assert exp.camera_pattern_at(1).max() == 1  # the one in force, from t = 0
     write_run(tmp_path / "none", pattern_policy="none")
     assert not (tmp_path / "none" / "exp.00.zarr" / "patterns").exists()
     exp = pio.open(tmp_path / "none" / "exp.00.zarr")
@@ -242,6 +265,12 @@ def test_hdf5_v1_reader_and_export(tmp_path):
                 acquire(plan, "exp.00", t, "545", np.full((16, 16), t + 1, np.uint16))
             )
     writer.close()
+
+    import h5py
+
+    with h5py.File(tmp_path / "exp.00.hdf5", "r", swmr=True) as f:
+        assert f["00000/stim_aq/dmd"].compression == "gzip"  # patterns compress ~50x
+        assert f["00000/channel_545/data"].compression is None
 
     exp = pio.open(tmp_path / "exp.00.hdf5")
     assert exp.format == 1

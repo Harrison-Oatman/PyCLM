@@ -99,7 +99,10 @@ class EventDoneMessage(Message):
 
     message = "event_done"
 
-    def __init__(self, event: AcquisitionEvent, error: str | None = None):
+    def __init__(
+        self, event: AcquisitionEvent, error: str | None = None, skipped: bool = False
+    ):
+        self.event = event
         self.event_id = event.id
         self.experiment_name = event.experiment_name
         self.index = dict(event.index)
@@ -107,6 +110,8 @@ class EventDoneMessage(Message):
         self.scheduled_time = event.scheduled_time
         self.completed_time = event.completed_time
         self.error = error
+        # the microscope skipped the exposure (stimulation only, blank pattern)
+        self.skipped = skipped
 
     @property
     def t_index(self) -> int:

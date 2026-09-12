@@ -28,7 +28,7 @@ from ..plan import AcquisitionPlan
 logger = logging.getLogger(__name__)
 
 STORAGE_FORMATS = ("hdf5", "ome-zarr")
-PATTERN_POLICIES = ("on_change", "all", "none")
+PATTERN_POLICIES = ("on_change", "imaging", "none")
 
 
 @dataclass(frozen=True)
@@ -133,8 +133,15 @@ def cadence_groups(plan: AcquisitionPlan, experiment: str) -> list[CadenceGroup]
     return groups
 
 
-def image_shape(core: MicroscopeCoreInterface, binning: int = 1) -> tuple[int, int]:
-    """(height, width) of a frame at the given binning, from the camera ROI."""
+def image_shape(
+    core: MicroscopeCoreInterface, binning: int = 1, geometry=None
+) -> tuple[int, int]:
+    """
+    (height, width) of a frame at the given binning, from the camera ROI, or
+    of the stitched frame of a grid position (``geometry``).
+    """
+    if geometry is not None:
+        return tuple(int(v) for v in geometry.shape(binning))
     roi = core.getROI()
     h, w = roi[3], roi[2]
     return (h // binning, w // binning)
@@ -199,6 +206,13 @@ class FrameWriter(ABC):
 
     @abstractmethod
     def write_labels(self, data: SegmentationData) -> None: ...
+
+    def write_skipped(self, data) -> None:
+        """
+        A planned frame that will not arrive (``SkippedAcquisition``): record
+        it so the timepoint's progress does not wait for it. Optional.
+        """
+        return None
 
     def write_tracks(self, data) -> None:
         """Record tracking output. Writers that cannot store tracks log once and drop them."""

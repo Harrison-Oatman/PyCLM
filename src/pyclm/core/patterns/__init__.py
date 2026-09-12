@@ -25,15 +25,12 @@ from .pattern import (
     ExperimentState,
     PatternContext,
     PatternMethod,
-    PatternMethodReturnsSLM,
-    PatternReview,
 )
 from .static_patterns import CirclePattern, FullOnPattern
 
 known_models = {
     "circle": CirclePattern,
     "bar": BarPatternBase,
-    "pattern_review": PatternReview,
     "bar_bounce": BouncingBarPattern,
     "full_on": FullOnPattern,
     "rotate_ccw": RotateCcwModel,

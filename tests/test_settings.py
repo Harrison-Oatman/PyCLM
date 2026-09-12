@@ -254,6 +254,7 @@ def test_acknowledgements_lateness_errors_and_status(tmp_path):
         "last_t": 2,
         "lateness_s": 0.0,
         "errors": 1,
+        "skipped": 0,
     }
     assert status["health"] == {"errors": {"microscope": 0}}
     assert status["done"] is False

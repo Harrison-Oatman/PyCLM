@@ -37,7 +37,7 @@ import numpy as np
 from qtpy import QtCore, QtWidgets
 
 from pyclm import io as pyclm_io
-from pyclm.io.export import pattern_to_camera
+from pyclm.io.export import pattern_overlay
 
 from .widgets import RunOverview
 
@@ -256,11 +256,10 @@ class LiveExperiment:
                 if self.exp.affine_transform is not None:
                     pstack = self.stacks.pattern(gkey, g.every_t, g.t_delay, (1, 1))
                     if (self.index, i) not in pstack.loaded:
-                        pat = self.exp.pattern_at(g.global_t(i))
-                        if pat is not None:
-                            overlay = pattern_to_camera(
-                                pat, self.exp.affine_transform, frame.shape, g.binning
-                            )
+                        overlay = pattern_overlay(
+                            self.exp, g, frame.shape, g.global_t(i)
+                        )
+                        if overlay is not None:
                             pstack.put(self.index, i, overlay)
         return changed
 

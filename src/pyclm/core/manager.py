@@ -24,13 +24,14 @@ from cv2 import warpAffine
 from pyclm.core.pattern_process import RequestPattern
 
 from .base_process import BaseProcess
-from .datatypes import CameraPattern, EventSLMPattern
+from .datatypes import CameraPattern, EventSLMPattern, SkippedAcquisition
 from .events import (
     AcquisitionEvent,
     UpdatePatternEvent,
     UpdateStagePositionEvent,
 )
 from .experiments import ConfigGroup, DeviceProperty, Experiment
+from .grid import cut
 from .messages import (
     AcquisitionEventMessage,
     CloseMessage,
@@ -51,6 +52,21 @@ from .writer_process import MicroscopeOutbox, WriterProcess
 logger = logging.getLogger(__name__)
 
 __all__ = ["Manager", "MicroscopeOutbox", "SLMBuffer", "WriterProcess"]
+
+
+def compose_affine(affine, roi_offset=(0.0, 0.0), binning=1) -> np.ndarray:
+    """
+    The camera-to-SLM affine for a pattern expressed in a camera ROI at a
+    binning: ``affine`` is calibrated in full-frame unbinned pixels, so a
+    pattern pixel ``p`` sits at ``binning * p + roi_offset`` in that frame.
+    """
+    at = np.array(affine, dtype=np.float32)
+    ox, oy = roi_offset
+    if ox or oy:
+        at[:, 2] = at[:, 2] + at[:, :2] @ np.array([ox, oy], dtype=np.float32)
+    if binning != 1:
+        at[:, :2] = at[:, :2] * binning
+    return at
 
 
 class SLMBuffer(BaseProcess):
@@ -85,9 +101,20 @@ class SLMBuffer(BaseProcess):
         shape: tuple[int, int],
         affine_transform: np.ndarray[Any, np.float32],
         experiment_names: list[str],
+        roi=None,
+        grids: dict | None = None,
     ):
+        """
+        :param roi: the camera ROI ``(x, y, width, height)`` in unbinned pixels
+            the patterns are expressed in; the affine is calibrated in the
+            full frame, so the offset is composed into it
+        :param grids: ``{experiment: GridGeometry}`` for grid experiments, whose
+            (stitched) patterns are cut into one DMD image per tile
+        """
         self.slm_shape = shape
         self.affine_transform = np.array(affine_transform)
+        self.roi_offset = (0.0, 0.0) if roi is None else (float(roi[0]), float(roi[1]))
+        self.grids = dict(grids or {})
 
         assert affine_transform.shape == (2, 3), "Affine transform must be a 2x3 matrix"
 
@@ -96,30 +123,33 @@ class SLMBuffer(BaseProcess):
             slm_pattern = np.zeros(
                 self.slm_shape, dtype=np.uint8
             )  # Initialize a blank pattern
-            self.slm_patterns[name] = (
-                0,
-                slm_pattern,
-            )  # Store the pattern in the dictionary
+            # (pattern id, DMD image(s), camera-space uint8 pattern or None, DMD ids)
+            geom = self.grids.get(name)
+            if geom is None:
+                self.slm_patterns[name] = (0, slm_pattern, None, None)
+            else:
+                n = len(geom.tiles)
+                self.slm_patterns[name] = (
+                    0,
+                    [np.zeros(self.slm_shape, dtype=np.uint8) for _ in range(n)],
+                    None,
+                    [f"0:{k}" for k in range(n)],
+                )
 
         self.initialized = True
 
-    def pattern_to_slm(self, pattern: np.ndarray, slm_coords=False, binning=1):
+    def pattern_to_slm(self, pattern: np.ndarray, binning=1):
         """
         This function takes a pattern and applies the stored affine transformation
         :param pattern: np array of type float scaled from 0-1, in coordinates of camera
-        :param slm_coords: bool whether pattern is already in slm coordinate space
+        :param binning: the camera binning the pattern is at
         :return: at_slm_pattern: np array of type uint8, transformed to SLM coordinates
         """
         assert self.initialized, (
             "SLMBuffer must be initialized before converting patterns"
         )
 
-        if slm_coords:
-            return np.round(pattern).astype(np.uint8)
-
-        at = np.copy(self.affine_transform)
-        if binning != 1:
-            at[:, :2] = at[:, :2] * binning
+        at = compose_affine(self.affine_transform, self.roi_offset, binning)
 
         return warpAffine(
             np.round(pattern * 255).astype(np.uint8),
@@ -141,12 +171,35 @@ class SLMBuffer(BaseProcess):
 
         experiment_name = data.experiment
 
-        slm_pattern = self.pattern_to_slm(pattern, data.slm_coords, data.binning)
+        camera = np.round(np.clip(np.asarray(pattern, dtype=np.float32), 0, 1) * 255)
+        camera = camera.astype(np.uint8)
+        geom = self.grids.get(experiment_name)
+        if geom is None:
+            slm_pattern = self.pattern_to_slm(pattern, data.binning)
+            dmd_ids = None
+        else:
+            # the method returned the stitched pattern: one DMD image per tile
+            expected = geom.shape(data.binning)
+            if tuple(np.asarray(pattern).shape[:2]) != tuple(expected):
+                logger.warning(
+                    f"{experiment_name}: pattern shape {np.asarray(pattern).shape} "
+                    f"is not the stitched shape {expected}; cutting what fits"
+                )
+            slm_pattern = [
+                self.pattern_to_slm(tile, data.binning)
+                for tile in cut(pattern, geom, data.binning)
+            ]
+            dmd_ids = [f"{pattern_id}:{k}" for k in range(len(slm_pattern))]
 
         # Store the pattern in the dictionary
         if experiment_name in self.slm_patterns:
             # set the current pattern and id
-            self.slm_patterns[experiment_name] = (pattern_id, slm_pattern)
+            self.slm_patterns[experiment_name] = (
+                pattern_id,
+                slm_pattern,
+                camera,
+                dmd_ids,
+            )
         else:
             logger.warning(
                 f"Experiment name '{experiment_name}' not found in SLM patterns."
@@ -174,7 +227,13 @@ class SLMBuffer(BaseProcess):
 
                 pattern = self.slm_patterns[experiment_name]
 
-                data = EventSLMPattern(update_pattern_event_id, pattern[1], pattern[0])
+                data = EventSLMPattern(
+                    update_pattern_event_id,
+                    pattern[1],
+                    pattern[0],
+                    camera_pattern=pattern[2],
+                    dmd_ids=pattern[3],
+                )
 
                 self.to_microscope.put(data)
 
@@ -254,6 +313,7 @@ class Manager:
     ):
         self.plan = plan
         self.schedule = plan.schedule
+        self.skipped = 0
         self.experiments: dict[str, Experiment] = plan.schedule.experiments
         self.positions = plan.schedule.positions
         self.times = plan.schedule.times
@@ -455,9 +515,11 @@ class Manager:
         self.overrides.setdefault((name, channel), {})[change.column] = change.value
         return old
 
-    def construct_position_event_message(self, position, name):
+    def construct_position_event_message(self, position, name, **kwargs):
         self.msgout["microscope"].put(
-            UpdatePositionEventMessage(UpdateStagePositionEvent(position, name))
+            UpdatePositionEventMessage(
+                UpdateStagePositionEvent(position, name, **kwargs)
+            )
         )
 
     # ------------------------------------------------------------ commands
@@ -574,8 +636,25 @@ class Manager:
     # -------------------------------------------------- acknowledgements
     def handle_event_done(self, msg: EventDoneMessage):
         rec = self.acks.setdefault(msg.t_index, {}).setdefault(
-            msg.experiment_name, {"frames": 0, "errors": 0, "lateness_s": 0.0}
+            msg.experiment_name,
+            {"frames": 0, "errors": 0, "lateness_s": 0.0, "skipped": 0},
         )
+        if getattr(msg, "skipped", False):
+            rec["skipped"] = rec.get("skipped", 0) + 1
+            self.skipped += 1
+            self.event_log.record(
+                "position_skipped",
+                msg.experiment_name,
+                msg.channel,
+                None,
+                None,
+                None,
+                "skipped",
+                "only the stimulation frame was due and the pattern was blank",
+                msg.t_index,
+                msg.t_index,
+            )
+            return
         rec["frames"] += 1
         self.current_experiment = msg.experiment_name
         if msg.error:
@@ -620,15 +699,22 @@ class Manager:
         for name in self.plan.experiments:
             seen = [(t, recs[name]) for t, recs in self.acks.items() if name in recs]
             errors = sum(r["errors"] for _, r in seen)
+            skipped = sum(r.get("skipped", 0) for _, r in seen)
             if seen:
                 t_last, last = max(seen, key=lambda item: item[0])
                 experiments[name] = {
                     "last_t": t_last,
                     "lateness_s": round(last["lateness_s"], 3),
                     "errors": errors,
+                    "skipped": skipped,
                 }
             else:
-                experiments[name] = {"last_t": None, "lateness_s": None, "errors": 0}
+                experiments[name] = {
+                    "last_t": None,
+                    "lateness_s": None,
+                    "errors": 0,
+                    "skipped": 0,
+                }
         return {
             "t": self.current_t,
             "timepoints": self.plan.timepoints,
@@ -646,6 +732,7 @@ class Manager:
             "stopping": self.stopping,
             "pending_commands": self.pending_commands,
             "commands_applied": self.commands_applied,
+            "skipped": self.skipped,
             "experiments": experiments,
             "health": self.health() if self.health is not None else {},
         }
@@ -684,13 +771,22 @@ class Manager:
                 )
 
             case "position":
-                self.construct_position_event_message(self.positions[name], name)
+                self.construct_position_event_message(
+                    self.positions[name],
+                    name,
+                    index=ev.index,
+                    skippable_if_blank=ev.skippable,
+                )
 
             case "update_pattern":
                 cfg = self.plan.imaging_config(name, ev.channel)
                 upmsg = UpdatePatternEventMessage(
                     UpdatePatternEvent(
-                        name, cfg.get_config_groups(), cfg.get_device_properties()
+                        name,
+                        cfg.get_config_groups(),
+                        cfg.get_device_properties(),
+                        index=ev.index,
+                        skippable_if_blank=ev.skippable,
                     )
                 )
                 self.msgout["slm_buffer"].put(upmsg)
@@ -713,6 +809,7 @@ class Manager:
                     binning=cfg.binning,
                 )
                 event.overrides = dict(self.overrides.get((name, ev.channel), {}))
+                event.skippable_if_blank = ev.skippable
                 self.msgout["microscope"].put(AcquisitionEventMessage(event))
 
             case _:

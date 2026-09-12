@@ -57,8 +57,13 @@ class WriterProcess(PipelineProcess):
             }
             tracking = getattr(experiment, "tracking", None)
             record["tracks"] = bool(tracking is not None and tracking.save)
+            stim = plan.stim_channel(name)
             for channel in plan.channels(name):
                 subs.append(Subscription(self.name, name, channel, "raw", demand=False))
+                if channel == stim:
+                    subs.append(
+                        Subscription(self.name, name, channel, "skipped", demand=False)
+                    )
                 for kind, wanted in record.items():
                     if wanted:
                         subs.append(
@@ -108,7 +113,9 @@ class WriterProcess(PipelineProcess):
     # ------------------------------------------------------------ writing
     def write_data(self, data):
         kind = base_kind(getattr(data, "kind", "raw"))
-        if kind == "seg":
+        if kind == "skipped":
+            self.writer.write_skipped(data)
+        elif kind == "seg":
             self.writer.write_labels(data)
         elif kind == "tracks":
             self.writer.write_tracks(data)

@@ -227,6 +227,8 @@ context.last_pattern()              # the array generate() returned last time, o
 context.pattern_history(n=None)     # previous patterns, oldest first
 
 context.settings(channel_name)      # exposure, presets, device properties in force
+context.grid()                      # GridGeometry of a grid experiment (rows, columns,
+                                    # tile shape, pitch, tile order), None otherwise
 context.set_exposure(channel_name, ms)                 # change settings of this experiment
 context.set_property(channel_name, device, prop, value)  # from the next timepoint on
 ```
@@ -329,6 +331,26 @@ and warns once about the rest). To track the nuclei, set
 come from the same camera frame, so they line up pixel for pixel.
 
 ---
+
+## Grids and blank patterns
+
+**Grids.** When the position is a grid of tiles (MicroManager's Create
+Grid, see the first-time setup), the frames a method receives are the
+**stitched** frames and `self.pattern_shape` is the stitched shape, so a
+method written for one field works over the whole grid unchanged: its µm
+meshgrid spans the grid, its segmentation runs on the stitched image, and
+the pattern it returns is cut into one DMD image per tile by the SLM
+buffer. `context.grid()` returns the layout for methods that want per-tile
+logic (for example `geometry.tile_slices(row, col, self.binning)` for a
+tile's slice of the frame).
+
+**Blank patterns skip the position.** At a timepoint where only the
+stimulation frame is due at a position (the imaging channels have a longer
+cadence) and the method does not need that frame, a pattern of all zeros
+makes the microscope skip the stage move and the exposure altogether. The
+frame is recorded as `kind = "skipped"` in the frames table and the event
+in `events.parquet`. A programme-style method (see the red / far-red
+example) therefore costs no microscope time on its "off" steps.
 
 ## Changing settings from a pattern method
 

@@ -26,6 +26,7 @@ from .core import (
     WriterProcess,
 )
 from .core.base_process import PipelineProcess
+from .core.grid import geometry_for
 from .core.kinds import DEFAULT_SEGMENTATION, seg_name
 from .core.plan import PLAN_FILENAME, AcquisitionPlan
 from .core.position_mover import PositionMover
@@ -156,7 +157,12 @@ class Controller:
         slm_shape: tuple[int, int],
         affine_transform: np.ndarray,
         out_path: Path,
+        camera_roi=None,
     ):
+        """
+        :param camera_roi: ``[x, y, width, height]`` in unbinned pixels to set on
+            the camera before anything is measured; None leaves the camera as it is
+        """
         # refuse to run before any models are loaded if outputs already exist
         out_path = Path(out_path)
         planned = self.writer_process.writer.planned_paths(
@@ -182,6 +188,9 @@ class Controller:
                 )
 
         self.microscope.set_binning(1)
+        if camera_roi is not None:
+            self.core.setROI(*[int(v) for v in camera_roi])
+            logger.info(f"camera ROI set to {tuple(int(v) for v in camera_roi)}")
 
         camera_roi = ROI(*self.core.getROI())
         camera_resolution = self.core.getPixelSizeUm()
@@ -189,6 +198,22 @@ class Controller:
         self.camera_properties = CameraProperties(camera_roi, camera_resolution)
 
         logger.info(f"camera properties: {self.camera_properties}")
+
+        # grid positions: the tiles' layout in camera pixels, shared by the
+        # pattern process (stitched pattern shape), the SLM buffer (cutting)
+        # and the writer (stitched frame shape) through the position object
+        self.grids = {}
+        for name, position in schedule.positions.items():
+            geometry = geometry_for(position, camera_roi, camera_resolution)
+            position.geometry = geometry
+            if geometry is not None:
+                self.grids[name] = geometry
+                oy, ox = geometry.overlap(1)
+                logger.info(
+                    f"{name}: grid of {geometry.rows} x {geometry.columns} tiles, "
+                    f"stitched frame {geometry.shape(1)} px, overlap {oy} x {ox} px"
+                )
+        self.pattern.grids = self.grids
 
         self.pattern.initialize(self.camera_properties)
 
@@ -243,7 +268,11 @@ class Controller:
         )
         self.pattern.positions = schedule.positions
         self.slm_buffer.initialize(
-            slm_shape, affine_transform, schedule.experiment_names
+            slm_shape,
+            affine_transform,
+            schedule.experiment_names,
+            roi=camera_roi,
+            grids=self.grids,
         )
         self.microscope.declare_slm()
         self.writer_process.base_path = out_path

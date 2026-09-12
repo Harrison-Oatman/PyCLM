@@ -73,7 +73,9 @@ Experiments are configured entirely via TOML files in an experiment directory:
 
 **Custom tracking methods:** Subclass `TrackingMethod` (`core/tracking/tracking.py`, `track(labels, t, pixel_size_um) -> (relabelled, rows)`). Register with `Controller.register_tracking_method(name, cls)`; enable with a `[tracking]` table in the experiment TOML.
 
-**Virtual microscope (dry run):** `--dry` flag activates `SimulatedMicroscopeCore` + `TimeSeriesImageSource` (TIFs in the experiment directory, mapped by `dry_run.yml`, a position list, or TIF names; `dry_run.yml` may also set `pixel_size_um` and `binning` of the TIFs, and the Controller scales the affine by that binning). Useful for testing pattern logic without hardware.
+**Virtual microscope (dry run):** `--dry` flag activates `SimulatedMicroscopeCore` + `TimeSeriesImageSource` (TIFs in the experiment directory, mapped by `dry_run.yml`, a position list, or TIF names; `dry_run.yml` may also set `pixel_size_um` and `binning` of the TIFs, and the Controller scales the affine by that binning; the core reports the ROI `ROI_FACTOR` = 4 times the TIF; a snap at a stage offset from the listed position takes a window of a larger TIF, which is how grids dry-run). Useful for testing pattern logic without hardware.
+
+**Grids and skipping (Stage 6):** a MicroManager Create Grid position list folds into one `MicroscopePosition` per grid (`core/grid.py`: `group_tiles`, `GridGeometry`, `stitch`, `cut`); the Controller sets `position.geometry`; the microscope visits tiles inside one acquisition event and publishes a stitched frame; the SLM buffer cuts the stitched pattern into per-tile DMD images. Per position the Manager emits request_pattern, update_pattern, position, acquisitions; a blank pattern at a stimulation-only visit makes the microscope skip the move and exposure (`skippable` flags, `SkippedAcquisition` on the `skipped` kind). `camera_roi` in `pyclm_config.toml` is composed into the affine (`compose_affine`). Patterns are stored in camera and DMD space (format 3).
 
 ### Data Output
 

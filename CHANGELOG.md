@@ -241,6 +241,46 @@ becomes a tagged release.
   viewer already handled a stimulation-only group), `pyclm check` reports
   it, and `pyclm preview` probes with the stimulation frame.
 
+### Stage 6 — grids, skipping idle positions, the camera ROI, patterns in both spaces
+
+- **Grid acquisition** from MicroManager's Create Grid: the tiles of a grid
+  (labelled `<prefix>-<n>-<col>_<row>`, with `GridRow` / `GridCol`) fold
+  into one position at their centre. Every channel visits all the tiles at
+  each timepoint (through the configured position mover, so PFS locks per
+  tile) and publishes one stitched frame; the pattern method's
+  `pattern_shape` is the stitched frame and its pattern is cut into one DMD
+  image per tile. Stitching is placement by row and column (MicroManager's
+  pixel-size affine makes tiles abut), no registration. `pyclm check`
+  describes each grid and, with `camera_roi` and `--pixel-size-um`, whether
+  the tiles abut. Grids need OME-Zarr. `context.grid()` for methods.
+- **Skipping idle positions.** A position with nothing due was already
+  skipped; now a position whose only due acquisition is the stimulation
+  frame is skipped when the pattern the SLM handshake delivers is blank and
+  the method does not need that frame: no stage move, no exposure. The
+  handshake now precedes the stage move (per position: request pattern,
+  update pattern, position, acquisitions). Skipped frames are rows of
+  `kind = "skipped"`, `position_skipped` events, `skipped` in `status.json`.
+- **Camera ROI**: `camera_roi = [x, y, w, h]` in `pyclm_config.toml`, set
+  at run start and by preview; the affine stays in full-frame coordinates
+  and PyCLM composes the offset. `pyclm check` prints the DMD's footprint
+  on the camera and warns when the ROI exceeds it.
+- **Patterns in both spaces** (OME-Zarr format 3): `patterns/camera/0`,
+  what the method returned (stimulation binning, ROI frame, stitched for
+  grids), alongside `patterns/dmd/0`; `pattern_index` now points into the
+  camera array and the new `dmd_index` into the DMD array (per-tile entries
+  for grids, ids and tiles in the attrs). `pattern_policy` gains `imaging`
+  (store only at timepoints with a saved imaging frame) and loses `all`.
+  HDF5 format 1 keeps its layout and its `dmd` datasets are now gzip
+  compressed, which is where most of a long run's bytes went. The viewer
+  and the export overlay the camera-space pattern directly.
+- **Removed**: the `pattern_review` method (`PatternReview`), and with it
+  `PatternMethodReturnsSLM` and the SLM-coordinates return path; every
+  method returns camera coordinates.
+- Z-stacks were designed (a per-channel projection to the pipeline, the
+  stack beside it) and dropped before implementation: the geometry would
+  have needed a second MicroManager export. The design is in the Stage 6
+  notes should it return.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,
@@ -274,6 +314,21 @@ becomes a tagged release.
   of `KeyError`. `run_pyclm(..., check=True, force=False)` runs the check
   first and raises `pyclm.check.CheckFailed` on errors.
 - The `pyclm` entry point is `pyclm.cli.main` with subcommands.
+- OME-Zarr stores are format 3: `pattern_index` indexes `patterns/camera/0`
+  (it indexed `patterns/dmd/0` in format 2; `pyclm.io` reads both);
+  `pattern_policy = "all"` is gone (`on_change`, `imaging`, `none`).
+- The Manager emits `update_pattern` before `position` at each position;
+  `PlannedEvent` and the three control events carry `skippable`;
+  `EventDoneMessage.skipped`; a `skipped` routing kind (`SkippedAcquisition`)
+  that the writers subscribe to for the stimulation channel;
+  `FrameWriter.write_skipped`.
+- `MicroscopePosition` gained `tiles`, `grid`, `grid_rc`, `geometry`;
+  `positions_from_pos` folds tile-creator entries; `image_shape(core,
+  binning, geometry)`; `SLMBuffer.initialize(..., roi, grids)`;
+  `EventSLMPattern` and `StimulationData` carry `camera_pattern` and
+  `dmd_ids`, and a grid's DMD pattern is a list.
+- `PatternReview` / `PatternMethodReturnsSLM` / `CameraPattern.slm_coords`
+  removed.
 - pymmcore and the Micro-Manager device adapters must share a device
   interface. `uv.lock` is held at interface 71 by `[tool.uv]
   constraint-dependencies` in `pyproject.toml`; delete them and `uv lock`

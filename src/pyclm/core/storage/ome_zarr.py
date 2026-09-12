@@ -48,7 +48,7 @@ from .base import (
 
 logger = logging.getLogger(__name__)
 
-STORAGE_FORMAT_VERSION = 2
+STORAGE_FORMAT_VERSION = 3
 NGFF_VERSION = "0.4"
 FRAMES_COLUMNS = (
     "experiment",
@@ -67,6 +67,7 @@ FRAMES_COLUMNS = (
     "pfs_offset",
     "pattern_id",
     "pattern_index",
+    "dmd_index",
     "pixel_size_um",
 )
 TRACKS_COLUMNS = (
@@ -156,8 +157,15 @@ class _ExperimentStore:
         # (cadence group, segmentation name) -> label array
         self.labels: dict[tuple[str, str], zarr.Array] = {}
         self.tracks: dict[str, zarr.Array] = {}
-        self.pattern_array: zarr.Array | None = None
-        self.pattern_ids: list[str] = []
+        self.pattern_array: zarr.Array | None = None  # patterns/dmd/0
+        self.pattern_ids: list[str] = []  # one per DMD image
+        self.dmd_camera_ids: list[
+            str
+        ] = []  # the camera pattern each DMD image came from
+        self.dmd_tiles: list = []  # [row, col] of the tile, None for a plain experiment
+        self.camera_array: zarr.Array | None = None  # patterns/camera/0
+        self.camera_ids: list[str] = []
+        self.geometry = None  # GridGeometry of a grid experiment
         self.written: set[tuple[int, str]] = set()  # (t, channel) frames written
         self.written_groups: set[str] = set()  # groups with at least one frame
         self.current_t = -1
@@ -242,12 +250,14 @@ class OMEZarrWriter(FrameWriter):
         plan = self.plan
         experiment = plan.schedule.experiments[exp_name]
         groups = cadence_groups(plan, exp_name)
+        geometry = getattr(plan.schedule.positions.get(exp_name), "geometry", None)
         root = zarr.open_group(str(path), mode="w", zarr_format=2)
         store = _ExperimentStore(root, groups)
+        store.geometry = geometry
         layers = []
 
         for g in groups:
-            h, w = image_shape(core, g.binning)
+            h, w = image_shape(core, g.binning, geometry)
             px = self._pixel_size_um * g.binning
             img_group = root.create_group(g.name)
             img_group.attrs.update(
@@ -297,11 +307,30 @@ class OMEZarrWriter(FrameWriter):
 
         if slm_shape is not None and self.pattern_policy != "none":
             patterns = root.create_group("patterns/dmd")
-            patterns.attrs["pyclm"] = {"policy": self.pattern_policy, "pattern_ids": []}
+            patterns.attrs["pyclm"] = {
+                "policy": self.pattern_policy,
+                "pattern_ids": [],
+                "camera_ids": [],
+                "tiles": [],
+            }
             store.pattern_array = patterns.create_array(
                 "0",
                 shape=(0, int(slm_shape[0]), int(slm_shape[1])),
                 chunks=(1, int(slm_shape[0]), int(slm_shape[1])),
+                dtype="uint8",
+                compressors=_compressor(),
+                fill_value=0,
+            )
+            # the camera-space pattern the method returned, at the stimulation
+            # binning in the ROI frame; resized to the first pattern if the
+            # camera reports a different ROI (as the image groups are)
+            ch, cw = image_shape(core, experiment.stimulation.binning, geometry)
+            camera = root.create_group("patterns/camera")
+            camera.attrs["pyclm"] = {"policy": self.pattern_policy, "pattern_ids": []}
+            store.camera_array = camera.create_array(
+                "0",
+                shape=(0, int(ch), int(cw)),
+                chunks=(1, int(ch), int(cw)),
                 dtype="uint8",
                 compressors=_compressor(),
                 fill_value=0,
@@ -319,6 +348,8 @@ class OMEZarrWriter(FrameWriter):
             if affine_transform is None
             else np.asarray(affine_transform, dtype=float).tolist(),
             "slm_shape": None if slm_shape is None else [int(v) for v in slm_shape],
+            "camera_roi": [int(v) for v in core.getROI()],
+            "grid": None if geometry is None else geometry.as_dict(),
             "pattern_policy": self.pattern_policy,
             "routing": self.routing,
             "groups": {
@@ -388,6 +419,7 @@ class OMEZarrWriter(FrameWriter):
         channel,
         pattern_id=None,
         pattern_index=None,
+        dmd_index=None,
     ) -> dict:
         ev = data.event
         pos = ev.position.as_dict()
@@ -408,6 +440,7 @@ class OMEZarrWriter(FrameWriter):
             "pfs_offset": pos.get("PFSOffset", pos.get("autofocus_offset")),
             "pattern_id": None if pattern_id is None else str(pattern_id),
             "pattern_index": pattern_index,
+            "dmd_index": dmd_index,
             "pixel_size_um": None
             if ev.pixel_width_um is None
             else float(ev.pixel_width_um),
@@ -427,10 +460,13 @@ class OMEZarrWriter(FrameWriter):
             plan = self.plan
 
             pattern_index = None
+            dmd_index = None
             pattern_id = None
             if isinstance(data, StimulationData):
                 pattern_id = data.pattern_id
-                pattern_index = self._record_pattern(store, data)
+                pattern_index, dmd_index = self._record_pattern(
+                    store, data, ev.experiment_name, ev.t_index
+                )
                 self.rows.append(
                     self._row(
                         data,
@@ -440,6 +476,7 @@ class OMEZarrWriter(FrameWriter):
                         channel,
                         pattern_id,
                         pattern_index,
+                        dmd_index,
                     )
                 )
 
@@ -461,7 +498,14 @@ class OMEZarrWriter(FrameWriter):
                     store.written_groups.add(g.name)
                     self.rows.append(
                         self._row(
-                            data, "frame", g.name, i, channel, pattern_id, pattern_index
+                            data,
+                            "frame",
+                            g.name,
+                            i,
+                            channel,
+                            pattern_id,
+                            pattern_index,
+                            dmd_index,
                         )
                     )
 
@@ -472,6 +516,22 @@ class OMEZarrWriter(FrameWriter):
         except Exception as e:
             self.error_count += 1
             logger.error(f"Failed to write frame: {e}", exc_info=True)
+
+    def write_skipped(self, data):
+        """A stimulation frame the microscope skipped: a row, and the slot counts as done."""
+        try:
+            ev = data.event
+            store = self.stores.get(ev.experiment_name)
+            if store is None:
+                return
+            channel = ev.index.get("c")
+            self.rows.append(self._row(data, "skipped", None, None, channel))
+            store.written.add((ev.t_index, channel))
+            self._update_progress(store, ev.experiment_name, ev.t_index)
+            self._write_frames_table()
+        except Exception as e:
+            self.error_count += 1
+            logger.error(f"Failed to record a skipped frame: {e}", exc_info=True)
 
     def _fit_group_shape(self, store: _ExperimentStore, g: CadenceGroup, shape):
         """
@@ -495,23 +555,72 @@ class OMEZarrWriter(FrameWriter):
             lab.resize((lab.shape[0], lab.shape[1], *shape))
 
     def _record_pattern(
-        self, store: _ExperimentStore, data: StimulationData
-    ) -> int | None:
+        self, store: _ExperimentStore, data: StimulationData, exp_name: str, t: int
+    ) -> tuple[int | None, int | None]:
+        """
+        Store the pattern of a stimulation event according to the policy.
+        Returns ``(camera index, dmd index)`` into ``patterns/camera/0`` and
+        ``patterns/dmd/0``; None where nothing was stored.
+        """
         if store.pattern_array is None or self.pattern_policy == "none":
-            return None
+            return None, None
+        if self.pattern_policy == "imaging" and not any(
+            ds.save and not ds.is_stim for ds in self.plan.datasets_at(exp_name, t)
+        ):
+            return None, None
         pid = str(data.pattern_id)
-        if self.pattern_policy == "on_change" and pid in store.pattern_ids:
-            return store.pattern_ids.index(pid)
-        pattern = np.asarray(data.dmd_pattern, dtype=np.uint8)
-        arr = store.pattern_array
+
+        # DMD image (one per tile for a grid experiment, contiguous in tile order)
+        if isinstance(data.dmd_pattern, list | tuple):
+            images = list(data.dmd_pattern)
+            ids = list(data.dmd_ids or [f"{pid}:{k}" for k in range(len(images))])
+            tiles = (
+                [list(rc) for rc in store.geometry.tiles]
+                if store.geometry is not None
+                else [None] * len(images)
+            )
+        else:
+            images, ids, tiles = [data.dmd_pattern], [pid], [None]
+        if ids[0] in store.pattern_ids:
+            dmd_index = store.pattern_ids.index(ids[0])
+        else:
+            dmd_index = None
+            for image, dmd_id, tile in zip(images, ids, tiles, strict=True):
+                n = self._append(store.pattern_array, image)
+                dmd_index = n if dmd_index is None else dmd_index
+                store.pattern_ids.append(dmd_id)
+                store.dmd_camera_ids.append(pid)
+                store.dmd_tiles.append(tile)
+            grp = store.root["patterns/dmd"]
+            meta = dict(grp.attrs.get("pyclm", {}))
+            meta["pattern_ids"] = list(store.pattern_ids)
+            meta["camera_ids"] = list(store.dmd_camera_ids)
+            meta["tiles"] = list(store.dmd_tiles)
+            grp.attrs["pyclm"] = meta
+
+        # camera-space pattern (absent for the blank pattern before the first generate)
+        camera_index = None
+        if store.camera_array is not None and data.camera_pattern is not None:
+            if pid in store.camera_ids:
+                camera_index = store.camera_ids.index(pid)
+            else:
+                cam = np.asarray(data.camera_pattern, dtype=np.uint8)
+                arr = store.camera_array
+                if arr.shape[0] == 0 and tuple(arr.shape[1:]) != cam.shape:
+                    arr.resize((0, *cam.shape))
+                camera_index = self._append(arr, cam)
+                store.camera_ids.append(pid)
+                grp = store.root["patterns/camera"]
+                meta = dict(grp.attrs.get("pyclm", {}))
+                meta["pattern_ids"] = list(store.camera_ids)
+                grp.attrs["pyclm"] = meta
+        return camera_index, dmd_index
+
+    @staticmethod
+    def _append(arr: zarr.Array, image) -> int:
         n = arr.shape[0]
         arr.resize((n + 1, *arr.shape[1:]))
-        arr[n] = pattern
-        store.pattern_ids.append(pid)
-        patterns_group = store.root["patterns/dmd"]
-        meta = dict(patterns_group.attrs.get("pyclm", {}))
-        meta["pattern_ids"] = list(store.pattern_ids)
-        patterns_group.attrs["pyclm"] = meta
+        arr[n] = np.asarray(image, dtype=np.uint8)
         return n
 
     def write_labels(self, data: SegmentationData):
@@ -611,6 +720,7 @@ class OMEZarrWriter(FrameWriter):
                 ("pfs_offset", pa.float64()),
                 ("pattern_id", pa.string()),
                 ("pattern_index", pa.int32()),
+                ("dmd_index", pa.int32()),
                 ("pixel_size_um", pa.float64()),
             ]
         )

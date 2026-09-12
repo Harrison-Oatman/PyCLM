@@ -53,6 +53,8 @@ def status_text(status: dict | None) -> str:
     )
     if errors:
         parts.append(f"{errors} acquisition error{'s' if errors != 1 else ''}")
+    if status.get("skipped"):
+        parts.append(f"{status['skipped']} skipped")
     if status.get("settings_applied"):
         parts.append(f"{status['settings_applied']} settings changed")
     pending = status.get("pending_commands")

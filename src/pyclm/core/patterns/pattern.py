@@ -370,6 +370,14 @@ class PatternContext:
             },
         }
 
+    def grid(self):
+        """
+        The :class:`~pyclm.core.grid.GridGeometry` of a grid experiment (rows,
+        columns, tile shape, pitch, the tiles' order), or None for a plain
+        position. ``raw()`` and the pattern are in the stitched frame either way.
+        """
+        return getattr(self._position, "geometry", None)
+
     def position(self) -> dict | None:
         """The stage position of this experiment (``x``, ``y``, ``z`` and extras), if known."""
         return None if self._position is None else dict(self._position.as_dict())
@@ -583,50 +591,3 @@ class PatternMethod:
         logger.info(f"model {self.name} updated pattern_shape to {self.pattern_shape}")
 
         self.binning = binning
-
-
-class PatternMethodReturnsSLM(PatternMethod):
-    pass
-
-
-class PatternReview(PatternMethodReturnsSLM):
-    """
-    Replays the DMD patterns recorded in an earlier experiment's HDF5 file,
-    one per call to ``generate``.
-    """
-
-    name = "pattern_review"
-
-    def __init__(
-        self,
-        h5fp: str | Path | None = None,
-        channel="545",
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        if h5fp is None:
-            raise ValueError(
-                "pattern_review model requires specifying h5fp (h5 filepath)"
-            )
-
-        self.fp = Path(h5fp)
-        self.channel_name = f"channel_{channel}"
-
-        with File(str(self.fp), "r") as f:
-            keys = list(f.keys())
-
-        self.keys = natsorted(keys)
-
-    def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-        return []
-
-    def generate(self, context) -> np.ndarray:
-        with File(str(self.fp), "r") as f:
-            while len(self.keys) > 0:
-                key = self.keys.pop(0)
-
-                if self.channel_name in f[key]:
-                    return np.array(f[key]["stim_aq"]["dmd"])
-
-        return np.array([])

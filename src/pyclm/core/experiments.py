@@ -231,6 +231,12 @@ class MicroscopePosition(PositionBase):
     Standard microscope position.  x, y, and z are required.  Any optional
     hardware-specific values (e.g. focus-offset) are stored in ``extras``
     keyed by device name, e.g. ``{"PFSOffset": 11122.0}``.
+
+    A grid (MicroManager's Create Grid, see :mod:`pyclm.core.grid`) is one
+    position at the centre of its tiles: ``tiles`` holds one position per
+    tile (each with ``grid_rc = (row, col)``), ``grid`` the rows, columns
+    and pitch in µm, and ``geometry`` the :class:`~pyclm.core.grid.GridGeometry`
+    once the camera is known. All three are None for a plain position.
     """
 
     def __init__(
@@ -246,6 +252,14 @@ class MicroscopePosition(PositionBase):
         self.z = z
         self.label = label
         self.extras: dict = extras if extras is not None else {}
+        self.tiles: list[MicroscopePosition] | None = None
+        self.grid: dict | None = None
+        self.grid_rc: tuple[int, int] | None = None
+        self.geometry = None
+
+    @property
+    def is_grid(self) -> bool:
+        return bool(self.tiles)
 
     def as_dict(self):
         d = {"label": self.label, "x": self.x, "y": self.y, "z": self.z}

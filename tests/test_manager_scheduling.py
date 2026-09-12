@@ -107,8 +107,8 @@ def test_event_order_within_timepoint():
     messages = drain(aq.manager_to_microscope)
     kinds = [type(m) for m in messages]
     assert kinds == [
+        UpdatePatternEventMessage,  # the SLM handshake precedes the move
         UpdatePositionEventMessage,
-        UpdatePatternEventMessage,
         AcquisitionEventMessage,  # stimulation (needs_slm)
         AcquisitionEventMessage,  # imaging channel
         CloseMessage,
@@ -117,7 +117,7 @@ def test_event_order_within_timepoint():
     assert not messages[3].event.needs_slm
     # the SLM buffer sees the same update-pattern event as the microscope
     slm_messages = drain(aq.manager_to_slm_buffer)
-    assert slm_messages[0].event.id == messages[1].event.id
+    assert slm_messages[0].event.id == messages[0].event.id
 
 
 def test_close_is_sent_to_every_addressed_process():

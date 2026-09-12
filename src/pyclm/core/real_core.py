@@ -101,6 +101,9 @@ def device_interface_hint() -> str:
     def getROI(self):
         return self._core.getROI()
 
+    def setROI(self, x: int, y: int, width: int, height: int) -> None:
+        self._core.setROI(int(x), int(y), int(width), int(height))
+
     # Stage/focus/positioning
     def getXYPosition(self) -> tuple[float, float]:
         x, y = self._core.getXYPosition()

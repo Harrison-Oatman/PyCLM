@@ -47,9 +47,14 @@ def positions_from_pos(fp) -> list[MicroscopePosition]:
         data = json.load(f)
 
     positions = []
+    raw_labels: list[str] = []
+    grid_rc: list[tuple[int, int] | None] = []
 
     for pos_data in data["map"]["StagePositions"]["array"]:
-        label = str(pos_data["Label"]["scalar"]).replace("-", ".")
+        raw_label = str(pos_data["Label"]["scalar"])
+        label = raw_label.replace("-", ".")
+        raw_labels.append(raw_label)
+        grid_rc.append(_grid_rc(pos_data))
         xy_stage = pos_data["DefaultXYStage"]["scalar"]
         z_stage = pos_data["DefaultZStage"]["scalar"]
 
@@ -77,7 +82,20 @@ def positions_from_pos(fp) -> list[MicroscopePosition]:
 
         positions.append(MicroscopePosition(x=x, y=y, z=z, label=label, extras=extras))
 
-    return positions
+    from .core.grid import group_tiles
+
+    return group_tiles(positions, raw_labels, grid_rc)
+
+
+def _grid_rc(pos_data: dict) -> tuple[int, int] | None:
+    """(GridRow, GridCol) of a position-list entry, None when absent."""
+    try:
+        row, col = pos_data["GridRow"], pos_data["GridCol"]
+    except KeyError:
+        return None
+    row = row["scalar"] if isinstance(row, dict) else row
+    col = col["scalar"] if isinstance(col, dict) else col
+    return (int(row), int(col))
 
 
 def positions_from_xml(fp):

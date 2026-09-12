@@ -33,17 +33,55 @@ LABEL_LUTS = (YELLOW, GREEN, RED, BLUE)
 
 
 def pattern_to_camera(
-    pattern: np.ndarray, affine: np.ndarray, shape: tuple[int, int], binning: int
+    pattern: np.ndarray,
+    affine: np.ndarray,
+    shape: tuple[int, int],
+    binning: int,
+    roi_offset=(0, 0),
 ) -> np.ndarray:
-    """Warp a DMD-space pattern back into a (binned) camera frame, values 0-255."""
+    """
+    Warp a DMD-space pattern back into a (binned) camera frame, values 0-255.
+    ``roi_offset`` is the camera ROI origin in unbinned pixels (the affine is
+    calibrated in the full frame).
+    """
+    from pyclm.core.manager import compose_affine
+
     h, w = shape
-    ati = cv2.invertAffineTransform(np.asarray(affine, dtype=np.float32))
+    ati = cv2.invertAffineTransform(compose_affine(affine, roi_offset, 1))
     full = cv2.warpAffine(
         np.round(pattern).astype(np.uint8), ati, (w * binning, h * binning)
     )
     if binning > 1:
         full = downscale_local_mean(full.astype(np.float32), (binning, binning))
     return np.clip(full, 0, 255).astype(np.uint16)
+
+
+def _roi_offset(exp) -> tuple[int, int]:
+    roi = getattr(exp, "camera_roi", None)
+    return (0, 0) if roi is None else (int(roi[0]), int(roi[1]))
+
+
+def pattern_overlay(exp, group, shape: tuple[int, int], t: int) -> np.ndarray | None:
+    """
+    The pattern in force at plan timepoint ``t`` as a frame of ``shape``
+    (values 0-255): the stored camera-space pattern when the store has one
+    (resized if the stimulation binning differs from the group's), else the
+    DMD pattern warped back through the affine.
+    """
+    cam = exp.camera_pattern_at(t)
+    if cam is not None:
+        cam = np.asarray(cam)
+        if tuple(cam.shape) != tuple(shape):
+            cam = cv2.resize(cam, (shape[1], shape[0]), interpolation=cv2.INTER_NEAREST)
+        return cam.astype(np.uint16)
+    if exp.affine_transform is None:
+        return None
+    pat = exp.pattern_at(t)
+    if pat is None:
+        return None
+    return pattern_to_camera(
+        pat, exp.affine_transform, shape, group.binning, _roi_offset(exp)
+    )
 
 
 def export_group(
@@ -102,7 +140,9 @@ def export_group(
             planes.append(
                 np.zeros(shape, np.uint16)
                 if pat is None
-                else pattern_to_camera(pat, affine, shape, group.binning)
+                else pattern_to_camera(
+                    pat, affine, shape, group.binning, _roi_offset(exp)
+                )
             )
         frames.append(np.stack(planes))
 

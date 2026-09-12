@@ -8,14 +8,29 @@ import numpy as np
 
 from .base_process import BaseProcess
 from .core_interface import MicroscopeCoreInterface
-from .datatypes import AcquisitionData, EventSLMPattern, StimulationData
+from .datatypes import (
+    AcquisitionData,
+    EventSLMPattern,
+    SkippedAcquisition,
+    StimulationData,
+)
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
 from .experiments import ConfigGroup, DeviceProperty
+from .grid import stitch
 from .messages import EventDoneMessage, Message, UpdateZPositionMessage
 from .position_mover import BasicPositionMover, PositionMover
 from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
+
+
+def pattern_is_blank(pattern) -> bool:
+    """True when nothing in the DMD image (or any tile of a list of them) is lit."""
+    if pattern is None:
+        return True
+    if isinstance(pattern, list | tuple):
+        return all(pattern_is_blank(p) for p in pattern)
+    return not np.any(np.asarray(pattern))
 
 
 class MicroscopeProcess(BaseProcess):
@@ -31,7 +46,7 @@ class MicroscopeProcess(BaseProcess):
     re-raised, which makes the Controller abort the run.
     """
 
-    produces: ClassVar[dict[str, tuple[str, ...]]] = {"raw": ()}
+    produces: ClassVar[dict[str, tuple[str, ...]]] = {"raw": (), "skipped": ()}
     always_active: ClassVar[bool] = True
 
     def __init__(
@@ -77,6 +92,12 @@ class MicroscopeProcess(BaseProcess):
 
         self.current_pattern = None
         self.current_pattern_id = None
+        self.current_camera_pattern = None
+        self.current_dmd_ids = None
+        # (t, experiment) whose stimulation-only visit a blank pattern cancelled
+        self._blank_skips: set[tuple[int, str]] = set()
+        self.skipped_moves = 0
+        self.skipped_acquisitions = 0
 
         self.warned_binning = False
 
@@ -245,9 +266,34 @@ class MicroscopeProcess(BaseProcess):
             )
             self.warned_binning = True
 
+    @staticmethod
+    def _skip_key(event) -> tuple[int, str] | None:
+        index = getattr(event, "index", None) or {}
+        if "t" not in index:
+            return None
+        return (int(index["t"]), event.experiment_name)
+
+    def _skipping(self, event) -> bool:
+        """Whether this event belongs to a visit a blank pattern cancelled."""
+        if not getattr(event, "skippable_if_blank", False):
+            return False
+        key = self._skip_key(event)
+        return key is not None and key in self._blank_skips
+
     def handle_update_position_event(self, up_event: UpdateStagePositionEvent):
+        if self._skipping(up_event):
+            self.skipped_moves += 1
+            logger.info(
+                f"experiment {up_event.experiment_name}: blank pattern, "
+                "stimulation only; stage move skipped"
+            )
+            return
         position = up_event.position
-        z_moved, z_new_position = self.position_mover.move_to(position, self.core)
+        # a grid is visited tile by tile inside each acquisition; the position
+        # event brings the stage to its first tile
+        tiles = getattr(position, "tiles", None)
+        target = tiles[0] if tiles else position
+        z_moved, z_new_position = self.position_mover.move_to(target, self.core)
 
         if z_moved:
             old_z = position.z
@@ -319,18 +365,44 @@ class MicroscopeProcess(BaseProcess):
 
         pattern = pattern_data.pattern
 
+        if getattr(up_event, "skippable_if_blank", False):
+            key = self._skip_key(up_event)
+            if key is not None:
+                if pattern_is_blank(pattern):
+                    self._blank_skips.add(key)
+                else:
+                    self._blank_skips.discard(key)
+                # keep the set small: earlier timepoints are over
+                self._blank_skips = {k for k in self._blank_skips if k[0] >= key[0] - 1}
+
+        # a grid experiment's pattern is one DMD image per tile; the first goes
+        # up now, the others as the tiles are visited
+        first = pattern[0] if isinstance(pattern, list | tuple) else pattern
         if self.slm_device == "dummy":
             logger.info(f"experiment {up_event.experiment_name}: dummy slm set image")
         else:
-            self.core.setSLMImage(self.slm_device, pattern)
+            self.core.setSLMImage(self.slm_device, first)
             logger.info(f"experiment {up_event.experiment_name}: set slm image")
 
         self.current_pattern = pattern
         self.current_pattern_id = pattern_data.pattern_unique_id
+        self.current_camera_pattern = pattern_data.camera_pattern
+        self.current_dmd_ids = pattern_data.dmd_ids
 
         return 0
 
     def handle_acquisition_event(self, aq_event: AcquisitionEvent):
+        if self._skipping(aq_event):
+            self.skipped_acquisitions += 1
+            aq_event.completed_time = time()
+            logger.info(
+                f"experiment {aq_event.experiment_name} t={aq_event.t_index}: "
+                "stimulation skipped (blank pattern)"
+            )
+            # the writer learns of it on the data stream, in order with the frames
+            self._emit(SkippedAcquisition(aq_event))
+            self.manager.put(EventDoneMessage(aq_event, skipped=True))
+            return
         event_id = aq_event.id
         logger.debug(f"{self.t(): .3f}| handling acquisition event {event_id}")
 
@@ -349,16 +421,16 @@ class MicroscopeProcess(BaseProcess):
             )
             sleep(t_delta)
 
-        logger.debug("wait for system")
-        wait_time = time()
-        self.core.waitForSystem()
-        logger.debug(f"took {time() - wait_time: .3f}s")
-
-        if self.settle_time_s > 0:
-            sleep(self.settle_time_s)
-
-        logger.info(f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms")
-        image = self.snap()
+        tiles = getattr(aq_event.position, "tiles", None)
+        geometry = getattr(aq_event.position, "geometry", None)
+        if tiles and geometry is not None:
+            image = self._acquire_grid(aq_event, tiles, geometry)
+        else:
+            self._settle()
+            logger.info(
+                f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms"
+            )
+            image = self.snap()
         aq_event.completed_time = time()
         logger.info(f"{self.t(): .3f}| image acquired")
 
@@ -366,7 +438,12 @@ class MicroscopeProcess(BaseProcess):
 
         if aq_event.needs_slm:
             data_out = StimulationData(
-                aq_event, image, self.current_pattern, self.current_pattern_id
+                aq_event,
+                image,
+                self.current_pattern,
+                self.current_pattern_id,
+                camera_pattern=self.current_camera_pattern,
+                dmd_ids=self.current_dmd_ids,
             )
         else:
             data_out = AcquisitionData(aq_event, image)
@@ -374,6 +451,35 @@ class MicroscopeProcess(BaseProcess):
         self._emit(data_out)
         # acknowledge to the Manager: lateness and errors are tracked there
         self.manager.put(EventDoneMessage(aq_event))
+
+    def _settle(self):
+        logger.debug("wait for system")
+        wait_time = time()
+        self.core.waitForSystem()
+        logger.debug(f"took {time() - wait_time: .3f}s")
+        if self.settle_time_s > 0:
+            sleep(self.settle_time_s)
+
+    def _acquire_grid(self, aq_event: AcquisitionEvent, tiles, geometry):
+        """
+        Visit every tile of a grid position for one channel: move, settle,
+        snap (with the tile's own DMD image up for a stimulation frame), then
+        stitch the tiles into the one frame the pipeline consumes.
+        """
+        patterns = self.current_pattern if aq_event.needs_slm else None
+        per_tile = isinstance(patterns, list | tuple)
+        frames = []
+        for k, tile in enumerate(tiles):
+            if per_tile and self.slm_device != "dummy":
+                self.core.setSLMImage(self.slm_device, patterns[k])
+            self.position_mover.move_to(tile, self.core)
+            self._settle()
+            logger.info(
+                f"{self.t(): .3f}| tile {k + 1}/{len(tiles)} of "
+                f"{aq_event.experiment_name}: {aq_event.exposure_time_ms}ms"
+            )
+            frames.append(self.snap())
+        return stitch(frames, geometry, aq_event.binning)
 
     def snap(self):
         core = self.core

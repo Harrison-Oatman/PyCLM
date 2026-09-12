@@ -31,12 +31,17 @@ class UpdatePatternEvent:
         experiment,
         config_groups: list[ConfigGroup] | None = None,
         devices: list[DeviceProperty] | None = None,
+        index: dict | None = None,
+        skippable_if_blank: bool = False,
     ):
         self.id = uuid4()
 
         self.experiment_name = experiment
         self.config_groups = config_groups
         self.devices = devices
+        self.index = dict(index or {})
+        # a blank pattern may skip this position at this timepoint (see PlannedEvent)
+        self.skippable_if_blank = skippable_if_blank
 
 
 class UpdateStagePositionEvent:
@@ -44,10 +49,18 @@ class UpdateStagePositionEvent:
     Moves the stage
     """
 
-    def __init__(self, position: PositionBase, experiment_name: str):
+    def __init__(
+        self,
+        position: PositionBase,
+        experiment_name: str,
+        index: dict | None = None,
+        skippable_if_blank: bool = False,
+    ):
         self.id = uuid4()
         self.position = position
         self.experiment_name = experiment_name
+        self.index = dict(index or {})
+        self.skippable_if_blank = skippable_if_blank
 
 
 class UpdatePositionWithAutoFocusEvent(UpdateStagePositionEvent):

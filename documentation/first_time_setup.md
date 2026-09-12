@@ -68,11 +68,19 @@ focus_device = "ZDrive"
 # Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
 settle_time_seconds = 1.0
 
+# Optional. Camera ROI [x, y, width, height] in unbinned pixels, set when a run
+# (or `pyclm preview --snap`) starts. The DMD usually lights only part of the
+# field: `pyclm check` prints the region it covers and suggests it here, so
+# that every pixel imaged can be stimulated. Omit to leave the camera as it is.
+# The affine above stays calibrated in the full frame; PyCLM composes the offset.
+camera_roi = [256, 128, 1536, 1792]
+
 # Optional. How data is stored and exported.
 [output]
 format = "ome-zarr"          # "ome-zarr" (default) or "hdf5" (PyCLM's original layout)
-pattern_policy = "on_change" # ome-zarr only: store each distinct DMD pattern once ("on_change"),
-                             # every stimulation event ("all"), or not at all ("none")
+pattern_policy = "on_change" # ome-zarr only: store each distinct pattern once ("on_change"),
+                             # only at timepoints with a saved imaging frame ("imaging"),
+                             # or not at all ("none"); stored in camera and DMD coordinates
 export_imagej = true         # write ImageJ hyperstacks next to the data when the run finishes
 ```
 
@@ -162,6 +170,38 @@ open_loop-pos1
 These three positions would use `feedback_ctrl.toml` for the first two and `open_loop.toml` for the third.
 
 PyCLM also supports the Nikon Elements `multipoints.xml` format (exported from the xy-positions tab of an NDAcquire). If both files are present, `PositionList.pos` takes precedence.
+
+### Grids
+
+A position can be a **grid of tiles** imaged as one stitched frame, so a
+pattern method sees, and lights, a region larger than one field. Grids are
+made in MicroManager with the Stage Position List's **Create Grid** (the
+tile creator) and need nothing in the experiment TOML:
+
+1. Once per objective, run MicroManager's **Pixel Calibrator** so that the
+   pixel-size affine knows the camera's orientation; the tile creator lays
+   tiles out with it, and PyCLM stitches by tile row and column, so tiles
+   abut only if this is right.
+2. Set the camera ROI you will run with (`camera_roi` in `pyclm_config.toml`;
+   `pyclm check` prints the region the DMD covers). Create Grid spaces tiles
+   by the *current* image size, so the ROI must be active when the grid is
+   created. Use overlap 0 for stimulated grids: the overlap strip would be
+   lit from two tiles.
+3. In Create Grid, set the **prefix** to the experiment's TOML stem
+   (`tissue` for `tissue.toml`), mark the corners, and create. MicroManager
+   writes one entry per tile, labelled `tissue-1-000_000`,
+   `tissue-1-001_000`, … with `GridRow` / `GridCol`, each with its own z
+   and, on a Nikon, PFS offset interpolated between the corners.
+4. Save the list as `PositionList.pos` in the experiment directory.
+
+PyCLM folds those entries into one position, `tissue.1`, at the centre of
+the tiles. `pyclm check` reports each grid (rows × columns, spacing, and,
+given `camera_roi` and `--pixel-size-um`, the overlap in pixels). At each
+timepoint every channel visits all the tiles (the stimulation frame with
+its tile's own DMD image) and publishes one stitched frame; the pattern
+method's `pattern_shape` is the stitched frame and the pattern it returns
+is cut into one DMD image per tile. Grids need the OME-Zarr format. Do not
+delete tiles from a grid; PyCLM refuses an incomplete rectangle.
 
 ---
 

@@ -24,7 +24,7 @@ OS processes**, despite the naming. All processes share one
 
 | Process | Class / file | Role | Router role |
 |---|---|---|---|
-| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Between timepoints it applies the setting changes pattern methods asked for (`apply_settings`, `core/settings.py`), polls the `commands/` directory (`poll_commands` / `apply_command`, `pyclm/commands.py`: pause shifts the clock, stop_run, stop_experiment, set_*, set_pattern), absorbs the microscope's acknowledgements (lateness, errors) and writes `status.json`; `finish()` closes the events table. Own loop, not a `BaseProcess`. | none (control only) |
+| Manager | `Manager`, `core/manager.py` | Walks the `AcquisitionPlan`: waits for each timepoint, then turns `plan.events_at(t)` into messages for the microscope, the SLM buffer and the pattern process. Between timepoints it applies the setting changes pattern methods asked for (`apply_settings`, `core/settings.py`), polls the `commands/` directory (`poll_commands` / `apply_command`, `pyclm/commands.py`: pause shifts the clock, stop_run, stop_experiment, set_*, set_pattern), absorbs the microscope's acknowledgements (lateness, errors, skipped visits) and writes `status.json`; `finish()` closes the events table. Own loop, not a `BaseProcess`. | none (control only) |
 | Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. Own loop with a per-message error guard (aborts after `max_consecutive_errors`, default 10). | produces `raw`; ends the raw stream on the Manager's close |
 | Writer | `WriterProcess`, `core/writer_process.py` (`MicroscopeOutbox` is an alias) | Hands every frame, label image and track table to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2, the default, or HDF5 format 1). | consumes `raw` for every channel and, with `demand=False`, `seg` / `tracks` where the method has `save = true`; `always_active` |
 | SLM buffer | `SLMBuffer`, `core/manager.py` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | none (the pattern → SLM → microscope path is a control handshake, not routed) |
@@ -131,7 +131,7 @@ writer has compressed it.
   for a named table; the router looks producers up by the base kind, so one
   segmentation process serves every name), `TrackingData(event,
   labels, rows)` (`tracks`; `rows` are `TrackRow`s). Not routed:
-  `CameraPattern(experiment, data, slm_coords, binning)` (gets a fresh
+  `CameraPattern(experiment, data, binning)` (gets a fresh
   `pattern_id` UUID) and `EventSLMPattern(event_id, pattern,
   pattern_unique_id)`.
 
@@ -367,7 +367,7 @@ PatternProcess
   → raw/seg/tracks arrivals fill the dock by data.kind (data for a timepoint with no dock is
     dropped with a warning); when complete: docks.pop(), ExperimentState.absorb(dock, t),
     PatternContext(state, experiment), model.generate(context)
-    → CameraPattern(experiment, pattern, slm_coords, binning) → state.record_pattern → pattern_to_slm
+    → CameraPattern(experiment, pattern, binning) → state.record_pattern → pattern_to_slm
 SLMBuffer.handle_data
   → pattern_to_slm(): float[0,1] camera coords → uint8, warpAffine with affine (scaled by binning) → SLM shape
   → slm_patterns[experiment] = (pattern_id, slm_image)
@@ -471,7 +471,7 @@ raise when creating attributes or datasets after `swmr_mode = True`; the
 constraint is about reader visibility, not writer errors.)
 
 Consumers of this layout: `MicroscopeOutbox._timepoint_complete`, the GUI
-(`gui/gui_controller.py`), `convert_hdf5s.py`, `PatternReview`, `tests/test_dry_run.py`.
+(`gui/gui_controller.py`), `convert_hdf5s.py`, `tests/test_dry_run.py`.
 
 Other outputs in the experiment directory: `plan.useq.yaml` (the acquisition
 plan, also embedded in every output), `<experiment>_<group>.tif` ImageJ
@@ -521,7 +521,7 @@ are closed on both paths.
 | Stage µm (x, y, z, extras) | `MicroscopePosition` | `PFSPositionMover` negates y when calling `setXYPosition` (`position_mover.py:82`). |
 | Camera pixels, full ROI | `CameraProperties.roi` from `core.getROI()` | `(x_off, y_off, w, h)`; `get_image_shape()` returns `(h//b, w//b)`. |
 | Pattern space | `PatternMethod.pattern_shape`, `pixel_size_um` | Camera ROI divided by **stimulation** binning; methods return float `[0,1]` arrays of this shape. `update_binning` keeps `pattern_shape` integral (the `int(h)` casts in built-in methods predate that and are harmless). |
-| SLM pixels | `SLMBuffer.slm_shape`, `pyclm_config.affine_transform` (2×3, camera→SLM) | `pattern_to_slm` scales the linear part by binning, converts to uint8 0–255, `cv2.warpAffine`. `PatternMethodReturnsSLM` subclasses skip the transform. |
+| SLM pixels | `SLMBuffer.slm_shape`, `pyclm_config.affine_transform` (2×3, camera→SLM) | `pattern_to_slm` scales the linear part by binning, converts to uint8 0–255, `cv2.warpAffine`. Every method returns camera coordinates (the SLM-coordinates path went with `PatternReview` in Stage 6). |
 | Time | `context.time` = scheduled seconds since `start`; `t_index` = absolute timepoint | Pattern methods convert to minutes themselves. |
 
 The simulated core's `getROI()` returns 4× the TIF size (`simulated_core.py:192`)
@@ -573,7 +573,7 @@ router concern, invisible to producers and to the Controller.
 
 ## 11. Tests
 
-`uv run --group test pytest` — 232 tests, ~135 s, all passing after Stage 5b
+`uv run --group test pytest` — 256 tests, ~160 s, all passing after Stage 6
 (2026-09-09) on the locked interface-71 stack (pymmcore 11.2.1.71.0 / pymmcore-plus 0.14.0) and on pymmcore 12.5 / pymmcore-plus 0.18.1; useq-schema 0.9.2, napari 0.9.1. The dry-run integration tests take almost all of that time.
 
 | File | Covers |
@@ -602,7 +602,11 @@ router concern, invisible to producers and to the Controller.
 | `test_microscope_process.py` | Frame delivery to the router, settle time, error guard and abort threshold, SLM handshake (stale replies, timeout), z-correction message. |
 | `test_logging_setup.py` | Per-run log handlers. |
 | `test_controller_init.py` | Early `FileExistsError` for both formats, unused-segmentation warning, settle-time plumbing. |
-| `test_pattern_method.py` | Integral `pattern_shape` under binning; `PatternReview` constructible from TOML kwargs. |
+| `test_pattern_method.py` | Integral `pattern_shape` under binning. |
+| `test_camera_roi.py` | `camera_roi` validation, the DMD footprint, `compose_affine` against embedding the ROI in the full frame, the SLM buffer's offset, the virtual camera's `setROI`, the check's footprint lines. |
+| `test_skip.py` | The plan's handshake-first order and `skippable` flags, `pattern_is_blank`, the microscope skipping the move and the exposure (and never an unflagged event), the Manager's accounting, both writers counting a skipped frame as done, a dry run with a blank method. |
+| `test_grid.py` | Folding tile-creator entries into a grid position (snake order, centre, averaged extras), refusing incomplete or uneven grids, `GridGeometry`, `stitch` and `cut`. |
+| `test_grid_run.py` | The SLM buffer cutting a stitched pattern into per-tile DMD images, the microscope visiting every tile and publishing one stitched frame, the writer's stitched shapes and per-tile DMD entries, the check's grid lines and the HDF5 refusal, a dry run of a 2 × 2 grid. |
 
 `tests/helpers.py` holds the builders (`make_experiment`, `make_schedule`,
 `make_plan`, `FakeImageSource`, `drain`) used by the unit tests. Still
