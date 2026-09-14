@@ -6,6 +6,7 @@ Register a custom mover via Controller(position_mover=...) or by passing it
 to run_pyclm().
 """
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from time import sleep, time
@@ -106,3 +107,45 @@ class PFSPositionMover(PositionMover):
 
         logger.info(f"move+focus took {time() - start:.3f}s")
         return True, core.getZPosition()
+
+
+MOVERS: dict[str, type[PositionMover]] = {
+    "basic": BasicPositionMover,
+    "pfs": PFSPositionMover,
+}
+
+
+def resolve_mover(spec: str) -> type[PositionMover]:
+    """
+    The :class:`PositionMover` subclass named by ``spec``: one of
+    :data:`MOVERS` (``"basic"``, ``"pfs"``) or a dotted path
+    ``"package.module:ClassName"`` to a custom subclass.
+    """
+    key = (spec or "basic").strip()
+    if key.lower() in MOVERS:
+        return MOVERS[key.lower()]
+    if ":" not in key:
+        raise ValueError(
+            f"position_mover {spec!r} is not one of {sorted(MOVERS)} and is not a "
+            "'package.module:ClassName' path"
+        )
+    module_name, _, class_name = key.partition(":")
+    import importlib
+
+    try:
+        module = importlib.import_module(module_name)
+    except ImportError as e:
+        raise ValueError(
+            f"position_mover {spec!r}: cannot import {module_name!r} ({e})"
+        ) from e
+    cls = getattr(module, class_name, None)
+    if (
+        cls is None
+        or not (isinstance(cls, type) and issubclass(cls, PositionMover))
+        or inspect.isabstract(cls)
+    ):
+        raise ValueError(
+            f"position_mover {spec!r}: {class_name!r} in {module_name!r} is not a "
+            "concrete PositionMover subclass"
+        )
+    return cls

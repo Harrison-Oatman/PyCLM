@@ -108,7 +108,8 @@ def run_pyclm(
     Run a pyclm experiment from a given directory and configuration file.
     :param experiment_directory: directory containing experiment files, including schedule.toml. [experiment].toml files,
                                and the position list
-    :param config_path: path to pyclm_config.toml file. If None, will look for pyclm_config.toml in the experiment_directory
+    :param config_path: path to the configuration file. If None, the experiment directory's
+                        pyclm_config[.<anything>].toml is used, then the working directory's
     :param segmentation_methods: optional dictionary of segmentation method classes to register with the SegmentationProcess
                                     key is the method name (used by [experiment].toml), value is the class
     :param pattern_methods: optional dictionary of pattern method classes to register with the PatternProcess
@@ -131,8 +132,8 @@ def run_pyclm(
         f"experiment directory {experiment_directory} does not exist"
     )
     assert config_path.exists(), (
-        f"config file {config_path} does not exist: pyclm_config.toml must be specified or be "
-        f"present in the experiment directory"
+        f"config file {config_path} does not exist: pyclm_config.toml (or "
+        "pyclm_config.<name>.toml) must be given or be in the experiment directory"
     )
 
     set_logging(experiment_directory)
@@ -154,6 +155,16 @@ def run_pyclm(
     logger.info(f"loaded config from {config_path}")
 
     focus_device = config.focus_device
+    if position_mover is None:
+        # the command line (and any caller that does not pass one) takes the
+        # mover from pyclm_config.toml; a mover passed in code wins
+        from .core.position_mover import resolve_mover
+
+        position_mover = resolve_mover(config.position_mover)()
+        logger.info(
+            f"position mover: {type(position_mover).__name__} "
+            f"(pyclm_config.toml position_mover = {config.position_mover!r})"
+        )
     settle_time_s = config.settle_time_seconds
     storage_format = config.output.format
     pattern_policy = config.output.pattern_policy

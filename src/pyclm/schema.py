@@ -519,6 +519,12 @@ class PyclmConfig(Strict):
     focus_device: str = Field(
         "ZDrive", description="MicroManager focus (Z) device selected at start-up"
     )
+    position_mover: str = Field(
+        "basic",
+        description='how the stage moves to a position: "basic" (XY then Z), "pfs" '
+        "(Nikon Perfect Focus: move, apply the PFS offset, wait for the lock), or "
+        '"package.module:ClassName" for a custom PositionMover subclass',
+    )
     settle_time_seconds: float = Field(
         1.0,
         ge=0,

@@ -230,9 +230,11 @@ def process_args():
 def find_affine_transform(input_dir, config_path):
     """Affine transform from pyclm_config.toml, or None if no config is found."""
     if config_path is None:
-        config_path = Path(input_dir) / "pyclm_config.toml"
-        if not config_path.exists():
-            config_path = Path("pyclm_config.toml")
+        from .directories import find_config_in
+
+        config_path = find_config_in(input_dir) or find_config_in(Path.cwd())
+        if config_path is None:
+            return None
     config_path = Path(config_path)
     if not config_path.exists():
         return None

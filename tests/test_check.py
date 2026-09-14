@@ -248,3 +248,67 @@ def test_run_refuses_to_start_on_errors_unless_forced(good_dir):
     with pytest.raises(CheckFailed, match="1 error"):
         run_pyclm(good_dir, dry=True)
     assert not list(good_dir.glob("*.hdf5"))
+
+
+def test_position_mover_is_resolved_from_the_config(good_dir):
+    from pyclm.core.position_mover import (
+        BasicPositionMover,
+        PFSPositionMover,
+        resolve_mover,
+    )
+
+    assert resolve_mover("basic") is BasicPositionMover
+    assert resolve_mover("PFS") is PFSPositionMover
+    assert (
+        resolve_mover("pyclm.core.position_mover:PFSPositionMover") is PFSPositionMover
+    )
+    for bad in ("nikon", "no.such.module:X", "pyclm.core.position_mover:PositionMover"):
+        with pytest.raises(ValueError, match="position_mover"):
+            resolve_mover(bad)
+
+    text = check_directory(good_dir).text()
+    assert "position_mover: BasicPositionMover" in text
+    cfg = good_dir / "pyclm_config.toml"
+    cfg.write_text(
+        cfg.read_text().replace("config_path", 'position_mover = "pfs"\nconfig_path', 1)
+    )
+    assert "position_mover: PFSPositionMover" in check_directory(good_dir).text()
+    cfg.write_text(cfg.read_text().replace('"pfs"', '"nikon"'))
+    report = check_directory(good_dir)
+    assert any("position_mover" in str(e) for e in report.errors)
+
+
+def test_labelled_schedule_and_config_names(good_dir):
+    """schedule.<x>.toml and pyclm_config.<x>.toml are found; two of either is an error."""
+    from pyclm.directories import (
+        AmbiguousFileError,
+        experiment_tomls,
+        find_config_in,
+        find_schedule,
+    )
+
+    (good_dir / "schedule.toml").rename(good_dir / "schedule.fast.toml")
+    (good_dir / "pyclm_config.toml").rename(good_dir / "pyclm_config.ti2.toml")
+    assert find_schedule(good_dir).name == "schedule.fast.toml"
+    assert find_config_in(good_dir).name == "pyclm_config.ti2.toml"
+    assert sorted(experiment_tomls(good_dir)) == ["bar025", "bar10"]
+
+    report = check_directory(good_dir)
+    assert report.ok, report.text()
+    assert "schedule.fast.toml: 4 timepoints" in report.text()
+    assert "pyclm_config.ti2.toml: ok" in report.text()
+
+    (good_dir / "schedule.toml").write_text(
+        (good_dir / "schedule.fast.toml").read_text()
+    )
+    with pytest.raises(AmbiguousFileError, match="2 schedule files"):
+        find_schedule(good_dir)
+    report = check_directory(good_dir)
+    assert any("2 schedule files" in str(e) for e in report.errors)
+    (good_dir / "schedule.toml").unlink()
+
+    (good_dir / "pyclm_config.toml").write_text(
+        (good_dir / "pyclm_config.ti2.toml").read_text()
+    )
+    report = check_directory(good_dir)
+    assert any("2 pyclm_config files" in str(e) for e in report.errors)

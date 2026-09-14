@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
@@ -16,6 +17,56 @@ from .core.virtual_microscope.simulated_source import (
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------- file names
+# ``schedule.toml`` and ``pyclm_config.toml`` may carry a qualifier between the
+# name and the suffix (``schedule.fast.toml``, ``pyclm_config.ti2.toml``) so a
+# directory can be labelled by what it was run with; exactly one of each.
+SCHEDULE_PATTERN = re.compile(r"^schedule(\..+)?\.toml$", re.IGNORECASE)
+CONFIG_PATTERN = re.compile(r"^pyclm_config(\..+)?\.toml$", re.IGNORECASE)
+
+
+class AmbiguousFileError(ValueError):
+    """More than one file in a directory matches a name that must be unique."""
+
+
+def _find_one(directory, pattern: re.Pattern, what: str) -> Path | None:
+    directory = Path(directory)
+    if not directory.is_dir():
+        return None
+    matches = sorted(p for p in directory.iterdir() if pattern.match(p.name))
+    if len(matches) > 1:
+        raise AmbiguousFileError(
+            f"{directory} has {len(matches)} {what} files "
+            f"({', '.join(m.name for m in matches)}); keep exactly one"
+        )
+    return matches[0] if matches else None
+
+
+def find_schedule(directory) -> Path | None:
+    """The directory's ``schedule[.<anything>].toml``; None if absent, error if several."""
+    return _find_one(directory, SCHEDULE_PATTERN, "schedule")
+
+
+def find_config_in(directory) -> Path | None:
+    """The directory's ``pyclm_config[.<anything>].toml``; None if absent, error if several."""
+    return _find_one(directory, CONFIG_PATTERN, "pyclm_config")
+
+
+def is_reserved_toml(name: str) -> bool:
+    """Whether a TOML file name is the schedule or the configuration, not an experiment."""
+    return bool(SCHEDULE_PATTERN.match(name) or CONFIG_PATTERN.match(name))
+
+
+def experiment_tomls(directory) -> dict[str, Path]:
+    """``{stem: path}`` of the experiment TOMLs in a directory (schedule and config excluded)."""
+    directory = Path(directory)
+    return {
+        p.stem: p
+        for p in sorted(directory.glob("*.toml"))
+        if not is_reserved_toml(p.name)
+    }
+
+
 def experiment_from_toml(toml_path, name="SampleExperiment"):
     """
     The ``Experiment`` described by one experiment TOML, for position ``name``.
@@ -25,6 +76,15 @@ def experiment_from_toml(toml_path, name="SampleExperiment"):
     from .schema import ExperimentConfig
 
     return ExperimentConfig.from_file(toml_path).to_experiment(name)
+
+
+def _schedule_path(directory) -> Path:
+    path = find_schedule(directory)
+    if path is None:
+        raise FileNotFoundError(
+            f"no schedule.toml (or schedule.<name>.toml) in {Path(directory)}"
+        )
+    return path
 
 
 def read_schedule(toml_path):
@@ -138,8 +198,7 @@ def positions_from_xml(fp):
 
 
 def schedule_from_directory(experiment_dir: Path):
-    tomls = experiment_dir.glob("*.toml")
-    tomls = {f.stem: str(f) for f in tomls}
+    tomls = {stem: str(p) for stem, p in experiment_tomls(experiment_dir).items()}
 
     pos_path = experiment_dir / "PositionList.pos"
     xml_path = experiment_dir / "multipoints.xml"
@@ -174,7 +233,7 @@ def schedule_from_directory(experiment_dir: Path):
         positions[name] = position
         experiments[name] = experiment_from_toml(experiment_path, name)
 
-    timing = read_schedule(str(experiment_dir / "schedule.toml"))
+    timing = read_schedule(str(_schedule_path(experiment_dir)))
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
 
@@ -412,8 +471,8 @@ def dry_schedule_from_directory(
       3. TIF filenames in the directory — position labels inferred from stems
     """
     experiment_dir = Path(experiment_dir)
-    tomls = {f.stem: str(f) for f in experiment_dir.glob("*.toml")}
-    timing = read_schedule(str(experiment_dir / "schedule.toml"))
+    tomls = {stem: str(p) for stem, p in experiment_tomls(experiment_dir).items()}
+    timing = read_schedule(str(_schedule_path(experiment_dir)))
 
     yml_path = experiment_dir / "dry_run.yml"
     pos_path = experiment_dir / "PositionList.pos"

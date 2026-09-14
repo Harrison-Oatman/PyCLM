@@ -281,6 +281,22 @@ becomes a tagged release.
   have needed a second MicroManager export. The design is in the Stage 6
   notes should it return.
 
+### The position mover in `pyclm_config.toml`
+
+- `position_mover = "basic" | "pfs" | "package.module:ClassName"` chooses
+  how the stage moves to a position. Until now only `run_pyclm(...,
+  position_mover=...)` in code could choose, so every command-line run used
+  the basic mover and a Nikon's PFS was never engaged. `pyclm check`
+  reports the resolved mover; a mover passed in code still wins.
+
+### Labelled schedule and configuration files
+
+- `schedule.<anything>.toml` and `pyclm_config.<anything>.toml` are
+  recognised as the schedule and the configuration (`schedule.toml`,
+  `pyclm_config.toml` still work); every other TOML is an experiment. Two
+  schedules or two configurations in one directory are an error, in
+  `pyclm check` and at run start.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,

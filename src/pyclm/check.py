@@ -182,6 +182,20 @@ def _configs_for(directory: Path, label: str) -> dict:
         return {}
 
 
+def _check_position_mover(report: CheckReport, file: str, config: PyclmConfig) -> None:
+    from .core.position_mover import resolve_mover
+
+    try:
+        cls = resolve_mover(config.position_mover)
+    except ValueError as e:
+        report.error(file, "position_mover", str(e))
+        return
+    note = ""
+    if cls.__name__ == "BasicPositionMover":
+        note = ' (XY then Z, no focus maintenance; a Nikon with PFS wants "pfs")'
+    report.info(file, "position_mover", f"{cls.__name__}{note}")
+
+
 def _check_camera_roi(report: CheckReport, file: str, config: PyclmConfig) -> None:
     """Report the DMD's footprint on the camera and how the configured ROI relates to it."""
     fx, fy, fw, fh = config.dmd_footprint()
@@ -211,12 +225,20 @@ def _check_camera_roi(report: CheckReport, file: str, config: PyclmConfig) -> No
 
 
 def find_pyclm_config(directory: Path, config_path=None) -> Path | None:
-    """``pyclm_config.toml``: the given path, else the directory's, else the working directory's."""
+    """
+    The configuration: the given path, else the directory's
+    ``pyclm_config[.<anything>].toml``, else the working directory's.
+    Raises :class:`~pyclm.directories.AmbiguousFileError` when a directory
+    holds more than one.
+    """
+    from .directories import find_config_in
+
     if config_path is not None:
         return Path(config_path)
-    for candidate in (Path(directory) / CONFIG_NAME, Path.cwd() / CONFIG_NAME):
-        if candidate.exists():
-            return candidate
+    for folder in (Path(directory), Path.cwd()):
+        found = find_config_in(folder)
+        if found is not None:
+            return found
     return None
 
 
@@ -350,45 +372,55 @@ def check_directory(
         pattern_methods, segmentation_methods, tracking_methods
     )
 
+    from .directories import AmbiguousFileError, experiment_tomls, find_schedule
+
     # 1. pyclm_config.toml
     config = None
-    cfg_path = find_pyclm_config(directory, config_path)
+    try:
+        cfg_path = find_pyclm_config(directory, config_path)
+    except AmbiguousFileError as e:
+        cfg_path = None
+        report.error(CONFIG_NAME, "", str(e))
     if cfg_path is None:
-        report.error(
-            CONFIG_NAME, "", "not found in the directory or the working directory"
-        )
+        if not report.errors:
+            report.error(
+                CONFIG_NAME, "", "not found in the directory or the working directory"
+            )
     else:
         try:
             config = PyclmConfig.from_file(cfg_path)
             report.info(cfg_path.name, "", f"ok ({cfg_path})")
             _check_camera_roi(report, cfg_path.name, config)
+            _check_position_mover(report, cfg_path.name, config)
         except ConfigError as e:
             for problem in e.problems:
                 report.error(cfg_path.name, "", problem)
 
     # 2. schedule.toml
     schedule = None
-    schedule_path = directory / SCHEDULE_NAME
+    schedule_name = SCHEDULE_NAME
     try:
+        schedule_path = find_schedule(directory)
+        if schedule_path is None:
+            schedule_path = directory / SCHEDULE_NAME
+        schedule_name = schedule_path.name
         schedule = ScheduleConfig.from_file(schedule_path)
         t = schedule.timing
         report.info(
-            SCHEDULE_NAME,
+            schedule_name,
             "",
             f"{t.steps} timepoints every {t.interval_seconds:g} s "
             f"({t.steps * t.interval_seconds / 60:.1f} min)",
         )
+    except AmbiguousFileError as e:
+        report.error(SCHEDULE_NAME, "", str(e))
     except ConfigError as e:
         for problem in e.problems:
-            report.error(SCHEDULE_NAME, "", problem)
+            report.error(schedule_name, "", problem)
 
     # 3. experiment TOMLs
     configs: dict[str, ExperimentConfig] = {}
-    toml_paths = sorted(
-        p
-        for p in directory.glob("*.toml")
-        if p.name not in (CONFIG_NAME, SCHEDULE_NAME)
-    )
+    toml_paths = list(experiment_tomls(directory).values())
     if not toml_paths:
         report.error(str(directory.name), "", "no experiment TOML files found")
     for path in toml_paths:
@@ -767,8 +799,11 @@ def _dry_rehearsal(
                 shutil.copytree(item, tmp / item.name)
             else:
                 shutil.copy(item, tmp / item.name)
-        schedule = ScheduleConfig.from_file(tmp / SCHEDULE_NAME)
-        (tmp / SCHEDULE_NAME).write_text(
+        from .directories import find_schedule
+
+        schedule_file = find_schedule(tmp) or (tmp / SCHEDULE_NAME)
+        schedule = ScheduleConfig.from_file(schedule_file)
+        schedule_file.write_text(
             "[timing]\nsteps = 2\ninterval_seconds = 1.0\nsetup_time_seconds = 0.0\n"
             f"time_between_positions = {min(schedule.timing.time_between_positions, 0.1):g}\n"
         )

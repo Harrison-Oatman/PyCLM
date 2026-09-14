@@ -39,7 +39,7 @@ from .core.plan import _channel_group, _stim_channel_name
 from .core.queues import AllQueues
 from .core.segmentation_process import SegmentationProcess
 from .core.tracking_process import TrackingProcess
-from .directories import dry_settings_from_directory
+from .directories import dry_settings_from_directory, find_schedule
 from .schema import ConfigError, ExperimentConfig, PyclmConfig, ScheduleConfig
 
 logger = logging.getLogger(__name__)
@@ -153,10 +153,9 @@ def preview(
     stem = toml.stem
 
     interval_s = 0.0
-    if (directory / "schedule.toml").exists():
-        interval_s = ScheduleConfig.from_file(
-            directory / "schedule.toml"
-        ).timing.interval_seconds
+    schedule_path = find_schedule(directory)
+    if schedule_path is not None:
+        interval_s = ScheduleConfig.from_file(schedule_path).timing.interval_seconds
     config = None
     found = find_pyclm_config(directory, config_path)
     if found is not None:

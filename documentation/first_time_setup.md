@@ -64,6 +64,12 @@ affine_transform = [[-0.29, -0.002, 939.9], [0.004, -0.579, 1505.2]]
 # Optional. MicroManager focus (Z) device selected at startup. Default "ZDrive".
 focus_device = "ZDrive"
 
+# Optional. How the stage moves to a position: "basic" (default; XY then Z),
+# "pfs" (Nikon Perfect Focus: move, apply the position's PFS offset, wait for
+# the lock), or "package.module:ClassName" for your own PositionMover.
+# `pyclm run` reads this; a mover passed to run_pyclm() in code takes precedence.
+position_mover = "pfs"
+
 # Optional. Seconds to wait after the hardware reports ready, before each snap.
 # Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
 settle_time_seconds = 1.0
@@ -110,7 +116,14 @@ PyCLM needs to know how to move to an imaging position on your hardware. Three c
 
 ### Using a built-in mover
 
-Pass a mover instance to `run_pyclm` or `Controller`:
+Name it in `pyclm_config.toml`; this is what `pyclm run` uses:
+
+```toml
+position_mover = "pfs"     # or "basic" (the default)
+```
+
+`pyclm check` prints the mover it resolved to. In code, a mover instance
+passed to `run_pyclm` or `Controller` takes precedence over the file:
 
 ```python
 from pyclm import run_pyclm
@@ -149,6 +162,14 @@ class MyFocusMover(PositionMover):
         return True, core.getZPosition()
 
 run_pyclm("path/to/experiment_dir", position_mover=MyFocusMover())
+```
+
+or, so that `pyclm run` finds it, point the configuration at the class
+(the module must be importable, for example installed in the same
+environment or on `PYTHONPATH`):
+
+```toml
+position_mover = "my_lab.movers:MyFocusMover"
 ```
 
 The `extras` dict is populated from any devices in the position list beyond the XY and Z stages (see Section 5 below).
@@ -310,6 +331,12 @@ time_between_positions = 2.0 # pause between consecutive positions within a time
 ---
 
 ## 8. Experiment Directory Layout
+
+`schedule.toml` and `pyclm_config.toml` may carry a label between the name
+and the suffix, `schedule.fast.toml` or `pyclm_config.ti2.toml`, so a
+directory says what it was run with. Every other `.toml` is an experiment.
+A directory must hold exactly one of each; `pyclm check` and `pyclm run`
+refuse two schedules or two configurations.
 
 Before running, your experiment directory should contain:
 
