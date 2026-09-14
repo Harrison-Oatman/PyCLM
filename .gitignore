@@ -19,7 +19,8 @@ log.txt
 /figures/**/*.png
 # Documentation
 documentation/_build/
-documentation/_static/
+documentation/_static/*
+!documentation/_static/pyclm.css
 documentation/_generated/
 documentation/_zoo_gallery.md
 

@@ -116,7 +116,7 @@ class PipelineProcess(BaseProcess):
 
     # ------------------------------------------------------------ routing
     def subscriptions(self, plan) -> list:
-        """What this process wants, as :class:`~pyclm.core.router.Subscription`s."""
+        """What this process wants: a list of :class:`~pyclm.core.router.Subscription`."""
         return []
 
     def can_produce(self, kind: str, experiment, channel: str) -> bool:

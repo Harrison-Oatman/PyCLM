@@ -28,4 +28,12 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "_zoo_gallery.md"]
 
 html_theme = "sphinx_rtd_theme"
+
+# Signatures longer than this are wrapped one parameter per line (Sphinx >= 7.1);
+# most PyCLM entry points take a dozen keyword arguments.
+maximum_signature_line_length = 60
+python_maximum_signature_line_length = 60
+autodoc_default_options = {"member-order": "bysource"}
+autodoc_typehints = "signature"
 html_static_path = ["_static"]
+html_css_files = ["pyclm.css"]

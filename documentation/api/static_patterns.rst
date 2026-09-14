@@ -1,5 +1,5 @@
-Static Patterns
-===============
+Static patterns (``static_patterns``)
+=====================================
 
 .. autoclass:: pyclm.core.patterns.static_patterns.CirclePattern
    :members: generate

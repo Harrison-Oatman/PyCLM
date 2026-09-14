@@ -1,9 +1,9 @@
-Feedback Control Patterns
-=========================
+Per-cell feedback patterns (``fbc_cell_movement``)
+==================================================
 
-These patterns use per-cell segmentation data to direct light to specific
-sub-cellular regions based on each cell's position within the field.
-All require a ``channel`` argument naming a segmented imaging channel.
+These methods use a segmentation to direct light to a sub-cellular region
+of every cell, chosen by the cell's position in the field. All take a
+``channel`` argument naming the segmented imaging channel.
 
 .. autoclass:: pyclm.core.patterns.fbc_cell_movement.PerCellPatternMethod
    :members: generate, process_prop
@@ -28,4 +28,3 @@ All require a ``channel`` argument naming a segmented imaging channel.
 .. autoclass:: pyclm.core.patterns.fbc_cell_movement.BounceModel
    :members: generate, process_prop
    :show-inheritance:
-

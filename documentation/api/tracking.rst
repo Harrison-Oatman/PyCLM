@@ -19,3 +19,4 @@ receives.
 
 .. autoclass:: pyclm.core.tracking_process.TrackingProcess
    :members: register_method, request_method
+   :no-index:

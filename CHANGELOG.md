@@ -297,6 +297,13 @@ becomes a tagged release.
   schedules or two configurations in one directory are an error, in
   `pyclm check` and at run start.
 
+### Documentation
+
+- The API reference is reorganised by task (running and preparing,
+  configuration, writing methods, reading data, the shipped pattern
+  methods, the pipeline for developers) and covers the modules added
+  since Stage 3; pages are named after their modules.
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,

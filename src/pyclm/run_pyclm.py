@@ -105,18 +105,24 @@ def run_pyclm(
     force: bool = False,
 ):
     """
-    Run a pyclm experiment from a given directory and configuration file.
-    :param experiment_directory: directory containing experiment files, including schedule.toml. [experiment].toml files,
-                               and the position list
-    :param config_path: path to the configuration file. If None, the experiment directory's
-                        pyclm_config[.<anything>].toml is used, then the working directory's
-    :param segmentation_methods: optional dictionary of segmentation method classes to register with the SegmentationProcess
-                                    key is the method name (used by [experiment].toml), value is the class
-    :param pattern_methods: optional dictionary of pattern method classes to register with the PatternProcess
-                                    key is the method name (used by [experiment].toml), value is the class
-    :param tracking_methods: optional dictionary of tracking method classes to register with the TrackingProcess
-                                    key is the method name (used by [tracking] in the experiment toml), value is the class
-    :return:
+    Run the experiments of a directory: the same as ``pyclm run``.
+
+    :param experiment_directory: the directory holding the experiment TOMLs,
+        the schedule, the position list and (usually) ``pyclm_config.toml``
+    :param config_path: the configuration file; None means the directory's
+        ``pyclm_config[.<anything>].toml``, then the working directory's
+    :param segmentation_methods: ``{name: class}`` of custom segmentation
+        methods to register (``name`` is what ``[segmentation] method`` selects)
+    :param pattern_methods: ``{name: class}`` of custom pattern methods
+    :param position_mover: how the stage reaches a position; None means the
+        configuration's ``position_mover`` (``basic`` by default)
+    :param dry_image_source: frames for the virtual microscope; None with
+        ``dry=True`` discovers them from the directory
+    :param tracking_methods: ``{name: class}`` of custom tracking methods
+    :param dry: run on the virtual microscope
+    :param gui: open the live viewer in its own process
+    :param check: run ``pyclm check`` first and stop on errors
+    :param force: start despite check errors
     """
 
     experiment_directory = Path(experiment_directory)
