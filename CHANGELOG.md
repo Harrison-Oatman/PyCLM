@@ -303,6 +303,15 @@ becomes a tagged release.
   configuration, writing methods, reading data, the shipped pattern
   methods, the pipeline for developers) and covers the modules added
   since Stage 3; pages are named after their modules.
+- `docs/release-wet-tests.md` lists the checks that need a microscope
+  before a release, and `tests/wet_tests/` is a self-contained package
+  that runs them: one experiment directory per item with a `guide.md`
+  saying what must be generated live, a `wet` command (`prepare`, `run`,
+  `verify`, `commands`, `report`, `clean`) that copies one configuration
+  template into every item and registers the methods the items use, and
+  automatic verification of the files a run leaves behind.
+- A dry run no longer takes a previous run's ImageJ hyperstacks
+  (`<label>_imaging.tif`, `<label>_stim.tif`, …) for position TIFs.
 
 ### Breaking changes for developers
 

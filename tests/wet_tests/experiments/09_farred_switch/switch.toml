@@ -1,0 +1,40 @@
+format_version = 1
+
+[config_groups]
+Objective = "1-Plan Apo LmbdD0.80 20x"
+System = "Startup"
+
+[imaging]
+every_t = 8
+exposure = 50
+save = true
+binning = 1
+
+    [imaging.config_groups]
+    Laser-Intensity = "50%"
+    LightPath = "Fluor"
+
+[channels]
+group = "Channel"
+presets = ["farred"]
+
+[stimulation]
+every_t = 1
+exposure = 200
+save = true
+
+    [stimulation.config_groups]
+    Channel = "DMD"
+    LightPath = "DMD"
+    Laser-Intensity = "AllOff"
+    Sola = "30"
+
+[pattern]
+method = "red_farred_switch"
+program = "1100"
+farred_channel = "farred"
+red_device = "LaserRed"
+farred_device = "LaserFarRed"
+property = "Intensity"
+on = 100.0
+off = 0.0

@@ -1,0 +1,32 @@
+[project]
+name = "pyclm-wet-tests"
+version = "0.1.0"
+description = "Pre-release checks for PyCLM that need a microscope"
+requires-python = ">=3.11"
+dependencies = [
+    "pyclm",
+    "pyarrow>=15",
+    "toml>=0.10.2",
+]
+
+[project.scripts]
+wet = "wet.cli:main"
+
+[tool.uv]
+# keep the same pymmcore pair as the PyCLM checkout ([tool.uv] there): the
+# device interface must match the microscope's Micro-Manager adapters
+constraint-dependencies = [
+    "pymmcore==11.2.1.71.0",
+    "pymmcore-plus==0.14.0",
+]
+
+[tool.uv.sources]
+# point this at the PyCLM checkout being released
+pyclm = { path = "../..", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["wet"]

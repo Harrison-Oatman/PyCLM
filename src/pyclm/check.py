@@ -466,9 +466,9 @@ def check_directory(
             list_name, "", f"{len(labels)} position(s): {', '.join(labels) or 'none'}"
         )
     else:
-        dry_sources = list(directory.glob("*.tif")) + list(
-            directory.glob("dry_run.yml")
-        )
+        from .directories import dry_run_tifs
+
+        dry_sources = dry_run_tifs(directory) + list(directory.glob("dry_run.yml"))
         if dry_sources:
             report.info(
                 "positions",

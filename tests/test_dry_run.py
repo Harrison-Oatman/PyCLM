@@ -638,3 +638,25 @@ def test_position_list_round_trip(tmp_path):
     ]
     assert back[0].extras == {"PFSOffset": 5.5}
     assert back[1].extras == {}
+
+
+def test_dry_run_ignores_exported_hyperstacks(tif_name_experiment_dir):
+    """A previous run's ImageJ exports next to the TIFs are not taken for positions."""
+    from pyclm.directories import (
+        dry_run_tifs,
+        dry_schedule_from_directory,
+        is_export_tif,
+    )
+
+    d = tif_name_experiment_dir
+    for name in (
+        "bar10.00_imaging.tif",
+        "bar10.00_stim.tif",
+        "bar10.00_imaging_every5.tif",
+    ):
+        shutil.copy(next(d.glob("*.tif")), d / name)
+    assert is_export_tif(d / "bar10.00_stim.tif")
+    assert not is_export_tif(d / "bar10.00.tif")
+    assert all(not is_export_tif(p) for p in dry_run_tifs(d))
+    schedule, _source = dry_schedule_from_directory(d)
+    assert not any("_imaging" in n or "_stim" in n for n in schedule.experiment_names)

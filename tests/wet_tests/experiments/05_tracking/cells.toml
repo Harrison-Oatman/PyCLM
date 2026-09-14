@@ -1,0 +1,43 @@
+format_version = 1
+
+[config_groups]
+Objective = "1-Plan Apo LmbdD0.80 20x"
+System = "Startup"
+
+[imaging]
+every_t = 2
+exposure = 200
+save = true
+binning = 1
+
+    [imaging.config_groups]
+    Laser-Intensity = "50%"
+    LightPath = "Fluor"
+
+[channels]
+group = "Channel"
+presets = ["545"]
+
+[stimulation]
+every_t = 1
+exposure = 500
+save = false
+
+    [stimulation.config_groups]
+    Channel = "DMD"
+    LightPath = "DMD"
+    Laser-Intensity = "AllOff"
+    Sola = "30"
+
+[segmentation]
+method = "cellpose"
+model = "cpsam"
+
+[tracking]
+method = "centroid"
+max_distance_um = 20
+
+[pattern]
+method = "move_out"
+channel = "545"
+tracks = true

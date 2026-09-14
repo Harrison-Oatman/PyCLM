@@ -57,6 +57,20 @@ def is_reserved_toml(name: str) -> bool:
     return bool(SCHEDULE_PATTERN.match(name) or CONFIG_PATTERN.match(name))
 
 
+# the ImageJ export writes <label>_<cadence group>.tif next to the stores
+EXPORT_TIF = re.compile(r"^.+_(imaging|stim|imaging_every\d+)$")
+
+
+def is_export_tif(path) -> bool:
+    """Whether a TIF is an ImageJ hyperstack PyCLM exported (not a dry-run source)."""
+    return bool(EXPORT_TIF.match(Path(path).stem))
+
+
+def dry_run_tifs(directory) -> list[Path]:
+    """The TIFs of a directory that can feed a dry run, exports excluded."""
+    return sorted(p for p in Path(directory).glob("*.tif") if not is_export_tif(p))
+
+
 def experiment_tomls(directory) -> dict[str, Path]:
     """``{stem: path}`` of the experiment TOMLs in a directory (schedule and config excluded)."""
     directory = Path(directory)
@@ -323,7 +337,7 @@ def _dry_schedule_from_position_list(
     else:
         pos_list = positions_from_xml(str(xml_path))
 
-    available_tifs = sorted(experiment_dir.glob("*.tif"))
+    available_tifs = dry_run_tifs(experiment_dir)
     if not available_tifs:
         raise FileNotFoundError(f"No TIF files found in {experiment_dir} for dry run")
 
@@ -378,7 +392,7 @@ def _dry_schedule_from_tifs(
     experiment ``fast.toml``).  TIFs with no matching TOML are silently
     skipped.  Placeholder coordinates are assigned sequentially.
     """
-    tif_files = sorted(experiment_dir.glob("*.tif"))
+    tif_files = dry_run_tifs(experiment_dir)
     if not tif_files:
         raise FileNotFoundError(f"No TIF files found in {experiment_dir} for dry run")
 

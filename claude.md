@@ -14,6 +14,9 @@ uv run --group test pytest
 # Run a single test
 uv run --group test pytest tests/test_base_process.py
 
+# The wet tests (need a microscope): a separate uv project, see tests/wet_tests/README.md
+cd tests/wet_tests && uv sync && uv run wet list
+
 # Lint (via pre-commit)
 uv run pre-commit run --all-files
 
