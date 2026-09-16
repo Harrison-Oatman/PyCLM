@@ -25,6 +25,13 @@ are importable from ``pyclm``.
 .. autoclass:: pyclm.core.patterns.pattern.ROI
    :members:
 
+Composites
+----------
+
+.. autoclass:: pyclm.core.patterns.composite.SplitPattern
+   :members: nested_methods, bind_registry, masks, update
+   :show-inheritance:
+
 Gallery metadata for the :doc:`../method_zoo`:
 
 .. autoclass:: pyclm.core.patterns.zoo.ZooMeta

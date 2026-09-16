@@ -313,6 +313,18 @@ becomes a tagged release.
 - A dry run no longer takes a previous run's ImageJ hyperstacks
   (`<label>_imaging.tif`, `<label>_stim.tif`, …) for position TIFs.
 
+### The `split` pattern method
+
+- `method = "split"` with `[pattern.left]` / `[pattern.right]` (or `top` /
+  `bottom`) sub-tables runs one pattern method on each half of the field:
+  each half is an ordinary method with its own arguments, requirements are
+  merged, `boundary` moves the edge and `feather` blends across it,
+  `pyclm check` validates the halves, `set_pattern` reaches them as
+  `left.<argument>`. Two hooks on `PatternMethod` make it possible for
+  any composite: `nested_methods(kwargs)` (what the check validates) and
+  `bind_registry(registry)` (called by the pattern process before
+  `initialize`, with the registered methods).
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,

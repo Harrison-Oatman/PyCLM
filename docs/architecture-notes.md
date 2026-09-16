@@ -518,7 +518,7 @@ are closed on both paths.
 
 | Frame | Where it lives | Notes |
 |---|---|---|
-| Stage µm (x, y, z, extras) | `MicroscopePosition` | `PFSPositionMover` negates y when calling `setXYPosition` (`position_mover.py:82`). |
+| Stage µm (x, y, z, extras) | `MicroscopePosition` | Passed to `setXYPosition` as listed; the y negation `PFSPositionMover` once applied (a workaround for a wrong stage configuration) was removed on 2026-09-14. |
 | Camera pixels, full ROI | `CameraProperties.roi` from `core.getROI()` | `(x_off, y_off, w, h)`; `get_image_shape()` returns `(h//b, w//b)`. |
 | Pattern space | `PatternMethod.pattern_shape`, `pixel_size_um` | Camera ROI divided by **stimulation** binning; methods return float `[0,1]` arrays of this shape. `update_binning` keeps `pattern_shape` integral (the `int(h)` casts in built-in methods predate that and are harmless). |
 | SLM pixels | `SLMBuffer.slm_shape`, `pyclm_config.affine_transform` (2×3, camera→SLM) | `pattern_to_slm` scales the linear part by binning, converts to uint8 0–255, `cv2.warpAffine`. Every method returns camera coordinates (the SLM-coordinates path went with `PatternReview` in Stage 6). |

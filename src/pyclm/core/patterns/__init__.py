@@ -9,6 +9,7 @@ from .cell_intensity_patterns import (
     CenteredImageModel,
     GlobalCycleModel,
 )
+from .composite import SplitPattern
 from .embryo_patterns import InnerPatternMethod, OuterPatternMethod
 from .fbc_cell_movement import (
     BounceModel,
@@ -30,6 +31,7 @@ from .static_patterns import CirclePattern, FullOnPattern
 
 known_models = {
     "circle": CirclePattern,
+    "split": SplitPattern,
     "bar": BarPatternBase,
     "bar_bounce": BouncingBarPattern,
     "full_on": FullOnPattern,

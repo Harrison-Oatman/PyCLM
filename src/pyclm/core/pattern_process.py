@@ -95,6 +95,7 @@ class PatternProcess(PipelineProcess):
         logger.debug(f"{experiment_name}: {method_name} kwargs {method_kwargs}")
 
         model = model_class(**method_kwargs)
+        model.bind_registry(self.known_models)
 
         self.models[experiment_name] = model
         self.experiments[experiment_name] = experiment

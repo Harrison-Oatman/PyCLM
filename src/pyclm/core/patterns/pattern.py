@@ -462,6 +462,23 @@ class PatternMethod:
             )
         )
 
+    @classmethod
+    def nested_methods(cls, kwargs: dict) -> list[tuple[str, str, dict]]:
+        """
+        Pattern methods this one builds from its TOML arguments, as
+        ``(label, method name, kwargs)``; ``pyclm check`` validates them.
+        Empty for an ordinary method.
+        """
+        return []
+
+    def bind_registry(self, registry: dict[str, type]) -> None:
+        """
+        Called by the pattern process, with the registered pattern methods,
+        after construction and before ``initialize``: a method that builds
+        other methods (``split``) constructs them here.
+        """
+        return None
+
     def request_stim(self, raw: bool = False, seg: bool = False, history: int = 1):
         """Request the imaged stimulation"""
         self._stim_requested = True

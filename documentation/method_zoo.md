@@ -7,6 +7,10 @@ build time from sample images in `documentation/zoo_sources/`.
 
 ## Stimulation / Pattern Methods
 
+Two of these can share one field, each on its own half, with `method =
+"split"` and `[pattern.left]` / `[pattern.right]` (or `top` / `bottom`)
+sub-tables; see the "Combining methods" section of [Writing custom pattern methods](custom_pattern_methods.md).
+
 ```{include} _zoo_gallery.md
 ```
 

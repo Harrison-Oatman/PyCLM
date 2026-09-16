@@ -332,6 +332,39 @@ come from the same camera frame, so they line up pixel for pixel.
 
 ---
 
+## Combining methods: `split`
+
+Two methods can share one field, each on its own half, without writing a
+new class. `split` takes the halves as sub-tables of `[pattern]`, either
+`left` / `right` or `top` / `bottom`, each an ordinary pattern table with a
+`method` and that method's arguments:
+
+```toml
+[pattern]
+method = "split"
+boundary = 0.5      # where the halves meet, as a fraction of the width (or height); default 0.5
+feather = 0         # pixels of linear blend across the boundary; default 0 (a hard edge)
+
+[pattern.left]
+method = "move_in"
+channel = "545"
+
+[pattern.right]
+method = "move_out"
+channel = "545"
+```
+
+Each half's method sees the whole field (its segmentation, its history,
+its own arguments) and generates its full pattern; `split` keeps each on
+its side of the boundary. A cell straddling the boundary gets one method
+on one side and the other on the other. What the halves ask for is merged,
+so a frame or a segmentation both need arrives once. `pyclm check`
+validates each half's method name and arguments under `[pattern.left]`
+and the like; a `set_pattern` command reaches a half as `left.<argument>`
+(`boundary` and `feather` are the composite's own). Custom methods work as
+halves as soon as they are registered; a `split` can even hold another
+`split`.
+
 ## Grids and blank patterns
 
 **Grids.** When the position is a grid of tiles (MicroManager's Create

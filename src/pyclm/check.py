@@ -507,6 +507,21 @@ def check_directory(
                 pattern_cls, cfg.pattern.kwargs, "pattern", cfg.pattern.method
             ):
                 report.error(file, "[pattern]", problem)
+            # a method built from other methods (split): check each of them
+            for label, sub_name, sub_kwargs in pattern_cls.nested_methods(
+                cfg.pattern.kwargs
+            ):
+                sub_cls = patterns.get(sub_name)
+                if sub_cls is None:
+                    report.error(
+                        file,
+                        f"[pattern.{label}]",
+                        f"unknown pattern method '{sub_name}' "
+                        f"(known: {', '.join(sorted(patterns))})",
+                    )
+                    continue
+                for problem in check_kwargs(sub_cls, sub_kwargs, "pattern", sub_name):
+                    report.error(file, f"[pattern.{label}]", problem)
 
         for name, table in (
             [("segmentation", cfg.segmentation)] if cfg.segmentation else []
@@ -546,6 +561,7 @@ def check_directory(
             continue
         try:
             method = pattern_cls(**cfg.pattern.kwargs)
+            method.bind_registry(patterns)
         except Exception as e:
             report.error(
                 file, "[pattern]", f"constructing '{cfg.pattern.method}' failed: {e!r}"

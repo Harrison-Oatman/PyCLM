@@ -87,9 +87,12 @@ Still a single global value; per-channel settle is a Stage 1 plan concern.
 The focus device is now `focus_device` in `pyclm_config.toml` (default
 `"ZDrive"` for backwards compatibility, logged at INFO when the key is
 absent). Still hard-coded: PFS device/property names as overridable class
-attributes on `PFSPositionMover`; the y-axis negation in
-`core/position_mover.py` (`PFSPositionMover.move_to`); the dummy SLM shape
-`1140×900` in `MicroscopeProcess.declare_slm` (config says 912).
+attributes on `PFSPositionMover`; the dummy SLM shape `1140×900` in
+`MicroscopeProcess.declare_slm` (config says 912). The y-axis negation
+`PFSPositionMover` used to apply was removed on 2026-09-14: it compensated
+for a wrong MicroManager stage configuration, not a Nikon convention.
+Frames tables written before that date record the position list's `y`
+while the stage actually went to `-y`.
 
 ### 11. Swallowed handler exceptions have no health signal (hazard, partly addressed)
 
