@@ -312,3 +312,53 @@ def test_labelled_schedule_and_config_names(good_dir):
     )
     report = check_directory(good_dir)
     assert any("2 pyclm_config files" in str(e) for e in report.errors)
+
+
+def test_pixel_size_preset_is_resolved_from_the_objective(good_dir, tmp_path):
+    """The .cfg's pixel-size presets are matched against [config_groups]."""
+    from pyclm.mmconfig import MMConfig
+
+    cfg_text = MM_CFG + (
+        "ConfigGroup,Objective,10x,Core,Focus,ZDrive\n"
+        "ConfigGroup,Objective,10x,Nosepiece,Label,10x\n"
+        "ConfigGroup,Objective,1-Plan Apo LmbdD0.80 20x,Nosepiece,Label,20x\n"
+        "ConfigPixelSize,px20,Nosepiece,Label,20x\n"
+        "PixelSize_um,px20,0.65\n"
+        "ConfigPixelSize,px10,Nosepiece,Label,10x\n"
+        "PixelSize_um,px10,1.3\n"
+    )
+    mm_path = tmp_path / "scope.cfg"
+    mm_path.write_text(cfg_text)
+    mm = MMConfig.from_file(mm_path)
+    assert mm.pixel_sizes["px20"] == (0.65, [("Nosepiece", "Label", "20x")])
+    assert mm.pixel_size_for([("Objective", "10x")]) == ("px10", 1.3)
+    assert mm.pixel_size_for([("Objective", "1-Plan Apo LmbdD0.80 20x")]) == (
+        "px20",
+        0.65,
+    )
+    assert mm.pixel_size_for([("System", "Startup")]) is None
+
+    report = check_directory(good_dir, mm_config=mm_path)
+    text = report.text()
+    assert "pixel size 0.65 um (preset 'px20')" in text
+
+    # one experiment on another objective: a warning about the shared presets
+    toml = good_dir / "bar025.toml"
+    toml.write_text(
+        toml.read_text().replace(
+            'Objective = "1-Plan Apo LmbdD0.80 20x"', 'Objective = "10x"'
+        )
+    )
+    report = check_directory(good_dir, mm_config=mm_path)
+    text = report.text()
+    assert "pixel size 1.3 um (preset 'px10')" in text
+    assert any(
+        "[config_groups] Objective: differs between experiments" in str(w)
+        for w in report.warnings
+    )
+
+    # an objective with no preset: a warning that the run would see 0
+    toml.write_text(toml.read_text().replace('Objective = "10x"', 'Objective = "40x"'))
+    (mm_path).write_text(cfg_text + "ConfigGroup,Objective,40x,Nosepiece,Label,40x\n")
+    report = check_directory(good_dir, mm_config=mm_path)
+    assert any("no pixel-size preset matches" in str(w) for w in report.warnings)

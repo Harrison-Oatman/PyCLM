@@ -65,3 +65,32 @@ def test_settle_time_reaches_microscope():
         "unused.cfg", dry=True, dry_image_source=FakeImageSource(), settle_time_s=0.25
     )
     assert controller.microscope.settle_time_s == 0.25
+
+
+def test_shared_config_groups_are_applied_before_the_pixel_size_is_read(tmp_path):
+    """The objective decides the pixel size; whatever the scope was left at, the
+    run's presets are in force when the camera is asked."""
+    from helpers import make_experiment, make_schedule
+
+    from pyclm.core.experiments import ConfigGroup
+
+    controller = make_controller()
+    a = make_experiment("a.00")
+    b = make_experiment("b.00")
+    for exp in (a, b):
+        for cfg in (*exp.channels.values(), exp.stimulation):
+            cfg.update_config_groups([ConfigGroup("Objective", "20x")])
+    a.channels["545"].update_config_groups([ConfigGroup("LightPath", "Fluor")])
+    schedule = make_schedule([a, b])
+    core = controller.core
+    seen = {}
+    real = core.getPixelSizeUm
+
+    def spy():
+        seen.update(core._config_groups)
+        return real()
+
+    core.getPixelSizeUm = spy
+    controller.initialize(schedule, (12, 10), np.eye(2, 3, dtype=np.float32), tmp_path)
+    assert seen.get("Objective") == "20x"  # shared by every channel: applied first
+    assert "LightPath" not in seen  # only one channel sets it: not shared

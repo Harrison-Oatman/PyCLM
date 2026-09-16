@@ -104,6 +104,34 @@ If your microscope has no SLM, set the shape to the physical DMD resolution anyw
 
 ---
 
+## 3b. The objective and the pixel size
+
+PyCLM takes the pixel size from MicroManager, once, when a run starts:
+the value MicroManager's **pixel size calibration** (Devices → Pixel Size
+Calibration, or the Pixel Calibrator plugin) reports for the current
+device state. Every distance in a pattern method (a bar's speed and
+period, a cell's size, a grid's spacing) and in tracking comes from it, so
+three things must line up:
+
+1. A pixel-size preset exists for each objective you use, with the
+   objective's device property as its condition (this is what the
+   calibration dialog creates).
+2. Each experiment TOML names the objective in `[config_groups]`
+   (`Objective = "..."`). The run applies the presets every experiment
+   shares before it reads the pixel size, so it does not matter which
+   objective the microscope was left at.
+3. `pyclm_config.toml` is calibrated for that objective: the affine from
+   the Projector plugin and the `camera_roi`. Keep one configuration file
+   per objective (`pyclm_config.20x.toml`, `pyclm_config.10x.toml`) and
+   put the right one in the directory.
+
+`pyclm check` reads the `.cfg` and prints the pixel size the experiment's
+`[config_groups]` select (`pixel size 0.65 um (preset 'px20')`), warns
+when no preset matches (the run would report 0), and warns when
+experiments in one directory disagree on a global config group. Binning
+needs no preset of its own: PyCLM sets it per acquisition and records the
+binned pixel size with every frame.
+
 ## 4. Choose or Implement a PositionMover
 
 PyCLM needs to know how to move to an imaging position on your hardware. Three choices are available:

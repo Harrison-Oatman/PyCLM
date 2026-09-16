@@ -8,6 +8,8 @@ Only the lines that matter are read::
     Device,<label>,<library>,<adapter>
     Property,<device>,<property>,<value>
     ConfigGroup,<group>,<preset>,<device>,<property>,<value>
+    ConfigPixelSize,<preset>,<device>,<property>,<value>
+    PixelSize_um,<preset>,<value>
 
 A property that never appears in the file may still exist on the device,
 so :meth:`MMConfig.has_property` returns None for "unknown" rather than
@@ -31,6 +33,10 @@ class MMConfig:
     groups: dict[str, dict[str, list[tuple[str, str, str]]]] = field(
         default_factory=dict
     )
+    # pixel-size preset -> (um per pixel, [(device, property, value), ...])
+    pixel_sizes: dict[str, tuple[float | None, list[tuple[str, str, str]]]] = field(
+        default_factory=dict
+    )
 
     @classmethod
     def from_file(cls, path: str | Path) -> MMConfig:
@@ -48,6 +54,15 @@ class MMConfig:
                 elif kind == "Property" and len(parts) >= 3:
                     cfg.devices.add(parts[1])
                     cfg.properties.setdefault(parts[1], set()).add(parts[2])
+                elif kind == "ConfigPixelSize" and len(parts) >= 5:
+                    _um, conds = cfg.pixel_sizes.setdefault(parts[1], (None, []))
+                    conds.append((parts[2], parts[3], ",".join(parts[4:])))
+                elif kind == "PixelSize_um" and len(parts) >= 3:
+                    _um, conds = cfg.pixel_sizes.setdefault(parts[1], (None, []))
+                    try:
+                        cfg.pixel_sizes[parts[1]] = (float(parts[2]), conds)
+                    except ValueError:
+                        pass
                 elif kind == "ConfigGroup" and len(parts) >= 3:
                     group = cfg.groups.setdefault(parts[1], {})
                     preset = group.setdefault(parts[2], [])
@@ -74,6 +89,31 @@ class MMConfig:
         if device not in self.devices:
             return False
         return True if prop in self.properties.get(device, set()) else None
+
+    def device_state(
+        self, presets: list[tuple[str, str]]
+    ) -> dict[tuple[str, str], str]:
+        """The (device, property) -> value the given (group, preset) pairs set."""
+        state: dict[tuple[str, str], str] = {}
+        for group, preset in presets:
+            for device, prop, value in self.groups.get(group, {}).get(preset, []):
+                state[(device, prop)] = value
+        return state
+
+    def pixel_size_for(
+        self, presets: list[tuple[str, str]]
+    ) -> tuple[str, float | None] | None:
+        """
+        The pixel-size preset whose conditions are all met by the device
+        state the given (group, preset) pairs produce, as (name, um), or
+        None. MicroManager resolves the pixel size the same way: every
+        condition of a preset must match the current device properties.
+        """
+        state = self.device_state(presets)
+        for name, (um, conds) in self.pixel_sizes.items():
+            if conds and all(state.get((d, p)) == v for d, p, v in conds):
+                return name, um
+        return None
 
     def summary(self) -> str:
         return (

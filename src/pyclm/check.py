@@ -182,6 +182,64 @@ def _configs_for(directory: Path, label: str) -> dict:
         return {}
 
 
+def _check_shared_config_groups(report: CheckReport, configs: dict) -> None:
+    """
+    The run reads the camera's pixel size once, at start, with the presets
+    every experiment shares applied (the objective lives there), and the
+    affine and camera ROI are calibrated for one objective: experiments that
+    disagree on a global config group get a warning.
+    """
+    if len(configs) < 2:
+        return
+    by_group: dict[str, dict[str, set[str]]] = {}
+    for stem, cfg in configs.items():
+        for group, preset in cfg.config_groups.items():
+            by_group.setdefault(group, {}).setdefault(preset, set()).add(stem)
+    for group, presets in sorted(by_group.items()):
+        if len(presets) > 1:
+            detail = "; ".join(
+                f"{preset}: {', '.join(sorted(stems))}"
+                for preset, stems in presets.items()
+            )
+            report.warning(
+                "experiments",
+                f"[config_groups] {group}",
+                f"differs between experiments ({detail}); the pixel size is read "
+                "once at start under the shared presets and the affine and "
+                "camera_roi are calibrated for one objective",
+            )
+
+
+def _check_pixel_size(report: CheckReport, file: str, cfg, mm: MMConfig) -> None:
+    """Which MicroManager pixel-size preset the experiment's [config_groups] select."""
+    if not mm.pixel_sizes:
+        report.info(
+            file,
+            "[config_groups]",
+            "the MicroManager configuration defines no pixel-size presets; "
+            "the run will report a pixel size of 0 (Devices > Pixel Size Calibration)",
+        )
+        return
+    presets = sorted(cfg.config_groups.items())
+    found = mm.pixel_size_for(presets)
+    if found is None:
+        report.warning(
+            file,
+            "[config_groups]",
+            f"no pixel-size preset matches {dict(presets)}; the run would report a "
+            f"pixel size of 0 (presets: {', '.join(sorted(mm.pixel_sizes)) or 'none'})",
+        )
+        return
+    name, um = found
+    report.info(
+        file,
+        "[config_groups]",
+        f"pixel size {um:g} um (preset '{name}')"
+        if um
+        else f"pixel-size preset '{name}'",
+    )
+
+
 def _check_position_mover(report: CheckReport, file: str, config: PyclmConfig) -> None:
     from .core.position_mover import resolve_mover
 
@@ -690,9 +748,11 @@ def check_directory(
             "config_path",
             f"MicroManager configuration not found at {mm_path}; presets and devices not checked",
         )
+    _check_shared_config_groups(report, configs)
     if mm is not None:
         for stem, cfg in configs.items():
             file = f"{stem}.toml"
+            _check_pixel_size(report, file, cfg, mm)
             for group, preset in sorted(cfg.config_groups_used()):
                 if not mm.has_group(group):
                     report.error(

@@ -325,6 +325,17 @@ becomes a tagged release.
   `bind_registry(registry)` (called by the pattern process before
   `initialize`, with the registered methods).
 
+### The pixel size follows the objective
+
+- The run applies the config-group presets every experiment shares (the
+  objective among them) before reading the camera's pixel size, so the
+  pixel size no longer depends on which objective the microscope was left
+  at; a pixel size of 0 is warned about. `pyclm check` reads the `.cfg`'s
+  pixel-size presets, prints the one each experiment's `[config_groups]`
+  select, warns when none matches, and warns when experiments in a
+  directory disagree on a global config group (the affine and camera ROI
+  are per objective).
+
 ### Fixes
 
 - A negative `bar_speed` moves the bar (and the sawtooth) towards -y; it

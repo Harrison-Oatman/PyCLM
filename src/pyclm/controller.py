@@ -26,6 +26,7 @@ from .core import (
     WriterProcess,
 )
 from .core.base_process import PipelineProcess
+from .core.experiments import ConfigGroup
 from .core.grid import geometry_for
 from .core.kinds import DEFAULT_SEGMENTATION, seg_name
 from .core.plan import PLAN_FILENAME, AcquisitionPlan
@@ -187,6 +188,16 @@ class Controller:
                     f"dry run: affine transform scaled by the source binning {binning}"
                 )
 
+        # the presets every experiment shares (the objective among them) decide
+        # the pixel size: apply them before it is read, whatever the microscope
+        # was left at
+        shared = self._shared_config_groups(schedule)
+        if shared:
+            self.microscope.handle_config_update(shared)
+            logger.info(
+                "applied the shared config groups before reading the camera: "
+                + ", ".join(f"{g.group}={g.config}" for g in shared)
+            )
         self.microscope.set_binning(1)
         if camera_roi is not None:
             self.core.setROI(*[int(v) for v in camera_roi])
@@ -194,6 +205,12 @@ class Controller:
 
         camera_roi = ROI(*self.core.getROI())
         camera_resolution = self.core.getPixelSizeUm()
+        if not camera_resolution:
+            logger.warning(
+                "the camera reports a pixel size of 0: no MicroManager pixel-size "
+                "preset matches the current objective and binning; distances in "
+                "pattern methods and tracking will be wrong (see pyclm check)"
+            )
 
         self.camera_properties = CameraProperties(camera_roi, camera_resolution)
 
@@ -282,6 +299,16 @@ class Controller:
 
         self.all_layers = all_layers
         self.processes = [self.manager, self.slm_buffer, *router.active_processes()]
+
+    @staticmethod
+    def _shared_config_groups(schedule: ExperimentSchedule) -> list[ConfigGroup]:
+        """The (group, preset) pairs every channel of every experiment sets."""
+        shared: set[tuple[str, str]] | None = None
+        for experiment in schedule.experiments.values():
+            for cfg in (*experiment.channels.values(), experiment.stimulation):
+                pairs = {(g.group, g.config) for g in cfg.get_config_groups()}
+                shared = pairs if shared is None else shared & pairs
+        return [ConfigGroup(g, p) for g, p in sorted(shared or ())]
 
     def _instantiate_producers(self, schedule: ExperimentSchedule, router: Router):
         """Construct the methods of producer stages only where their output is demanded."""
