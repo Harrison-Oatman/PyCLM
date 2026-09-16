@@ -233,3 +233,28 @@ def test_real_core_implements_every_interface_method():
         and name not in vars(RealMicroscopeCore)
     ]
     assert missing == []
+
+
+def test_pfs_timeout_names_the_status_seen():
+    """A focus-lock timeout says which PFS status strings were polled and where z ended."""
+    from pyclm.core.position_mover import PFSPositionMover
+
+    core = SimulatedMicroscopeCore(FakeImageSource((16, 16)))
+    core.setProperty("PFS", "PFS Status", "0000000000000000")  # never locks
+    real_set = core.setProperty
+
+    def set_property(device, prop, value):
+        if (device, prop) == ("PFS", "FocusMaintenance"):
+            return None  # the simulated core would report a lock; keep it searching
+        return real_set(device, prop, value)
+
+    core.setProperty = set_property
+    mover = PFSPositionMover()
+    mover.PFS_TIMEOUT_S = 0.05
+    position = MicroscopePosition(1.0, 2.0, 3.0, extras={"PFSOffset": 7.0})
+    with pytest.raises(TimeoutError) as info:
+        mover.move_to(position, core)
+    text = str(info.value)
+    assert "status seen: '0000000000000000' x" in text
+    assert "offset 7.0" in text
+    assert "z now 3.00" in text

@@ -94,14 +94,19 @@ class PFSPositionMover(PositionMover):
         core.setProperty(self.PFS_DEVICE, self.PFS_MAINTENANCE_PROPERTY, "On")
 
         lock_start = time()
+        seen: dict[str, int] = {}
         while (
-            core.getProperty(self.PFS_DEVICE, self.PFS_STATUS_PROPERTY)
-            != self.PFS_LOCKED_VALUE
-        ):
+            status := core.getProperty(self.PFS_DEVICE, self.PFS_STATUS_PROPERTY)
+        ) != self.PFS_LOCKED_VALUE:
+            seen[status] = seen.get(status, 0) + 1
             if time() - lock_start > self.PFS_TIMEOUT_S:
+                # the status strings seen say why: searching, out of range, off
+                history = ", ".join(f"{s!r} x{n}" for s, n in seen.items())
                 raise TimeoutError(
                     f"PFS did not report focus lock within {self.PFS_TIMEOUT_S}s "
-                    f"at x={position.x}, y={position.y}, z={position.z}"
+                    f"at x={position.x}, y={position.y}, z={position.z} "
+                    f"(offset {pfs_offset}, z now {core.getZPosition():.2f}); "
+                    f"status seen: {history}"
                 )
             sleep(self.PFS_POLL_S)
 
