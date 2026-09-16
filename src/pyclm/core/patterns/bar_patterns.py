@@ -4,6 +4,17 @@ from .pattern import DataDock, PatternMethod
 from .zoo import ZooMeta
 
 
+def _bar_is_on(yy, t_minutes, bar_speed, period_um, duty_cycle):
+    """
+    Where a periodic bar is lit at ``t_minutes``: the bar travels along +y at
+    ``bar_speed`` µm/min, or along -y when the speed is negative, repeating
+    every ``period_um``. The period in time is taken from the speed's
+    magnitude so the modulo is always positive.
+    """
+    period_time = period_um / abs(bar_speed)  # minutes
+    return ((t_minutes - yy / bar_speed) % period_time) < duty_cycle * period_time
+
+
 class BarPatternBase(PatternMethod):
     """
     Creates a BarPattern or StationaryBarPattern depending on the requested barspeed
@@ -60,28 +71,36 @@ class BarPattern(BarPatternBase):
         source="mdck",
         kwargs={"duty_cycle": 0.2, "bar_speed": 1.0, "period": 100},
         title="Moving Bar",
-        description="Periodic bar sweeping along the y-axis at constant speed.",
+        description="Periodic bar sweeping along the y-axis at constant speed; a negative speed reverses it.",
     )
 
     def __init__(self, duty_cycle=0.2, bar_speed=1, period=30, **kwargs):
         """
         :param duty_cycle: fraction of time spent on (float 0-1), and consequently fraction of
                            vertical axis containing "on" pixels
-        :param bar_speed: speed in um/min
+        :param bar_speed: speed in um/min; negative moves the bar towards -y
         :param period: period in um
         """
         super().__init__(**kwargs)
 
+        if bar_speed == 0:
+            raise ValueError(
+                "bar_speed must be non-zero (0 selects the stationary bar)"
+            )
         self.duty_cycle = duty_cycle
-        self.bar_speed = bar_speed
+        self.bar_speed = bar_speed  # um/min; negative moves the bar the other way
         self.period_space = period  # in um
-        self.period_time = period / bar_speed  # in minutes
+
+    @property
+    def period_time(self) -> float:
+        """Minutes for the bar to travel one spatial period (follows bar_speed changes)."""
+        return self.period_space / abs(self.bar_speed)
 
     def _get_pattern_at_time(self, t_minutes):
         _xx, yy = self.get_um_meshgrid()
-        is_on = (
-            (t_minutes - (yy / self.bar_speed)) % self.period_time
-        ) < self.duty_cycle * self.period_time
+        is_on = _bar_is_on(
+            yy, t_minutes, self.bar_speed, self.period_space, self.duty_cycle
+        )
         return is_on.astype(np.float16)
 
     def generate(self, context):
@@ -100,20 +119,23 @@ class SawToothMethod(PatternMethod):
         """
         super().__init__(**kwargs)
 
+        if bar_speed == 0:
+            raise ValueError("bar_speed must be non-zero")
         self.duty_cycle = duty_cycle
-        self.bar_speed = bar_speed
+        self.bar_speed = bar_speed  # um/min; negative moves the ramp the other way
         self.period_space = period  # in um
-        self.period_time = period / bar_speed  # in minutes
         self.inverse = inverse
+
+    @property
+    def period_time(self) -> float:
+        return self.period_space / abs(self.bar_speed)
 
     def generate(self, context):
         t = context.time / 60
 
         _xx, yy = self.get_um_meshgrid()
 
-        is_on = (
-            (t - (yy / self.bar_speed)) % self.period_time
-        ) < self.duty_cycle * self.period_time
+        is_on = _bar_is_on(yy, t, self.bar_speed, self.period_space, self.duty_cycle)
 
         val = ((t - (yy / self.bar_speed)) % self.period_time) / (
             self.duty_cycle * self.period_time

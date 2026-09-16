@@ -275,3 +275,17 @@ the scope as `TypeError: argument of type 'NoneType' is not iterable` in
 `tests/test_microscope_process.py` asserts that the real core defines every
 interface method itself.
 
+### 33. OME-Zarr metadata writes failed under a reader on Windows
+
+**Fixed 2026-09-16.** Zarr writes `.zgroup` / `.zattrs` / `.zarray` by
+writing a `.partial` file and replacing the target; Windows refuses the
+replace while another process has the target open, and the viewer
+re-reads those files every second. Seen on the scope as `PermissionError:
+[WinError 5] Access is denied … .zgroup.<id>.partial -> .zgroup` from
+`_update_progress`; the frame itself was already written and the next
+frame's progress update healed `current_t`, so no data was lost, but the
+error was counted and the `.partial` file left behind. Every metadata
+write (progress, pattern ids, array resizes) and the parquet table move
+now retry with a short backoff (`_retry_write`, `ome_zarr.py`), as the
+HDF5 writer already did for its own Windows collisions.
+

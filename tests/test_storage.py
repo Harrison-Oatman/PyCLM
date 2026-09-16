@@ -470,3 +470,40 @@ def test_hdf5_v1_drops_named_segmentations_with_one_warning(tmp_path, caplog):
         assert grp.label_names == ("segmentation",)
         assert grp.labels(0, "545").max() == 1
         assert grp.labels(0, "545", "nuclei") is None
+
+
+def test_zarr_metadata_write_retries_on_a_windows_sharing_violation(
+    tmp_path, monkeypatch, caplog
+):
+    """
+    A viewer re-reading the store makes an atomic replace of .zgroup fail
+    with PermissionError on Windows now and then; the writer retries instead
+    of losing the progress update.
+    """
+    import logging
+    import pathlib
+
+    from pyclm.core.storage import ome_zarr
+
+    monkeypatch.setattr(ome_zarr, "_RETRY_DELAYS_S", (0.0, 0.0, 0.0))
+    real_replace = pathlib.Path.replace
+    failures = {"left": 2}
+
+    def flaky_replace(self, target):
+        # only a rewrite of existing metadata collides with a reader, never creation
+        if (
+            str(target).endswith(".zgroup")
+            and pathlib.Path(target).exists()
+            and failures["left"] > 0
+        ):
+            failures["left"] -= 1
+            raise PermissionError(5, "Access is denied", str(self))
+        return real_replace(self, target)
+
+    monkeypatch.setattr(pathlib.Path, "replace", flaky_replace)
+    with caplog.at_level(logging.WARNING):
+        write_run(tmp_path)
+    assert failures["left"] == 0
+    assert "retrying" in caplog.text
+    exp = pio.open(tmp_path / "exp.00.zarr")
+    assert exp.current_t == 3  # the progress update was not lost

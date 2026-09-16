@@ -325,6 +325,15 @@ becomes a tagged release.
   `bind_registry(registry)` (called by the pattern process before
   `initialize`, with the registered methods).
 
+### Fixes
+
+- A negative `bar_speed` moves the bar (and the sawtooth) towards -y; it
+  used to make the modulo negative and light the field wrongly. The period
+  in time now follows a `set_pattern` change of `bar_speed`.
+- OME-Zarr metadata writes (progress, pattern ids, array resizes) and
+  the parquet tables retry on the Windows sharing violation a reader can
+  cause (known issue #33).
+
 ### Breaking changes for developers
 
 - `AcquisitionEvent` lost its routing arguments (`do_segmentation`,

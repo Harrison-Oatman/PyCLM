@@ -26,6 +26,7 @@ import logging
 import shutil
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
+from time import sleep
 
 import numcodecs
 import numpy as np
@@ -108,6 +109,39 @@ def _iso(timestamp) -> str | None:
     if not timestamp:
         return None
     return datetime.datetime.fromtimestamp(timestamp).isoformat(timespec="milliseconds")
+
+
+# Windows refuses to replace a file another process has open: the viewer
+# re-reads .zgroup / .zattrs / .zarray every second, so a metadata write
+# collides with it now and then. Retry with a short backoff before giving up.
+_RETRY_DELAYS_S = (0.05, 0.1, 0.2, 0.4, 0.8)
+
+
+def _retry_write(fn, what: str):
+    for attempt, delay in enumerate(_RETRY_DELAYS_S):
+        try:
+            return fn()
+        except PermissionError as e:
+            logger.warning(
+                f"{what}: {e.strerror or e} (attempt {attempt + 1}); retrying in {delay:.2f}s"
+            )
+            sleep(delay)
+    return fn()
+
+
+def _set_attrs(node, meta: dict, what: str, key: str = "pyclm") -> None:
+    def put():
+        node.attrs[key] = meta
+
+    _retry_write(put, what)
+
+
+def _update_attrs(node, attrs: dict, what: str) -> None:
+    _retry_write(lambda: node.attrs.update(attrs), what)
+
+
+def _resize(arr, shape, what: str) -> None:
+    _retry_write(lambda: arr.resize(shape), what)
 
 
 def _compressor():
@@ -260,23 +294,30 @@ class OMEZarrWriter(FrameWriter):
             h, w = image_shape(core, g.binning, geometry)
             px = self._pixel_size_um * g.binning
             img_group = root.create_group(g.name)
-            img_group.attrs.update(
+            _update_attrs(
+                img_group,
                 ngff_image_attrs(
                     f"{exp_name}/{g.name}",
                     [g.every_t * plan.interval_s, 1.0, px, px],
                     g.channels,
-                )
+                ),
+                "writing image metadata",
             )
-            img_group.attrs["pyclm"] = {
-                "channels": list(g.channels),
-                "stim_channel": g.stim_channel,
-                "every_t": g.every_t,
-                "t_delay": g.t_delay,
-                "t_stop": g.t_stop,
-                "binning": g.binning,
-                "timepoints": g.timepoints,
-                "interval_seconds": plan.interval_s,
-            }
+            _set_attrs(
+                img_group,
+                {
+                    "channels": list(g.channels),
+                    "stim_channel": g.stim_channel,
+                    "every_t": g.every_t,
+                    "t_delay": g.t_delay,
+                    "t_stop": g.t_stop,
+                    "binning": g.binning,
+                    "timepoints": g.timepoints,
+                    "interval_seconds": plan.interval_s,
+                },
+                "writing group metadata",
+                key="pyclm",
+            )
             store.images[g.name] = img_group.create_array(
                 "0",
                 shape=(g.timepoints, len(g.channels), h, w),
@@ -289,10 +330,15 @@ class OMEZarrWriter(FrameWriter):
             record_tracks = any(self.records(exp_name, c, "tracks") for c in g.channels)
             if seg_names or record_tracks:
                 labels = img_group.create_group("labels")
-                labels.attrs["labels"] = [
-                    *seg_names,
-                    *(["tracks"] if record_tracks else []),
-                ]
+                _set_attrs(
+                    labels,
+                    [
+                        *seg_names,
+                        *(["tracks"] if record_tracks else []),
+                    ],
+                    "writing labels metadata",
+                    key="labels",
+                )
                 scale = [g.every_t * plan.interval_s, 1.0, px, px]
                 for seg in seg_names:
                     store.labels[(g.name, seg)] = self._label_array(
@@ -307,12 +353,17 @@ class OMEZarrWriter(FrameWriter):
 
         if slm_shape is not None and self.pattern_policy != "none":
             patterns = root.create_group("patterns/dmd")
-            patterns.attrs["pyclm"] = {
-                "policy": self.pattern_policy,
-                "pattern_ids": [],
-                "camera_ids": [],
-                "tiles": [],
-            }
+            _set_attrs(
+                patterns,
+                {
+                    "policy": self.pattern_policy,
+                    "pattern_ids": [],
+                    "camera_ids": [],
+                    "tiles": [],
+                },
+                "writing pattern metadata",
+                key="pyclm",
+            )
             store.pattern_array = patterns.create_array(
                 "0",
                 shape=(0, int(slm_shape[0]), int(slm_shape[1])),
@@ -326,7 +377,12 @@ class OMEZarrWriter(FrameWriter):
             # camera reports a different ROI (as the image groups are)
             ch, cw = image_shape(core, experiment.stimulation.binning, geometry)
             camera = root.create_group("patterns/camera")
-            camera.attrs["pyclm"] = {"policy": self.pattern_policy, "pattern_ids": []}
+            _set_attrs(
+                camera,
+                {"policy": self.pattern_policy, "pattern_ids": []},
+                "writing pattern metadata",
+                key="pyclm",
+            )
             store.camera_array = camera.create_array(
                 "0",
                 shape=(0, int(ch), int(cw)),
@@ -336,36 +392,41 @@ class OMEZarrWriter(FrameWriter):
                 fill_value=0,
             )
 
-        root.attrs["pyclm"] = {
-            "format": STORAGE_FORMAT_VERSION,
-            "ngff_version": NGFF_VERSION,
-            "useq_version": _pkg_version("useq-schema"),
-            "experiment": exp_name,
-            "plan": plan.yaml_str(),
-            "experiment_metadata": experiment.as_dict(),
-            "schedule_metadata": plan.schedule.as_dict(),
-            "affine_transform": None
-            if affine_transform is None
-            else np.asarray(affine_transform, dtype=float).tolist(),
-            "slm_shape": None if slm_shape is None else [int(v) for v in slm_shape],
-            "camera_roi": [int(v) for v in core.getROI()],
-            "grid": None if geometry is None else geometry.as_dict(),
-            "pattern_policy": self.pattern_policy,
-            "routing": self.routing,
-            "groups": {
-                g.name: {
-                    "channels": list(g.channels),
-                    "every_t": g.every_t,
-                    "t_delay": g.t_delay,
-                    "t_stop": g.t_stop,
-                    "binning": g.binning,
-                    "timepoints": g.timepoints,
-                }
-                for g in groups
+        _set_attrs(
+            root,
+            {
+                "format": STORAGE_FORMAT_VERSION,
+                "ngff_version": NGFF_VERSION,
+                "useq_version": _pkg_version("useq-schema"),
+                "experiment": exp_name,
+                "plan": plan.yaml_str(),
+                "experiment_metadata": experiment.as_dict(),
+                "schedule_metadata": plan.schedule.as_dict(),
+                "affine_transform": None
+                if affine_transform is None
+                else np.asarray(affine_transform, dtype=float).tolist(),
+                "slm_shape": None if slm_shape is None else [int(v) for v in slm_shape],
+                "camera_roi": [int(v) for v in core.getROI()],
+                "grid": None if geometry is None else geometry.as_dict(),
+                "pattern_policy": self.pattern_policy,
+                "routing": self.routing,
+                "groups": {
+                    g.name: {
+                        "channels": list(g.channels),
+                        "every_t": g.every_t,
+                        "t_delay": g.t_delay,
+                        "t_stop": g.t_stop,
+                        "binning": g.binning,
+                        "timepoints": g.timepoints,
+                    }
+                    for g in groups
+                },
+                "plan_timepoints": plan.timepoints,
+                "current_t": -1,
             },
-            "plan_timepoints": plan.timepoints,
-            "current_t": -1,
-        }
+            "writing store metadata",
+            key="pyclm",
+        )
         self.stores[exp_name] = store
         logger.info(f"Initialized OME-Zarr store {path}")
         return layers
@@ -393,13 +454,20 @@ class OMEZarrWriter(FrameWriter):
         """One NGFF label image (segmentation or tracks) under a cadence group."""
         h, w = shape
         grp = labels.create_group(name)
-        grp.attrs.update(
-            ngff_image_attrs(f"{exp_name}/{g.name}/{name}", scale, g.channels)
+        _update_attrs(
+            grp,
+            ngff_image_attrs(f"{exp_name}/{g.name}/{name}", scale, g.channels),
+            "writing label metadata",
         )
-        grp.attrs["image-label"] = {
-            "version": NGFF_VERSION,
-            "source": {"image": "../../"},
-        }
+        _set_attrs(
+            grp,
+            {
+                "version": NGFF_VERSION,
+                "source": {"image": "../../"},
+            },
+            "writing label metadata",
+            key="image-label",
+        )
         return grp.create_array(
             "0",
             shape=(g.timepoints, len(g.channels), h, w),
@@ -547,12 +615,20 @@ class OMEZarrWriter(FrameWriter):
                 f"frame shape {shape} does not match {g.name} array {arr.shape[2:]}"
             )
         logger.info(f"{g.name}: resizing arrays from {arr.shape[2:]} to {shape}")
-        arr.resize((arr.shape[0], arr.shape[1], *shape))
+        _resize(
+            arr,
+            (arr.shape[0], arr.shape[1], *shape),
+            f"{g.name}: fitting the frame shape",
+        )
         extras = [a for (gname, _n), a in store.labels.items() if gname == g.name]
         if g.name in store.tracks:
             extras.append(store.tracks[g.name])
         for lab in extras:
-            lab.resize((lab.shape[0], lab.shape[1], *shape))
+            _resize(
+                lab,
+                (lab.shape[0], lab.shape[1], *shape),
+                f"{g.name}: fitting the label shape",
+            )
 
     def _record_pattern(
         self, store: _ExperimentStore, data: StimulationData, exp_name: str, t: int
@@ -596,7 +672,7 @@ class OMEZarrWriter(FrameWriter):
             meta["pattern_ids"] = list(store.pattern_ids)
             meta["camera_ids"] = list(store.dmd_camera_ids)
             meta["tiles"] = list(store.dmd_tiles)
-            grp.attrs["pyclm"] = meta
+            _set_attrs(grp, meta, f"{exp_name}: recording DMD pattern ids")
 
         # camera-space pattern (absent for the blank pattern before the first generate)
         camera_index = None
@@ -613,13 +689,13 @@ class OMEZarrWriter(FrameWriter):
                 grp = store.root["patterns/camera"]
                 meta = dict(grp.attrs.get("pyclm", {}))
                 meta["pattern_ids"] = list(store.camera_ids)
-                grp.attrs["pyclm"] = meta
+                _set_attrs(grp, meta, f"{exp_name}: recording camera pattern ids")
         return camera_index, dmd_index
 
     @staticmethod
     def _append(arr: zarr.Array, image) -> int:
         n = arr.shape[0]
-        arr.resize((n + 1, *arr.shape[1:]))
+        _resize(arr, (n + 1, *arr.shape[1:]), "growing the pattern array")
         arr[n] = np.asarray(image, dtype=np.uint8)
         return n
 
@@ -698,7 +774,7 @@ class OMEZarrWriter(FrameWriter):
         store.current_t = t
         meta = dict(store.root.attrs["pyclm"])
         meta["current_t"] = t
-        store.root.attrs["pyclm"] = meta
+        _set_attrs(store.root, meta, f"{exp_name}: recording current_t = {t}")
 
     def _frames_table(self) -> pa.Table:
         columns = {k: [r.get(k) for r in self.rows] for k in FRAMES_COLUMNS}
@@ -754,7 +830,7 @@ class OMEZarrWriter(FrameWriter):
     def _write_parquet(table: pa.Table, path: Path):
         tmp = path.with_suffix(".parquet.tmp")
         pq.write_table(table, tmp)
-        shutil.move(str(tmp), str(path))
+        _retry_write(lambda: shutil.move(str(tmp), str(path)), f"writing {path.name}")
 
     # --------------------------------------------------------------- close
     def close(self):
