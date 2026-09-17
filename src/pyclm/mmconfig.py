@@ -100,6 +100,28 @@ class MMConfig:
                 state[(device, prop)] = value
         return state
 
+    def pixel_size_candidates(self, presets: list[tuple[str, str]]) -> list[dict]:
+        """
+        Every pixel-size preset against the device state the given (group,
+        preset) pairs produce: ``{"name", "um", "unmet", "unknown"}`` where
+        ``unmet`` lists conditions the state contradicts and ``unknown``
+        conditions on properties no given preset sets (MicroManager would
+        use the device's current value for those). Exact matches first.
+        """
+        state = self.device_state(presets)
+        out = []
+        for name, (um, conds) in self.pixel_sizes.items():
+            unmet, unknown = [], []
+            for device, prop, value in conds:
+                have = state.get((device, prop))
+                if have is None:
+                    unknown.append((device, prop, value))
+                elif str(have).strip() != str(value).strip():
+                    unmet.append((device, prop, value, have))
+            out.append({"name": name, "um": um, "unmet": unmet, "unknown": unknown})
+        out.sort(key=lambda c: (len(c["unmet"]), len(c["unknown"]), c["name"]))
+        return out
+
     def pixel_size_for(
         self, presets: list[tuple[str, str]]
     ) -> tuple[str, float | None] | None:
@@ -109,10 +131,9 @@ class MMConfig:
         None. MicroManager resolves the pixel size the same way: every
         condition of a preset must match the current device properties.
         """
-        state = self.device_state(presets)
-        for name, (um, conds) in self.pixel_sizes.items():
-            if conds and all(state.get((d, p)) == v for d, p, v in conds):
-                return name, um
+        for c in self.pixel_size_candidates(presets):
+            if not c["unmet"] and not c["unknown"]:
+                return c["name"], c["um"]
         return None
 
     def summary(self) -> str:

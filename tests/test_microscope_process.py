@@ -258,3 +258,28 @@ def test_pfs_timeout_names_the_status_seen():
     assert "status seen: '0000000000000000' x" in text
     assert "offset 7.0" in text
     assert "z now 3.00" in text
+
+
+def test_pfs_that_switched_itself_off_is_restarted():
+    """A PFS that ignores a repeated "On" locks once focus maintenance goes off and on."""
+    from pyclm.core.position_mover import PFSPositionMover
+
+    core = SimulatedMicroscopeCore(FakeImageSource((16, 16)))
+    real_set = core.setProperty
+    real_set("PFS", "PFS Status", "0000001100001001")  # off at the controller
+    calls = []
+
+    def set_property(device, prop, value):
+        if (device, prop) != ("PFS", "FocusMaintenance"):
+            return real_set(device, prop, value)
+        calls.append(value)
+        if value == "On" and calls[-2:] == ["Off", "On"]:
+            real_set("PFS", "PFS Status", PFSPositionMover.PFS_LOCKED_VALUE)
+        return None
+
+    core.setProperty = set_property
+    mover = PFSPositionMover()
+    mover.PFS_RETRY_S = 0.05
+    mover.PFS_TIMEOUT_S = 5.0
+    mover.move_to(MicroscopePosition(1.0, 2.0, 3.0), core)
+    assert calls == ["On", "Off", "On"]

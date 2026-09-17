@@ -289,3 +289,20 @@ write (progress, pattern ids, array resizes) and the parquet table move
 now retry with a short backoff (`_retry_write`, `ome_zarr.py`), as the
 HDF5 writer already did for its own Windows collisions.
 
+### 34. A PFS that switched itself off stayed off for the rest of the run
+
+**Mitigated 2026-09-17, to be confirmed on the scope.** Overnight, the
+Ti2's PFS went to "off" (the stage controller's display) part-way through
+a run and every later position waited the full 30 s and raised
+`TimeoutError` (2097 times); the status polled was `0000001100001001`
+throughout, against `...1010` when locked, so the low bits are the
+on/off state and not another spelling of "locked". The mover had set
+`FocusMaintenance = "On"` at every position, which did nothing; pressing
+"on" at the controller restored it at once, so the sample was in range.
+The likely reason is that the adapter (or MMCore's cache) still held "On"
+and did not resend it. `PFSPositionMover` now sets "Off" then "On" every
+`PFS_RETRY_S` (5 s) while it waits, and logs a warning for each restart.
+Not yet known: what switches the PFS off (the interface lost during a
+large z excursion is the usual cause; see the "Major Z position change"
+warnings in the same logs). If the restart does not bring it back, the
+next thing to try is `core.enableContinuousFocus(True)` / `fullFocus()`.

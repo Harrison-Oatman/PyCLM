@@ -362,3 +362,36 @@ def test_pixel_size_preset_is_resolved_from_the_objective(good_dir, tmp_path):
     (mm_path).write_text(cfg_text + "ConfigGroup,Objective,40x,Nosepiece,Label,40x\n")
     report = check_directory(good_dir, mm_config=mm_path)
     assert any("no pixel-size preset matches" in str(w) for w in report.warnings)
+
+
+def test_pixel_size_preset_conditioned_on_an_unset_property(good_dir, tmp_path):
+    """A preset conditioned on a property no config group sets is reported as
+    conditional, not as a mismatch; a contradicted one names the mismatch."""
+    from pyclm.mmconfig import MMConfig
+
+    mm_path = tmp_path / "scope.cfg"
+    mm_path.write_text(
+        MM_CFG
+        + "ConfigPixelSize,20x,Nosepiece,State,2\n"
+        + "PixelSize_um,20x,0.65\n"
+        + "ConfigPixelSize,10x,Nosepiece,State,1\n"
+        + "PixelSize_um,10x,1.3\n"
+    )
+    mm = MMConfig.from_file(mm_path)
+    # the Objective group in MM_CFG sets Core-Focus, not the nosepiece state
+    [best, *_] = mm.pixel_size_candidates([("Objective", "1-Plan Apo LmbdD0.80 20x")])
+    assert best["unmet"] == []
+    assert len(best["unknown"]) == 1
+    text = check_directory(good_dir, mm_config=mm_path).text()
+    assert "applies if Nosepiece-State = " in text
+    assert "no config group sets it" in text
+
+    mm_path.write_text(
+        mm_path.read_text()
+        + "ConfigGroup,Objective,1-Plan Apo LmbdD0.80 20x,Nosepiece,State,3\n"
+    )
+    report = check_directory(good_dir, mm_config=mm_path)
+    assert any(
+        "closest is" in str(w) and "Nosepiece-State is '3', preset wants" in str(w)
+        for w in report.warnings
+    )

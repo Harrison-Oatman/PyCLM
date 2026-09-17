@@ -60,7 +60,9 @@ class PFSPositionMover(PositionMover):
     ``position.extras["PFSOffset"]``, then polls the PFS status property until
     focus is confirmed locked, raising ``TimeoutError`` after ``PFS_TIMEOUT_S``.
 
-    The y-axis is negated on XY movement to match the Nikon stage convention.
+    The PFS can switch itself off (the interface was lost, or someone pressed
+    the button) and then ignore a repeated "On"; while waiting, the mover
+    switches focus maintenance off and on again every ``PFS_RETRY_S``.
     Override ``PFS_DEVICE``, ``PFS_MAINTENANCE_PROPERTY``, ``PFS_STATUS_PROPERTY``,
     and ``PFS_LOCKED_VALUE`` on a subclass if your hardware differs.
     """
@@ -71,6 +73,7 @@ class PFSPositionMover(PositionMover):
     PFS_LOCKED_VALUE = "0000001100001010"
     PFS_TIMEOUT_S = 30.0
     PFS_POLL_S = 0.01
+    PFS_RETRY_S = 5.0  # no lock after this long: switch focus maintenance off and on
 
     def move_to(self, position, core) -> tuple[bool, float]:
         start = time()
@@ -95,6 +98,8 @@ class PFSPositionMover(PositionMover):
 
         lock_start = time()
         seen: dict[str, int] = {}
+        retries = 0
+        next_retry = lock_start + self.PFS_RETRY_S
         while (
             status := core.getProperty(self.PFS_DEVICE, self.PFS_STATUS_PROPERTY)
         ) != self.PFS_LOCKED_VALUE:
@@ -106,12 +111,36 @@ class PFSPositionMover(PositionMover):
                     f"PFS did not report focus lock within {self.PFS_TIMEOUT_S}s "
                     f"at x={position.x}, y={position.y}, z={position.z} "
                     f"(offset {pfs_offset}, z now {core.getZPosition():.2f}); "
-                    f"status seen: {history}"
+                    f"status seen: {history}; focus maintenance was switched "
+                    f"off and on {retries} time(s)"
                 )
+            if time() >= next_retry:
+                retries += 1
+                next_retry = time() + self.PFS_RETRY_S
+                logger.warning(
+                    f"PFS not locked after {time() - lock_start:.1f}s (status "
+                    f"{status!r}); switching focus maintenance off and on "
+                    f"(attempt {retries})"
+                )
+                self._restart_focus_maintenance(core)
             sleep(self.PFS_POLL_S)
+
+        if retries:
+            logger.warning(
+                f"PFS locked after {retries} restart(s) of focus maintenance"
+            )
 
         logger.info(f"move+focus took {time() - start:.3f}s")
         return True, core.getZPosition()
+
+    def _restart_focus_maintenance(self, core) -> None:
+        """Off then on: a repeated "On" alone does not restart a PFS that switched itself off."""
+        try:
+            core.setProperty(self.PFS_DEVICE, self.PFS_MAINTENANCE_PROPERTY, "Off")
+            sleep(0.2)
+            core.setProperty(self.PFS_DEVICE, self.PFS_MAINTENANCE_PROPERTY, "On")
+        except Exception as e:
+            logger.warning(f"restarting PFS focus maintenance failed: {e}")
 
 
 MOVERS: dict[str, type[PositionMover]] = {

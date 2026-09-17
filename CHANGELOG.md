@@ -344,6 +344,10 @@ becomes a tagged release.
 - OME-Zarr metadata writes (progress, pattern ids, array resizes) and
   the parquet tables retry on the Windows sharing violation a reader can
   cause (known issue #33).
+- The PFS mover switches focus maintenance off and on again (every 5 s
+  while waiting for a lock) when the PFS has switched itself off; a
+  repeated "On" alone was ignored and every later position timed out
+  (known issue #34). The timeout message lists the status strings seen.
 
 ### Breaking changes for developers
 

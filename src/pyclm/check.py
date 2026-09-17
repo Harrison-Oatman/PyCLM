@@ -221,22 +221,38 @@ def _check_pixel_size(report: CheckReport, file: str, cfg, mm: MMConfig) -> None
         )
         return
     presets = sorted(cfg.config_groups.items())
-    found = mm.pixel_size_for(presets)
-    if found is None:
-        report.warning(
+    candidates = mm.pixel_size_candidates(presets)
+    if not candidates:
+        return
+    best = candidates[0]
+    size = (
+        f"pixel size {best['um']:g} um (preset '{best['name']}')"
+        if best["um"]
+        else f"pixel-size preset '{best['name']}'"
+    )
+    if not best["unmet"] and not best["unknown"]:
+        report.info(file, "[config_groups]", size)
+        return
+    if not best["unmet"]:
+        # the preset is conditioned on properties no config group sets;
+        # MicroManager compares them with the device's current value
+        conds = ", ".join(f"{d}-{p} = {v!r}" for d, p, v in best["unknown"])
+        report.info(
             file,
             "[config_groups]",
-            f"no pixel-size preset matches {dict(presets)}; the run would report a "
-            f"pixel size of 0 (presets: {', '.join(sorted(mm.pixel_sizes)) or 'none'})",
+            f"{size} applies if {conds} (no config group sets it; MicroManager "
+            "uses the device's current value)",
         )
         return
-    name, um = found
-    report.info(
+    unmet = ", ".join(
+        f"{d}-{p} is {have!r}, preset wants {v!r}" for d, p, v, have in best["unmet"]
+    )
+    report.warning(
         file,
         "[config_groups]",
-        f"pixel size {um:g} um (preset '{name}')"
-        if um
-        else f"pixel-size preset '{name}'",
+        f"no pixel-size preset matches {dict(presets)}: closest is '{best['name']}' "
+        f"but {unmet}; the run would report a pixel size of 0 "
+        f"(presets: {', '.join(sorted(mm.pixel_sizes))})",
     )
 
 
