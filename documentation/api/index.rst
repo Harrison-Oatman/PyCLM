@@ -43,6 +43,7 @@ them.
 
    static_patterns
    bar_patterns
+   pulse_patterns
    wave_patterns
    per_cell_patterns
    intensity_patterns

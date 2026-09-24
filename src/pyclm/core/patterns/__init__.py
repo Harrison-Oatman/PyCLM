@@ -28,6 +28,11 @@ from .pattern import (
     PatternContext,
     PatternMethod,
 )
+from .pulse_patterns import (
+    BlinkingBarPattern,
+    GlobalPulsePattern,
+    PulseSchedulePattern,
+)
 from .static_patterns import CirclePattern, FullOnPattern
 
 known_models = {
@@ -35,6 +40,9 @@ known_models = {
     "split": SplitPattern,
     "bar": BarPatternBase,
     "bar_bounce": BouncingBarPattern,
+    "blinking_bar": BlinkingBarPattern,
+    "global_pulse": GlobalPulsePattern,
+    "pulse_schedule": PulseSchedulePattern,
     "full_on": FullOnPattern,
     "rotate_ccw": RotateCcwModel,
     "sawtooth": SawToothMethod,

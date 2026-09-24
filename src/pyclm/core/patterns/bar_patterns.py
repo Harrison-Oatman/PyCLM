@@ -4,6 +4,15 @@ from .pattern import DataDock, PatternMethod
 from .zoo import ZooMeta
 
 
+def _stripe_is_on(yy, period_um, duty_cycle, offset_um=0.0):
+    """
+    Where a stationary periodic bar is lit: stripes of width
+    ``duty_cycle * period_um`` along the y-axis, repeating every
+    ``period_um``, with the first stripe edge at ``offset_um``.
+    """
+    return (((yy - offset_um) / period_um) % 1.0) < duty_cycle
+
+
 def _bar_is_on(yy, t_minutes, bar_speed, period_um, duty_cycle):
     """
     Where a periodic bar is lit at ``t_minutes``: the bar travels along +y at
@@ -56,7 +65,7 @@ class StationaryBarPattern(BarPatternBase):
     def generate(self, context):
         _xx, yy = self.get_um_meshgrid()
 
-        is_on = ((yy / self.period_space) % 1.0) < self.duty_cycle
+        is_on = _stripe_is_on(yy, self.period_space, self.duty_cycle)
 
         return is_on.astype(np.float16)
 
