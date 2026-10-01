@@ -11,8 +11,8 @@ The ``pyclm`` command.
     pyclm new <dir> [--template open-loop|closed-loop] [--name NAME]
 
 ``pyclm <dir> [--dry] [--gui]`` (the form before Stage 5) still means ``run``.
-Custom methods need the Python entry points (``run_pyclm``,
-``check_directory``, ``preview``), which take the same dictionaries.
+Custom methods are loaded from ``methods`` in ``pyclm_config.toml`` and
+from ``pyclm.methods`` entry points (:mod:`pyclm.methods`).
 """
 
 from __future__ import annotations
@@ -149,18 +149,23 @@ def cmd_check(args) -> int:
 
 
 def cmd_preview(args) -> int:
+    from .methods import MethodLoadError
     from .preview import preview
 
-    result = preview(
-        Path(args.directory),
-        args.experiment,
-        image=args.image,
-        snap=args.snap,
-        config_path=args.config,
-        out_dir=args.out,
-        t=args.t,
-        pixel_size_um=args.pixel_size_um,
-    )
+    try:
+        result = preview(
+            Path(args.directory),
+            args.experiment,
+            image=args.image,
+            snap=args.snap,
+            config_path=args.config,
+            out_dir=args.out,
+            t=args.t,
+            pixel_size_um=args.pixel_size_um,
+        )
+    except MethodLoadError as e:
+        print(f"error: {e}")
+        return 1
     print(result.text())
     return 0
 

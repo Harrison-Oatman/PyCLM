@@ -536,6 +536,12 @@ class PyclmConfig(Strict):
         "starts (for example the region the DMD covers; pyclm check prints it); "
         "omit to leave the camera as it is",
     )
+    methods: list[str] = Field(
+        default_factory=list,
+        description="custom pattern / segmentation / tracking methods to load: Python "
+        "files (relative to this file) or module names; each method class is "
+        "registered under its name attribute",
+    )
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     @model_validator(mode="after")

@@ -161,6 +161,13 @@ def preview(
     if found is not None:
         config = PyclmConfig.from_file(found)
 
+    from .methods import discover
+
+    custom, _ = discover(config, found)
+    pattern_methods, segmentation_methods, tracking_methods = custom.merged_with(
+        pattern_methods, segmentation_methods, tracking_methods
+    )
+
     if out_dir is None:
         out_dir = directory / "preview" / label
     out_dir = Path(out_dir)

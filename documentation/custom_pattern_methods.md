@@ -22,7 +22,7 @@ from pyclm import PatternMethod, PatternContext
 class MyCustomPattern(PatternMethod):
     """A custom pattern method."""
 
-    name = "custom_method"  # used in logging; does not need to match the run_pyclm dict key
+    name = "custom_method"  # what method = "..." in the TOML selects
 
     # keyword arguments defined here can be set in the experiment .toml
     def __init__(self, keyword_a="default_value_a", keyword_b=42, **kwargs):
@@ -54,17 +54,29 @@ class MyCustomPattern(PatternMethod):
         return pattern
 ```
 
-When you run pyclm, you must supply any custom generated patterns in a dictionary, with the name of the method 
-as it should be referenced in the .toml
+Save the class in a Python file, say `my_patterns.py` next to
+`pyclm_config.toml`, and list the file in the configuration:
+
+```toml
+# pyclm_config.toml
+methods = ["my_patterns.py"]
+```
+
+Every method class the file defines is registered under its `name`, for
+`pyclm check`, `pyclm preview` and `pyclm run` alike; `pyclm check` lists
+what it loaded and reports a file that fails to import. From Python, the
+same class can be passed directly (this takes precedence over the file):
 
 ```python
 from pyclm import run_pyclm
-from my_pattern import MyCustomPattern
-
-experiment_directory = ...
+from my_patterns import MyCustomPattern
 
 run_pyclm(experiment_directory, pattern_methods={"custom_method": MyCustomPattern})
 ```
+
+A package of methods shared by a lab can register them on installation with
+a `pyclm.methods` entry point (see [First-time setup](first_time_setup.md),
+section 10).
 
 PyCLM will know that you want to use this pattern if you put it in your .toml. The .toml should also supply any keyword 
 arguments that you want to overwrite.
@@ -120,17 +132,7 @@ outer_radius_um = 80
 
 All keys other than `method` are passed verbatim as kwargs to `__init__`. Default values in `__init__` are used when a key is absent from the TOML.
 
-**Registration:**
-
-```python
-from pyclm import run_pyclm
-from my_patterns import AnnulusPattern
-
-run_pyclm(
-    experiment_directory,
-    pattern_methods={"annulus": AnnulusPattern},
-)
-```
+**Registration:** `methods = ["my_patterns.py"]` in `pyclm_config.toml`.
 
 ---
 

@@ -13,6 +13,20 @@ Running
 .. autoclass:: pyclm.Controller
    :members: register_pattern_method, register_segmentation_method, register_tracking_method, add_process, initialize, run
 
+Custom methods
+--------------
+
+.. automodule:: pyclm.methods
+
+.. autofunction:: pyclm.methods.discover
+
+.. autofunction:: pyclm.methods.load_methods
+
+.. autoclass:: pyclm.methods.MethodSet
+   :members: merged_with, summary
+
+.. autoclass:: pyclm.methods.MethodLoadError
+
 Position movers
 ---------------
 

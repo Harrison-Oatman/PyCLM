@@ -113,7 +113,9 @@ def run_pyclm(
         ``pyclm_config[.<anything>].toml``, then the working directory's
     :param segmentation_methods: ``{name: class}`` of custom segmentation
         methods to register (``name`` is what ``[segmentation] method`` selects)
-    :param pattern_methods: ``{name: class}`` of custom pattern methods
+    :param pattern_methods: ``{name: class}`` of custom pattern methods; the
+        configuration's ``methods`` and installed ``pyclm.methods`` entry
+        points are loaded as well (see :mod:`pyclm.methods`), these win
     :param position_mover: how the stage reaches a position; None means the
         configuration's ``position_mover`` (``basic`` by default)
     :param dry_image_source: frames for the virtual microscope; None with
@@ -159,6 +161,17 @@ def run_pyclm(
 
     config = PyclmConfig.from_file(config_path)
     logger.info(f"loaded config from {config_path}")
+
+    # custom methods: installed entry points and the configuration's `methods`;
+    # the ones passed in code win
+    from .methods import discover
+
+    found, ep_warnings = discover(config, config_path)
+    for warning in ep_warnings:
+        logger.warning(warning)
+    pattern_methods, segmentation_methods, tracking_methods = found.merged_with(
+        pattern_methods, segmentation_methods, tracking_methods
+    )
 
     focus_device = config.focus_device
     if position_mover is None:

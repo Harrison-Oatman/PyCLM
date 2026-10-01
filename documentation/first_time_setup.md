@@ -81,6 +81,12 @@ settle_time_seconds = 1.0
 # The affine above stays calibrated in the full frame; PyCLM composes the offset.
 camera_roi = [256, 128, 1536, 1792]
 
+# Optional. Your own pattern / segmentation / tracking methods: Python files
+# (relative to this file) or module names. Each method class they define is
+# available by its `name` in the experiment TOMLs, to `pyclm run`, `check`
+# and `preview` alike. See "Custom Pattern and Segmentation Methods" below.
+methods = ["my_patterns.py"]
+
 # Optional. How data is stored and exported.
 [output]
 format = "ome-zarr"          # "ome-zarr" (default) or "hdf5" (PyCLM's original layout)
@@ -466,7 +472,7 @@ uv run pyclm run path/to/experiment_dir --dry --gui
 
 `--gui` can also be used during a real experiment to monitor output in real time.
 
-**Programmatically** (required when using a custom `PositionMover` or custom pattern/segmentation methods):
+**Programmatically** (for a `PositionMover` instance built in code; custom methods can also be passed here, though the `methods` key of `pyclm_config.toml` is enough for the command line):
 
 ```python
 from pyclm import run_pyclm, PFSPositionMover
@@ -513,10 +519,27 @@ class MyPattern(PatternMethod):
         return pattern
 ```
 
-Register and run:
+Save it as `my_patterns.py` next to `pyclm_config.toml` and list the file
+there:
 
-```python
-run_pyclm("path/to/experiment_dir", pattern_methods={"my_pattern": MyPattern})
+```toml
+methods = ["my_patterns.py"]
+```
+
+`pyclm check`, `pyclm preview` and `pyclm run` then know `method =
+"my_pattern"`. Every method class the file defines is registered under its
+`name`, which must be set on the class and must not be a built-in name; a
+shared base class without a `name` that the file's methods build on is
+skipped. A file may import helpers from its own folder. From Python,
+`run_pyclm(..., pattern_methods={"my_pattern": MyPattern})` does the same and
+takes precedence.
+
+A lab package can make its methods available to every installation with an
+entry point in its `pyproject.toml`:
+
+```toml
+[project.entry-points."pyclm.methods"]
+mylab = "mylab.patterns"
 ```
 
 ### Segmentation method
@@ -541,8 +564,7 @@ class MySegmentation(SegmentationMethod):
         return label(binary).astype(np.int32)
 ```
 
-```python
-run_pyclm("path/to/experiment_dir", segmentation_methods={"my_seg": MySegmentation})
-```
-
-The method name is then available as `method = "my_seg"` in the `[segmentation]` block of any experiment TOML.
+Listed in `methods` like a pattern method (or passed as
+`segmentation_methods={"my_seg": MySegmentation}` to `run_pyclm`), the
+method name is then available as `method = "my_seg"` in the `[segmentation]`
+block of any experiment TOML.

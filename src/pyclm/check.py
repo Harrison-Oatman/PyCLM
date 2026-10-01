@@ -328,6 +328,10 @@ def method_registries(
     return patterns, segmentations, trackers
 
 
+CUSTOM_HINT = (
+    "; a method of your own is listed by its file under methods in pyclm_config.toml"
+)
+
 # constructor parameters PyCLM supplies itself, per kind of method
 SUPPLIED = {
     "pattern": {"self", "experiment_name", "camera_properties"},
@@ -442,10 +446,6 @@ def check_directory(
         report.error(str(directory), "", "is not a directory")
         return report
 
-    patterns, segmentations, trackers = method_registries(
-        pattern_methods, segmentation_methods, tracking_methods
-    )
-
     from .directories import AmbiguousFileError, experiment_tomls, find_schedule
 
     # 1. pyclm_config.toml
@@ -469,6 +469,22 @@ def check_directory(
         except ConfigError as e:
             for problem in e.problems:
                 report.error(cfg_path.name, "", problem)
+
+    # 1b. custom methods: entry points and the configuration's `methods`
+    from .methods import MethodLoadError, MethodSet, discover
+
+    try:
+        found, ep_warnings = discover(config, cfg_path)
+    except MethodLoadError as e:
+        found, ep_warnings = MethodSet(), []
+        report.error(cfg_path.name if cfg_path else CONFIG_NAME, "methods", str(e))
+    for warning in ep_warnings:
+        report.warning("methods", "", warning)
+    for line in found.summary():
+        report.info("methods", "", line)
+    patterns, segmentations, trackers = method_registries(
+        *found.merged_with(pattern_methods, segmentation_methods, tracking_methods)
+    )
 
     # 2. schedule.toml
     schedule = None
@@ -574,7 +590,7 @@ def check_directory(
                 file,
                 "[pattern]",
                 f"unknown pattern method '{cfg.pattern.method}' "
-                f"(known: {', '.join(sorted(patterns))})",
+                f"(known: {', '.join(sorted(patterns))}){CUSTOM_HINT}",
             )
         else:
             for problem in check_kwargs(
@@ -591,7 +607,7 @@ def check_directory(
                         file,
                         f"[pattern.{label}]",
                         f"unknown pattern method '{sub_name}' "
-                        f"(known: {', '.join(sorted(patterns))})",
+                        f"(known: {', '.join(sorted(patterns))}){CUSTOM_HINT}",
                     )
                     continue
                 for problem in check_kwargs(sub_cls, sub_kwargs, "pattern", sub_name):
@@ -608,7 +624,7 @@ def check_directory(
                     file,
                     f"[{name}]",
                     f"unknown segmentation method '{table.method}' "
-                    f"(known: {', '.join(sorted(segmentations))})",
+                    f"(known: {', '.join(sorted(segmentations))}){CUSTOM_HINT}",
                 )
             else:
                 for problem in check_kwargs(
@@ -623,7 +639,7 @@ def check_directory(
                     file,
                     "[tracking]",
                     f"unknown tracking method '{cfg.tracking.method}' "
-                    f"(known: {', '.join(sorted(trackers))})",
+                    f"(known: {', '.join(sorted(trackers))}){CUSTOM_HINT}",
                 )
             else:
                 for problem in check_kwargs(
