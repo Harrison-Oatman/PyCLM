@@ -13,6 +13,18 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
+      # a release is published only when its tag (v1.2.3), pyproject.toml's
+      # version and a CHANGELOG.md section for it agree
+      - name: Check the tag, the version and the changelog agree
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: python3 scripts/check_release.py "$TAG"
+
+      - name: Run the tests
+        run: uv run --group test pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+
       - name: Build wheel and sdist
         run: uv build
 
