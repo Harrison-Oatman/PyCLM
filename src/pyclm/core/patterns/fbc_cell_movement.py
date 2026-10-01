@@ -1,3 +1,5 @@
+from typing import ClassVar, Literal
+
 import numpy as np
 import tifffile
 from scipy.ndimage import distance_transform_edt
@@ -7,7 +9,6 @@ from skimage.measure import label, regionprops, regionprops_table
 
 from .pattern import AcquiredImageRequest, DataDock, PatternMethod
 from .zoo import ZooMeta
-from typing import Literal
 
 
 class PerCellPatternMethod(PatternMethod):
@@ -198,19 +199,28 @@ class MoveInModel(PerCellPatternMethod):
 class PeriodDirectedPattern(PerCellPatternMethod):
     name = "direction"
 
-    direction_vec = {
+    direction_vec: ClassVar[dict[str, tuple[int, int]]] = {
         "u": (1, 0),
         "d": (-1, 0),
         "r": (0, 1),
-        "l": (0, -1)
+        "l": (0, -1),
     }
 
-    def __init__(self, sequence: list[Literal['u', 'd', 'l', 'r', 's']] | str | None = None, period_h = 2, channel="545", voronoi=True, gradient=True, **kwargs):
+    def __init__(
+        self,
+        sequence: list[Literal["u", "d", "l", "r", "s"]] | str | None = None,
+        period_h=2,
+        channel="545",
+        voronoi=True,
+        gradient=True,
+        **kwargs,
+    ):
         super().__init__(channel=channel, voronoi=voronoi, gradient=gradient, **kwargs)
 
         assert sequence, "sequence kwarg required but not provided"
-        assert all([val in ["u", "d", "l", "r", "s"] for val in sequence]), \
+        assert all([val in ["u", "d", "l", "r", "s"] for val in sequence]), (
             f"sequence {sequence} contains unrecognized characters"
+        )
 
         self.sequence = "".join([val for val in sequence])
         self.period_h = period_h
@@ -218,18 +228,18 @@ class PeriodDirectedPattern(PerCellPatternMethod):
         self.current_direction = self.sequence[0]
 
     def process_prop(self, prop) -> np.ndarray:
-
         if self.current_direction == "s":
             return 0 * prop.image
 
         vec = self.direction_vec.get(self.current_direction, None)
 
-        assert vec is not None, f"direction {self.current_direction} produced an invalid vector"
+        assert vec is not None, (
+            f"direction {self.current_direction} produced an invalid vector"
+        )
 
         return self.prop_vector(prop, vec)
 
     def generate(self, context) -> np.ndarray:
-
         t = context.time
         t_h = t / 3600
 
@@ -239,6 +249,7 @@ class PeriodDirectedPattern(PerCellPatternMethod):
         self.current_direction = self.sequence[step]
 
         return super().generate(context)
+
 
 class MoveDownModel(PerCellPatternMethod):
     name = "move_down"

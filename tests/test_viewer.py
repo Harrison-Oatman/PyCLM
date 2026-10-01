@@ -118,6 +118,10 @@ print("RESULT " + json.dumps(out))
 
 
 def run_scenario(directory: Path) -> dict:
+    if sys.platform.startswith("linux") and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    ):
+        pytest.skip("no display for the native Qt platform (headless Linux, CI)")
     env = {k: v for k, v in os.environ.items() if k != "QT_QPA_PLATFORM"}
     env["PYTHONPATH"] = os.pathsep.join(
         [str(Path(__file__).parent), env.get("PYTHONPATH", "")]
@@ -132,6 +136,8 @@ def run_scenario(directory: Path) -> dict:
     if proc.returncode != 0:
         if "GLError" in proc.stderr or "OpenGL" in proc.stderr:
             pytest.skip("no OpenGL context for napari here")
+        if "no Qt platform plugin could be initialized" in proc.stderr:
+            pytest.skip("no Qt platform plugin could start here (no display)")
         raise AssertionError(f"viewer scenario failed:\n{proc.stdout}\n{proc.stderr}")
     line = next(ln for ln in proc.stdout.splitlines() if ln.startswith("RESULT "))
     return json.loads(line[len("RESULT ") :])
