@@ -10,8 +10,9 @@ import pytest
 from helpers import make_experiment, make_plan, make_schedule
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-qtpy = pytest.importorskip("qtpy")
-from qtpy import QtWidgets
+# skipped where Qt cannot load: no binding installed, or system libraries
+# missing (a bare Linux machine without libEGL); CI installs them
+QtWidgets = pytest.importorskip("qtpy.QtWidgets", exc_type=ImportError)
 
 from pyclm.gui.widgets import (
     MapPosition,
