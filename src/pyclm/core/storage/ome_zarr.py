@@ -398,6 +398,7 @@ class OMEZarrWriter(FrameWriter):
                 "format": STORAGE_FORMAT_VERSION,
                 "ngff_version": NGFF_VERSION,
                 "useq_version": _pkg_version("useq-schema"),
+                "pyclm_version": _pyclm_version(),
                 "experiment": exp_name,
                 "plan": plan.yaml_str(),
                 "experiment_metadata": experiment.as_dict(),
@@ -852,3 +853,9 @@ class OMEZarrWriter(FrameWriter):
                 logger.error(f"failed to finalise tracks table: {e}", exc_info=True)
         self.stores.clear()
         self.is_open = False
+
+
+def _pyclm_version() -> str:
+    from pyclm import __version__
+
+    return __version__

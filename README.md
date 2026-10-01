@@ -3,7 +3,7 @@ A Modular Closed-Loop Microscopy Software in Python
 
 Please see our documentation at [readthedocs](https://pyclm.readthedocs.io/en/latest/first_time_setup.html)
 
-![](documentation\imgs\Figure%201.png "PyCLM Overview")
+![](documentation/imgs/Figure%201.png "PyCLM Overview")
 
 ## Overview
 
@@ -24,12 +24,21 @@ Ideally, the number of possible simultaneous experiments should be limited only 
 
 ## Installation
 
-PyCLM is installed with [uv](https://docs.astral.sh/uv/).
+```bash
+pip install "closed-loop-microscopy[gui]"
+```
+
+The package is `closed-loop-microscopy`; the import name and the command are
+`pyclm`. Leave out `[gui]` for a headless install (checking, previews, dry
+runs, reading data). For development, clone the repository and run
+`uv sync`.
+
+Try it without a microscope:
 
 ```bash
-git clone https://github.com/Harrison-Oatman/PyCLM.git
-cd PyCLM
-uv sync
+pyclm new demo --template open-loop
+# add a TIF named experiment.tif to demo/ (any fluorescence frame), then
+pyclm run demo --dry --gui
 ```
 
 See [First-Time Setup Guide](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) to get started.

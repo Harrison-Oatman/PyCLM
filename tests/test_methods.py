@@ -197,3 +197,19 @@ def test_methods_given_in_code_win(tmp_path):
 
     patterns, _, _ = found.merged_with(pattern={"half_on": Other})
     assert patterns["half_on"] is Other
+
+
+# ------------------------------------------------------------------ the viewer extra
+def test_require_gui_names_the_extra(monkeypatch):
+    import importlib.util
+
+    from pyclm.gui import GuiUnavailable, require_gui
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name, *a: None if name == "napari" else real(name, *a),
+    )
+    with pytest.raises(GuiUnavailable, match=r"closed-loop-microscopy\[gui\]"):
+        require_gui()

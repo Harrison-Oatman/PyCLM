@@ -12,18 +12,11 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 
 ## 1. Install PyCLM
 
-Create a virtual environment using [uv](https://docs.astral.sh/uv/) and install pyclm:
+See [Installation](installation.md). On the microscope PC:
 
 ```bash
-git clone https://github.com/Harrison-Oatman/PyCLM.git
-cd PyCLM
-uv sync --group dev
-```
-
-To use CellposeSAM segmentation, install the optional cellpose extras (requires a CUDA-capable GPU):
-
-```bash
-uv sync --extra cellpose
+pip install "closed-loop-microscopy[gui]"
+mmcore use "C:\Program Files\Micro-Manager-2.0"
 ```
 
 ---
@@ -103,7 +96,7 @@ image per acquisition cadence so channels imaged every N timepoints never show
 blank frames, segmentation as NGFF labels, DMD patterns stored once per
 distinct pattern, and a `frames.parquet`/`frames.csv` table of every frame and
 stimulation event. Whichever format is used, `pyclm.io.open(path)` reads it
-and `convert_hdf5s` (or the automatic export) produces ImageJ stacks. See
+and `pyclm export` (or the automatic export) produces ImageJ stacks. See
 [Data format and export](data_format.md) for the full description.
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.

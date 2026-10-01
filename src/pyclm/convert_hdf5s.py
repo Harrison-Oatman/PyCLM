@@ -1,5 +1,6 @@
 import json
 import re
+import tomllib
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -10,8 +11,6 @@ import tifffile
 from h5py import File
 from natsort import natsorted
 from skimage.transform import downscale_local_mean
-from toml import load
-from tqdm import tqdm
 
 
 def grayscale_lut():
@@ -238,7 +237,8 @@ def find_affine_transform(input_dir, config_path):
     config_path = Path(config_path)
     if not config_path.exists():
         return None
-    config = load(config_path)
+    with open(config_path, "rb") as f:
+        config = tomllib.load(f)
     return np.array(config["affine_transform"], dtype=np.float32)
 
 
@@ -250,7 +250,7 @@ def main():
     fallback_affine = find_affine_transform(input_dir, args.config)
     wanted = set(args.channels)
 
-    for path in tqdm(pyclm_io.find_experiments(input_dir)):
+    for path in pyclm_io.find_experiments(input_dir):
         with pyclm_io.open(path) as exp:
             groups = None
             if wanted:

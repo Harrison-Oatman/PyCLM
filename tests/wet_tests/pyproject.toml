@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Pre-release checks for PyCLM that need a microscope"
 requires-python = ">=3.11"
 dependencies = [
-    "pyclm",
+    "closed-loop-microscopy[gui]",
     "pyarrow>=15",
     "toml>=0.10.2",
 ]
@@ -22,7 +22,7 @@ constraint-dependencies = [
 
 [tool.uv.sources]
 # point this at the PyCLM checkout being released
-pyclm = { path = "../..", editable = true }
+closed-loop-microscopy = { path = "../..", editable = true }
 
 [build-system]
 requires = ["hatchling"]

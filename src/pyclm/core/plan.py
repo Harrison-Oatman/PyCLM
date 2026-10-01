@@ -260,6 +260,7 @@ class AcquisitionPlan:
                 "pyclm": {
                     "plan_format": PLAN_FORMAT,
                     "useq_version": _pkg_version("useq-schema"),
+                    "pyclm_version": _pyclm_version(),
                     "setup_time_seconds": float(times.setup),
                     "time_between_positions": float(times.between),
                 }
@@ -614,3 +615,9 @@ class AcquisitionPlan:
             f"AcquisitionPlan({len(self._names)} experiments, {self.timepoints} timepoints, "
             f"interval {self.interval_s}s)"
         )
+
+
+def _pyclm_version() -> str:
+    from pyclm import __version__
+
+    return __version__

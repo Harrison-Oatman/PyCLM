@@ -30,7 +30,7 @@ settle_time_seconds = 1.0     # wait after the hardware reports ready, before ea
 
 [output]
 format = "ome-zarr"           # or "hdf5"
-pattern_policy = "on_change"  # DMD patterns stored: on_change | all | none
+pattern_policy = "on_change"  # DMD patterns stored: on_change | imaging | none
 export_imagej = true          # ImageJ hyperstacks when the run ends
 """
 

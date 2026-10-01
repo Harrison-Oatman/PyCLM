@@ -16,13 +16,13 @@ See docs/stage5-schema-setup-design.md §2.
 from __future__ import annotations
 
 import difflib
+import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
-from toml import load as _load_toml
 
 from .core.experiments import (
     ConfigGroup,
@@ -606,11 +606,11 @@ def _props(table: dict[str, Scalar]) -> list[DeviceProperty]:
 def read_toml(path: str | Path) -> dict:
     path = Path(path)
     try:
-        with open(path) as f:
-            return _load_toml(f)
+        with open(path, "rb") as f:
+            return tomllib.load(f)
     except FileNotFoundError:
         raise ConfigError(path, ["file not found"]) from None
-    except Exception as e:  # toml.TomlDecodeError and friends
+    except Exception as e:  # tomllib.TOMLDecodeError, a file that is not UTF-8
         raise ConfigError(path, [f"not valid TOML: {e}"]) from None
 
 

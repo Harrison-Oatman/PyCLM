@@ -144,6 +144,12 @@ def run_pyclm(
         "pyclm_config.<name>.toml) must be given or be in the experiment directory"
     )
 
+    if gui:
+        # before the hardware is touched
+        from .gui import require_gui
+
+        require_gui()
+
     set_logging(experiment_directory)
 
     # the same check as `pyclm check`; errors stop the run unless forced

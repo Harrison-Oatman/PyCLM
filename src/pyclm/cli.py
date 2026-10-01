@@ -117,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
 # --------------------------------------------------------------- commands
 def cmd_run(args) -> int:
     from .check import CheckFailed
+    from .gui import GuiUnavailable
+    from .methods import MethodLoadError
     from .run_pyclm import run_pyclm
 
     try:
@@ -130,6 +132,9 @@ def cmd_run(args) -> int:
         )
     except CheckFailed as e:
         print(str(e))
+        return 1
+    except (GuiUnavailable, MethodLoadError) as e:
+        print(f"error: {e}")
         return 1
     return 0
 
@@ -200,6 +205,13 @@ def cmd_export(args) -> int:
 
 
 def cmd_gui(args) -> int:
+    from .gui import GuiUnavailable, require_gui
+
+    try:
+        require_gui()
+    except GuiUnavailable as e:
+        print(f"error: {e}")
+        return 1
     from .gui.gui_controller import main as gui_main
 
     return gui_main([args.directory])

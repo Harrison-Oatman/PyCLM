@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-This project uses `uv` for package management.
+This project uses `uv` for package management. The distribution is `closed-loop-microscopy` on PyPI; the import name and command are `pyclm`. The viewer (napari, PySide6) is the `gui` extra; `uv sync` in a clone still gets it through the default `dev` group.
 
 ```bash
 # Run tests
