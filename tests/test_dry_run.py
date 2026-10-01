@@ -22,6 +22,7 @@ import numpy as np
 import pytest
 
 from pyclm import BasicPositionMover, PFSPositionMover, run_pyclm
+from pyclm.core.experiments import MicroscopePosition
 from pyclm.core.virtual_microscope.simulated_source import TimeSeriesImageSource
 
 # ---------------------------------------------------------------------------
@@ -302,6 +303,36 @@ def test_dry_run_yml(yml_experiment_dir):
     assert_hdf5_content(yml_experiment_dir, 2)
 
 
+def test_dry_run_ome_zarr(yml_experiment_dir):
+    """
+    Same run as test_dry_run_yml with [output] format = "ome-zarr": two zarr
+    stores, no HDF5, the plan embedded, and ImageJ stacks exported at the end.
+    """
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    run_pyclm(yml_experiment_dir, dry=True)
+
+    import pyclm.io as pio
+
+    stores = sorted(yml_experiment_dir.glob("*.zarr"))
+    assert [s.name for s in stores] == ["bar025.00.zarr", "bar10.00.zarr"]
+    assert not list(yml_experiment_dir.glob("*.hdf5"))
+    assert (yml_experiment_dir / "frames.parquet").exists()
+
+    for store in stores:
+        with pio.open(store) as exp:
+            assert exp.format == 3
+            g = exp.groups["imaging"]
+            assert g.every_t == _IMAGING_EVERY_T
+            assert g.acquired() == list(range(_STEPS // _IMAGING_EVERY_T))
+            assert g.frame(0, "545").shape == _CAMERA_SHAPE
+            assert exp.current_t == _STEPS - 1
+            assert exp.pattern_at(_STEPS - 1).shape == _SLM_SHAPE
+        assert (yml_experiment_dir / f"{store.stem}_imaging.tif").exists()
+
+
 def test_dry_run_tif_names(tif_name_experiment_dir):
     """
     TIF-filename fallback: no position list or dry_run.yml present.
@@ -311,3 +342,321 @@ def test_dry_run_tif_names(tif_name_experiment_dir):
     """
     run_pyclm(tif_name_experiment_dir, dry=True)
     assert_hdf5_content(tif_name_experiment_dir, 2)
+
+
+def test_dry_run_tracking_ome_zarr(yml_experiment_dir):
+    """
+    A closed loop with tracking: [segmentation] and [tracking] in the TOMLs and
+    a pattern method that asks for tracks. On OME-Zarr the store gains
+    labels/tracks and tracks.parquet, the routing table is recorded, and the
+    ImageJ export carries the tracked labels.
+    """
+    import pyclm.io as pio
+    from pyclm.core.patterns import PatternMethod
+    from pyclm.core.segmentation import SegmentationMethod
+
+    class ThresholdSegmentation(SegmentationMethod):
+        name = "threshold"
+
+        def segment(self, data):
+            from skimage.measure import label
+
+            return label(data > np.percentile(data, 99)).astype(np.uint16)
+
+    class FollowTracks(PatternMethod):
+        name = "follow_tracks"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", tracks=True)
+
+        def generate(self, context):
+            tracks = context.tracks("545")
+            assert tracks is not None
+            return (tracks.labels > 0).astype(np.float32)
+
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    for name in ("bar10", "bar025"):
+        toml = yml_experiment_dir / f"{name}.toml"
+        text = toml.read_text()
+        toml.write_text(
+            text[: text.index("[pattern]")] + '[segmentation]\nmethod = "threshold"\n\n'
+            '[tracking]\nmethod = "centroid"\nmax_distance_um = 30\n\n'
+            '[pattern]\nmethod = "follow_tracks"\n'
+        )
+
+    run_pyclm(
+        yml_experiment_dir,
+        dry=True,
+        segmentation_methods={"threshold": ThresholdSegmentation},
+        pattern_methods={"follow_tracks": FollowTracks},
+    )
+
+    assert (yml_experiment_dir / "tracks.parquet").exists()
+    stores = sorted(yml_experiment_dir.glob("*.zarr"))
+    assert len(stores) == 2
+    for store in stores:
+        with pio.open(store) as exp:
+            g = exp.groups["imaging"]
+            assert g.has_labels
+            assert g.has_tracks
+            assert g.acquired() == list(range(_STEPS // _IMAGING_EVERY_T))
+            assert g.tracks(0, "545").shape == _CAMERA_SHAPE
+            assert g.tracks(0, "545").max() > 0
+            assert exp.tracks is not None
+            assert exp.tracks.num_rows > 0
+            routes = exp.routing["routes"][exp.name]["545"]
+            assert routes["raw"] == ["segmentation", "writer(record)"]
+            assert routes["seg"] == ["tracking", "writer(record)"]
+            assert routes["tracks"] == ["pattern@pattern", "writer(record)"]
+        import tifffile
+
+        stack = tifffile.imread(yml_experiment_dir / f"{store.stem}_imaging.tif")
+        assert stack.shape[1] == 4  # raw, segmentation, tracks, pattern
+
+
+def test_dry_run_named_segmentations_ome_zarr(yml_experiment_dir):
+    """
+    Two [segmentation] tables of one channel (the default and "bright"), a
+    pattern that asks for both: the store carries one label image per
+    table, the routing table shows both kinds, and the export has both
+    label sets.
+    """
+    import pyclm.io as pio
+    from pyclm.core.patterns import PatternMethod
+    from pyclm.core.segmentation import SegmentationMethod
+
+    class Threshold(SegmentationMethod):
+        name = "threshold"
+
+        def __init__(self, experiment_name, percentile=99, **kwargs):
+            super().__init__(experiment_name, **kwargs)
+            self.percentile = percentile
+
+        def segment(self, data):
+            from skimage.measure import label
+
+            return label(data > np.percentile(data, self.percentile)).astype(np.uint16)
+
+    class TwoSegmentations(PatternMethod):
+        name = "two_segmentations"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", seg=["segmentation", "bright"])
+
+        def generate(self, context):
+            both = context.regions("545").labels > 0
+            both &= context.regions("545", "bright").labels > 0
+            return both.astype(np.float32)
+
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    for name in ("bar10", "bar025"):
+        toml = yml_experiment_dir / f"{name}.toml"
+        text = toml.read_text()
+        toml.write_text(
+            text[: text.index("[pattern]")]
+            + '[segmentation]\nmethod = "threshold"\npercentile = 95\n\n'
+            '[segmentation.bright]\nmethod = "threshold"\npercentile = 99.5\n\n'
+            '[pattern]\nmethod = "two_segmentations"\n'
+        )
+
+    run_pyclm(
+        yml_experiment_dir,
+        dry=True,
+        segmentation_methods={"threshold": Threshold},
+        pattern_methods={"two_segmentations": TwoSegmentations},
+    )
+
+    import tifffile
+
+    for store in sorted(yml_experiment_dir.glob("*.zarr")):
+        with pio.open(store) as exp:
+            g = exp.groups["imaging"]
+            assert g.label_names == ("segmentation", "bright")
+            for i in g.acquired():
+                assert g.labels(i, "545").max() > 0
+                assert g.labels(i, "545", "bright").max() > 0
+                # the bright threshold keeps fewer pixels than the default
+                assert (g.labels(i, "545", "bright") > 0).sum() < (
+                    g.labels(i, "545") > 0
+                ).sum()
+            routes = exp.routing["routes"][exp.name]["545"]
+            assert routes["seg"] == ["pattern@pattern", "writer(record)"]
+            assert routes["seg:bright"] == ["pattern@pattern", "writer(record)"]
+        stack = tifffile.imread(yml_experiment_dir / f"{store.stem}_imaging.tif")
+        assert stack.shape[1] == 4  # raw, two label sets, pattern
+
+
+def test_dry_run_settings_requests_ome_zarr(yml_experiment_dir):
+    """
+    A pattern method that changes its experiment's exposure and a laser
+    property every time it runs: the values land in the next timepoints'
+    frames (frames table columns), the requests are in events.parquet with
+    the timepoints they applied from, and status.json is written.
+    """
+    import json
+
+    import pyclm.io as pio
+    from pyclm.core.patterns import PatternMethod
+
+    class ExposureRamp(PatternMethod):
+        name = "exposure_ramp"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", raw=True)
+
+        def generate(self, context):
+            # the stimulation channel is acquired every timepoint, so the change
+            # is visible on a frame even when the run lags
+            context.set_exposure("stimulation", 10 + 5 * context.t)
+            context.set_property(
+                "stimulation", "Laser545", "Intensity", 0.1 * (context.t + 1)
+            )
+            return np.ones(self.pattern_shape, np.float32)
+
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+    for name in ("bar10", "bar025"):
+        toml = yml_experiment_dir / f"{name}.toml"
+        text = toml.read_text()
+        toml.write_text(
+            text[: text.index("[pattern]")] + '[pattern]\nmethod = "exposure_ramp"\n'
+        )
+
+    run_pyclm(
+        yml_experiment_dir, dry=True, pattern_methods={"exposure_ramp": ExposureRamp}
+    )
+
+    status = json.loads((yml_experiment_dir / "status.json").read_text())
+    assert status["done"] is True
+    assert status["timepoints"] == _STEPS
+    assert status["settings_applied"] > 0
+    assert (yml_experiment_dir / "events.parquet").exists()
+    assert (yml_experiment_dir / "events.csv").exists()
+
+    for store in sorted(yml_experiment_dir.glob("*.zarr")):
+        with pio.open(store) as exp:
+            events = exp.events.to_pylist()
+            applied = [e for e in events if e["status"] == "applied"]
+            assert {e["kind"] for e in applied} == {"exposure", "property"}
+            assert all(e["t_applied"] >= e["t_requested"] for e in applied)
+            assert all(e["channel"] == "DMD" for e in applied)
+            assert not [e for e in events if e["status"] == "refused"]
+
+            # every stimulation frame taken after the first change carries the
+            # values in force, and the frames table has the property column
+            t_first = min(e["t_applied"] for e in applied)
+            frames = [
+                r
+                for r in exp.frames.to_pylist()
+                if r["kind"] == "frame" and r["channel"] == "DMD"
+            ]
+            later = [r for r in frames if r["t"] >= t_first]
+            before = [r for r in frames if r["t"] < t_first]
+            assert all(r["exposure_ms"] == 50.0 for r in before)
+            if later:
+                assert "Laser545-Intensity" in exp.frames.column_names
+                assert all(r["Laser545-Intensity"] is not None for r in later)
+                assert all(r["exposure_ms"] != 50.0 for r in later)
+                assert all(r["Laser545-Intensity"] is None for r in before)
+
+
+def test_dry_run_pixel_size_and_binning(yml_experiment_dir):
+    """
+    dry_run.yml can say what the TIFs are: ``pixel_size_um`` (recorded with
+    the frames) and ``binning`` relative to the camera the affine was
+    calibrated for.  With the test images (4x binned) and the calibrated
+    affine unscaled, the bar lands almost entirely off the DMD; scaled by
+    the binning, the DMD shows it.
+    """
+    from pyclm.directories import dry_schedule_from_directory
+
+    yml = yml_experiment_dir / "dry_run.yml"
+    yml.write_text("pixel_size_um: 1.333\nbinning: 4\n" + yml.read_text())
+    config = yml_experiment_dir / "pyclm_config.toml"
+    config.write_text(
+        config.read_text().replace('format = "hdf5"', 'format = "ome-zarr"')
+    )
+
+    _schedule, source = dry_schedule_from_directory(yml_experiment_dir)
+    assert source.pixel_size_um == 1.333
+    assert source.binning == 4
+
+    run_pyclm(yml_experiment_dir, dry=True)
+
+    import pyarrow.parquet as pq
+
+    import pyclm.io as pio
+
+    frames = pq.read_table(yml_experiment_dir / "frames.parquet").to_pandas()
+    assert set(frames["pixel_size_um"].round(3)) == {1.333}
+    with pio.open(yml_experiment_dir / "bar10.00.zarr") as exp:
+        dmd = np.asarray(exp.pattern_at(_STEPS - 1))
+    assert dmd.shape == _SLM_SHAPE
+    lit = float((dmd > 0).mean())
+    assert 0.05 < lit < 0.5, f"DMD lit fraction {lit}: the affine was not scaled"
+
+
+def test_dry_settings_without_positions(tif_name_experiment_dir):
+    """A dry_run.yml with only the two keys applies to TIF-named positions."""
+    from pyclm.directories import dry_schedule_from_directory
+
+    (tif_name_experiment_dir / "dry_run.yml").write_text("binning: 4\n")
+    schedule, source = dry_schedule_from_directory(tif_name_experiment_dir)
+    assert sorted(schedule.positions) == ["bar025.00", "bar10.00"]
+    assert source.binning == 4
+    assert source.pixel_size_um == 0.33
+
+    (tif_name_experiment_dir / "dry_run.yml").write_text("binning: 0\n")
+    with pytest.raises(ValueError, match="binning"):
+        dry_schedule_from_directory(tif_name_experiment_dir)
+
+
+def test_position_list_round_trip(tmp_path):
+    """write_position_list produces the MicroManager format positions_from_pos reads."""
+    from pyclm.directories import positions_from_pos, write_position_list
+
+    positions = [
+        MicroscopePosition(10.0, 20.0, 30.0, label="a.00", extras={"PFSOffset": 5.5}),
+        MicroscopePosition(-1.5, 2.5, 0.0, label="b.01"),
+    ]
+    path = write_position_list(tmp_path / "PositionList.pos", positions, "XY", "Z")
+    back = positions_from_pos(str(path))
+    assert [(p.label, p.x, p.y, p.z) for p in back] == [
+        ("a.00", 10.0, 20.0, 30.0),
+        ("b.01", -1.5, 2.5, 0.0),
+    ]
+    assert back[0].extras == {"PFSOffset": 5.5}
+    assert back[1].extras == {}
+
+
+def test_dry_run_ignores_exported_hyperstacks(tif_name_experiment_dir):
+    """A previous run's ImageJ exports next to the TIFs are not taken for positions."""
+    from pyclm.directories import (
+        dry_run_tifs,
+        dry_schedule_from_directory,
+        is_export_tif,
+    )
+
+    d = tif_name_experiment_dir
+    for name in (
+        "bar10.00_imaging.tif",
+        "bar10.00_stim.tif",
+        "bar10.00_imaging_every5.tif",
+    ):
+        shutil.copy(next(d.glob("*.tif")), d / name)
+    assert is_export_tif(d / "bar10.00_stim.tif")
+    assert not is_export_tif(d / "bar10.00.tif")
+    assert all(not is_export_tif(p) for p in dry_run_tifs(d))
+    schedule, _source = dry_schedule_from_directory(d)
+    assert not any("_imaging" in n or "_stim" in n for n in schedule.experiment_names)

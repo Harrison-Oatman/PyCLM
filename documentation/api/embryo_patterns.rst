@@ -1,7 +1,7 @@
-Embryo Axis Patterns
-================================
+Embryo-axis patterns (``embryo_patterns``)
+==========================================
 
-Patterns that apply a pattern along the AP axis of a segmented embryo
+Methods that light a segmented embryo along its anterior–posterior axis.
 
 .. autoclass:: pyclm.core.patterns.embryo_patterns.PatternAlongAxis
    :members: generate

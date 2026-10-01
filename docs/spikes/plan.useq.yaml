@@ -1,0 +1,74 @@
+axis_order:
+- t
+- p
+- c
+- z
+metadata:
+  pyclm:
+    plan_format: 1
+    setup_time_seconds: 0.0
+    time_between_positions: 0.0
+stage_positions:
+- name: bar10.pos1
+  sequence:
+    autofocus_plan:
+      autofocus_device_name: PFS
+      autofocus_motor_offset: 9969.0
+      axes:
+      - p
+    channels:
+    - acquire_every: 1
+      config: DMD
+      exposure: 50.0
+      group: Channel
+    - acquire_every: 2
+      config: '545'
+      exposure: 50.0
+      group: Channel
+    metadata:
+      pyclm:
+        binning: 1
+        every_t:
+          '545': 2
+          DMD: 1
+        experiment: bar10.pos1
+        pattern_every_t: 1
+        stim_channel: DMD
+        t_delay: 0
+        t_stop: 0
+  x: 5302.1
+  y: -15949.2
+  z: 5162.26
+- name: bar025.pos1
+  sequence:
+    autofocus_plan:
+      autofocus_device_name: PFS
+      autofocus_motor_offset: 9969.0
+      axes:
+      - p
+    channels:
+    - acquire_every: 1
+      config: DMD
+      exposure: 50.0
+      group: Channel
+    - acquire_every: 2
+      config: '545'
+      exposure: 50.0
+      group: Channel
+    metadata:
+      pyclm:
+        binning: 1
+        every_t:
+          '545': 2
+          DMD: 1
+        experiment: bar025.pos1
+        pattern_every_t: 1
+        stim_channel: DMD
+        t_delay: 0
+        t_stop: 0
+  x: 6747.2
+  y: -15026.9
+  z: 5169.48
+time_plan:
+  interval: 0.01
+  loops: 6

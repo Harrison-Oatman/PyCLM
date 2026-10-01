@@ -1,26 +1,48 @@
+import json
 import logging
 import os
 import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from threading import Thread
-import json
 
 import numpy as np
-from toml import load
 
-logger = logging.getLogger(__name__)
-
+from .check import CheckFailed, check_directory, find_pyclm_config
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .core.position_mover import PositionMover
+from .core.tracking import TrackingMethod
 from .directories import dry_schedule_from_directory, schedule_from_directory
+from .schema import PyclmConfig
+
+logger = logging.getLogger(__name__)
+
+# marks the handlers installed by set_logging so a later call can replace them
+_PYCLM_HANDLER_FLAG = "_pyclm_run_handler"
+
+
+def remove_pyclm_log_handlers():
+    """Detach and close the handlers installed by a previous ``set_logging`` call."""
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if getattr(handler, _PYCLM_HANDLER_FLAG, False):
+            root.removeHandler(handler)
+            handler.close()
 
 
 def set_logging(experiment_directory: Path):
+    """
+    Route logging for one run: WARNING and above to the console, INFO and above
+    to ``<experiment_directory>/log.log``.
+
+    Handlers from a previous call are removed first, so successive runs in the
+    same interpreter each log to their own experiment directory.
+    """
+    remove_pyclm_log_handlers()
+
     console_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(experiment_directory / "log.log")
+    file_handler = logging.FileHandler(Path(experiment_directory) / "log.log")
 
     # Set levels for handlers
     console_handler.setLevel(logging.WARNING)
@@ -36,7 +58,13 @@ def set_logging(experiment_directory: Path):
     console_handler.setFormatter(console_format)
     file_handler.setFormatter(file_format)
 
-    logging.basicConfig(handlers=[console_handler, file_handler])
+    root = logging.getLogger()
+    for handler in (console_handler, file_handler):
+        setattr(handler, _PYCLM_HANDLER_FLAG, True)
+        root.addHandler(handler)
+
+    if root.level > logging.INFO:
+        root.setLevel(logging.INFO)
 
 
 def launch_gui_process(
@@ -70,47 +98,103 @@ def run_pyclm(
     pattern_methods: dict[str, type[PatternMethod]] | None = None,
     position_mover: PositionMover | None = None,
     dry_image_source=None,
+    tracking_methods: dict[str, type[TrackingMethod]] | None = None,
     dry: bool = False,
     gui: bool = False,
+    check: bool = True,
+    force: bool = False,
 ):
     """
-    Run a pyclm experiment from a given directory and configuration file.
-    :param experiment_directory: directory containing experiment files, including schedule.toml. [experiment].toml files,
-                               and the position list
-    :param config_path: path to pyclm_config.toml file. If None, will look for pyclm_config.toml in the experiment_directory
-    :param segmentation_methods: optional dictionary of segmentation method classes to register with the SegmentationProcess
-                                    key is the method name (used by [experiment].toml), value is the class
-    :param pattern_methods: optional dictionary of pattern method classes to register with the PatternProcess
-                                    key is the method name (used by [experiment].toml), value is the class
-    :return:
+    Run the experiments of a directory: the same as ``pyclm run``.
+
+    :param experiment_directory: the directory holding the experiment TOMLs,
+        the schedule, the position list and (usually) ``pyclm_config.toml``
+    :param config_path: the configuration file; None means the directory's
+        ``pyclm_config[.<anything>].toml``, then the working directory's
+    :param segmentation_methods: ``{name: class}`` of custom segmentation
+        methods to register (``name`` is what ``[segmentation] method`` selects)
+    :param pattern_methods: ``{name: class}`` of custom pattern methods; the
+        configuration's ``methods`` and installed ``pyclm.methods`` entry
+        points are loaded as well (see :mod:`pyclm.methods`), these win
+    :param position_mover: how the stage reaches a position; None means the
+        configuration's ``position_mover`` (``basic`` by default)
+    :param dry_image_source: frames for the virtual microscope; None with
+        ``dry=True`` discovers them from the directory
+    :param tracking_methods: ``{name: class}`` of custom tracking methods
+    :param dry: run on the virtual microscope
+    :param gui: open the live viewer in its own process
+    :param check: run ``pyclm check`` first and stop on errors
+    :param force: start despite check errors
     """
 
     experiment_directory = Path(experiment_directory)
     print(f"experiment directory: {experiment_directory}")
 
-    # search for config file if not provided
+    # the config file: given, in the experiment directory, or in the working directory
+    config_path = find_pyclm_config(experiment_directory, config_path)
     if config_path is None:
-        # look in the experiment directory for pyclm_config.toml
         config_path = experiment_directory / "pyclm_config.toml"
-
-        # look in the current working directory for pyclm_config.toml
-        if not config_path.exists():
-            config_path = Path("pyclm_config.toml")
-
     config_path = Path(config_path)
 
     assert experiment_directory.exists(), (
         f"experiment directory {experiment_directory} does not exist"
     )
     assert config_path.exists(), (
-        f"config file {config_path} does not exist: pyclm_config.toml must be specified or be "
-        f"present in the experiment directory"
+        f"config file {config_path} does not exist: pyclm_config.toml (or "
+        "pyclm_config.<name>.toml) must be given or be in the experiment directory"
     )
+
+    if gui:
+        # before the hardware is touched
+        from .gui import require_gui
+
+        require_gui()
 
     set_logging(experiment_directory)
 
-    config = load(config_path)
+    # the same check as `pyclm check`; errors stop the run unless forced
+    if check:
+        report = check_directory(
+            experiment_directory,
+            config_path,
+            pattern_methods=pattern_methods,
+            segmentation_methods=segmentation_methods,
+            tracking_methods=tracking_methods,
+        )
+        print(report.text())
+        if report.errors and not force:
+            raise CheckFailed(report)
+
+    config = PyclmConfig.from_file(config_path)
     logger.info(f"loaded config from {config_path}")
+
+    # custom methods: installed entry points and the configuration's `methods`;
+    # the ones passed in code win
+    from .methods import discover
+
+    found, ep_warnings = discover(config, config_path)
+    for warning in ep_warnings:
+        logger.warning(warning)
+    pattern_methods, segmentation_methods, tracking_methods = found.merged_with(
+        pattern_methods, segmentation_methods, tracking_methods
+    )
+
+    focus_device = config.focus_device
+    if position_mover is None:
+        # the command line (and any caller that does not pass one) takes the
+        # mover from pyclm_config.toml; a mover passed in code wins
+        from .core.position_mover import resolve_mover
+
+        position_mover = resolve_mover(config.position_mover)()
+        logger.info(
+            f"position mover: {type(position_mover).__name__} "
+            f"(pyclm_config.toml position_mover = {config.position_mover!r})"
+        )
+    settle_time_s = config.settle_time_seconds
+    storage_format = config.output.format
+    pattern_policy = config.output.pattern_policy
+    export_imagej = config.output.export_imagej
+    logger.info(f"output format {storage_format}, pattern policy {pattern_policy}")
 
     base_path = experiment_directory
 
@@ -122,10 +206,13 @@ def run_pyclm(
         schedule = schedule_from_directory(base_path)
 
     c = Controller(
-        config["config_path"],
+        config.config_path,
         dry,
         position_mover=position_mover,
         dry_image_source=dry_image_source,
+        settle_time_s=settle_time_s,
+        storage_format=storage_format,
+        pattern_policy=pattern_policy,
     )
 
     # register any custom methods
@@ -137,27 +224,43 @@ def run_pyclm(
         for name, method in pattern_methods.items():
             c.register_pattern_method(name, method)
 
+    if tracking_methods is not None:
+        for name, method in tracking_methods.items():
+            c.register_tracking_method(name, method)
+
     core = c.core
     core.describe()
 
-    core.setFocusDevice("ZDrive")
+    if focus_device:
+        core.setFocusDevice(focus_device)
+        logger.info(f"focus device set to '{focus_device}'")
 
     print("---listing available config groups---")
-    for group in core.getAvailableConfigGroups():
+    groups = core.getAvailableConfigGroups()
+    if not groups:
+        # an empty tuple means no configuration is loaded; None has been seen
+        # with a pymmcore-plus / pymmcore pair that do not belong together
+        logger.warning(
+            "no config groups reported by the core "
+            f"(getAvailableConfigGroups returned {groups!r}); "
+            "is the MicroManager configuration loaded, and do the installed "
+            "pymmcore and pymmcore-plus match (see pyproject.toml, [tool.uv])?"
+        )
+    for group in groups or ():
         cg = core.getConfigGroupObject(group, False)
         print(cg.name, list(cg.items()))
 
-    slm_shape = config["slm_shape_h"], config["slm_shape_w"]
-    at = np.array(config["affine_transform"], dtype=np.float32)
+    slm_shape = config.slm_shape
+    at = config.affine
 
-    c.initialize(schedule, slm_shape, at, base_path)
+    c.initialize(schedule, slm_shape, at, base_path, camera_roi=config.camera_roi)
 
     all_layers = c.all_layers
     t_gcd = c.t_gcd
 
     all_layers_output = {
         "t": t_gcd,
-        "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers]
+        "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers],
     }
 
     with open(f"{base_path}/all_layers.txt", "w") as file:
@@ -172,3 +275,24 @@ def run_pyclm(
         logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
     c.run()
+
+    if export_imagej:
+        export_outputs(c.outbox.writer.output_paths().values())
+
+
+def export_outputs(paths) -> list[Path]:
+    """Write ImageJ hyperstacks next to each finished output; failures are logged, not raised."""
+    from . import io as pyclm_io
+
+    written = []
+    for path in paths:
+        try:
+            with pyclm_io.open(path) as exp:
+                written += pyclm_io.export_imagej(exp)
+        except Exception as e:
+            logger.error(f"ImageJ export of {path} failed: {e}", exc_info=True)
+    if written:
+        print(
+            f"exported {len(written)} ImageJ stack(s): {', '.join(p.name for p in written)}"
+        )
+    return written

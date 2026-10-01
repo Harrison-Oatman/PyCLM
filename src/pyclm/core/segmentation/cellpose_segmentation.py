@@ -1,6 +1,10 @@
+import logging
+
 from cv2 import resize
 
 from .segmentation import *
+
+logger = logging.getLogger(__name__)
 
 
 class CellposeResource(SharedSegmentationResource):
@@ -10,7 +14,7 @@ class CellposeResource(SharedSegmentationResource):
         self.pretrained_model = pretrained_model
         self.gpu = gpu
 
-        print(f"requesting cellpose model: {pretrained_model}")
+        logger.info(f"loading cellpose model: {pretrained_model} (gpu={gpu})")
 
         from cellpose import models
 
@@ -43,8 +47,6 @@ class CellposeSegmentationMethod(SegmentationMethod):
         **kwargs,
     ):
         super().__init__(experiment_name)
-
-        print(model)
 
         self.model_name = model
         self.use_gpu = use_gpu
@@ -103,7 +105,7 @@ class EmbryoSegmentationMethod(CellposeSegmentationMethod):
         big_mask = resize(mask.astype(float), data.shape) > 0.5
 
         big_mask = np.array(big_mask)
-        print(f"big_mask shape: {big_mask.shape}")
+        logger.debug(f"big_mask shape: {big_mask.shape}")
 
         if self.do_cache:
             self.cached_result = big_mask

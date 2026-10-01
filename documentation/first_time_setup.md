@@ -12,18 +12,11 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 
 ## 1. Install PyCLM
 
-Create a virtual environment using [uv](https://docs.astral.sh/uv/) and install pyclm:
+See [Installation](installation.md). On the microscope PC:
 
 ```bash
-git clone https://github.com/Harrison-Oatman/PyCLM.git
-cd PyCLM
-uv sync --group dev
-```
-
-To use CellposeSAM segmentation, install the optional cellpose extras (requires a CUDA-capable GPU):
-
-```bash
-uv sync --extra cellpose
+pip install "closed-loop-microscopy[gui]"
+mmcore use "C:\Program Files\Micro-Manager-2.0"
 ```
 
 ---
@@ -60,11 +53,83 @@ slm_shape_w = 912
 # This is a 2x3 matrix [[a, b, tx], [c, d, ty]].
 # Obtain it by running the MicroManager Projector plugin calibration.
 affine_transform = [[-0.29, -0.002, 939.9], [0.004, -0.579, 1505.2]]
+
+# Optional. MicroManager focus (Z) device selected at startup. Default "ZDrive".
+focus_device = "ZDrive"
+
+# Optional. How the stage moves to a position: "basic" (default; XY then Z),
+# "pfs" (Nikon Perfect Focus: move, apply the position's PFS offset, wait for
+# the lock), or "package.module:ClassName" for your own PositionMover.
+# `pyclm run` reads this; a mover passed to run_pyclm() in code takes precedence.
+position_mover = "pfs"
+
+# Optional. Seconds to wait after the hardware reports ready, before each snap.
+# Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
+settle_time_seconds = 1.0
+
+# Optional. Camera ROI [x, y, width, height] in unbinned pixels, set when a run
+# (or `pyclm preview --snap`) starts. The DMD usually lights only part of the
+# field: `pyclm check` prints the region it covers and suggests it here, so
+# that every pixel imaged can be stimulated. Omit to leave the camera as it is.
+# The affine above stays calibrated in the full frame; PyCLM composes the offset.
+camera_roi = [256, 128, 1536, 1792]
+
+# Optional. Your own pattern / segmentation / tracking methods: Python files
+# (relative to this file) or module names. Each method class they define is
+# available by its `name` in the experiment TOMLs, to `pyclm run`, `check`
+# and `preview` alike. See "Custom Pattern and Segmentation Methods" below.
+methods = ["my_patterns.py"]
+
+# Optional. How data is stored and exported.
+[output]
+format = "ome-zarr"          # "ome-zarr" (default) or "hdf5" (PyCLM's original layout)
+pattern_policy = "on_change" # ome-zarr only: store each distinct pattern once ("on_change"),
+                             # only at timepoints with a saved imaging frame ("imaging"),
+                             # or not at all ("none"); stored in camera and DMD coordinates
+export_imagej = true         # write ImageJ hyperstacks next to the data when the run finishes
 ```
+
+By default (`format = "ome-zarr"`) each experiment is written as an
+[OME-Zarr](https://ngff.openmicroscopy.org/) store (`<experiment>.zarr/`) that
+Fiji, napari, QuPath and plain Python (`zarr`, `dask`) open directly, with one
+image per acquisition cadence so channels imaged every N timepoints never show
+blank frames, segmentation as NGFF labels, DMD patterns stored once per
+distinct pattern, and a `frames.parquet`/`frames.csv` table of every frame and
+stimulation event. Whichever format is used, `pyclm.io.open(path)` reads it
+and `pyclm export` (or the automatic export) produces ImageJ stacks. See
+[Data format and export](data_format.md) for the full description.
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.
 
 ---
+
+## 3b. The objective and the pixel size
+
+PyCLM takes the pixel size from MicroManager, once, when a run starts:
+the value MicroManager's **pixel size calibration** (Devices → Pixel Size
+Calibration, or the Pixel Calibrator plugin) reports for the current
+device state. Every distance in a pattern method (a bar's speed and
+period, a cell's size, a grid's spacing) and in tracking comes from it, so
+three things must line up:
+
+1. A pixel-size preset exists for each objective you use, with the
+   objective's device property as its condition (this is what the
+   calibration dialog creates).
+2. Each experiment TOML names the objective in `[config_groups]`
+   (`Objective = "..."`). The run applies the presets every experiment
+   shares before it reads the pixel size, so it does not matter which
+   objective the microscope was left at.
+3. `pyclm_config.toml` is calibrated for that objective: the affine from
+   the Projector plugin and the `camera_roi`. Keep one configuration file
+   per objective (`pyclm_config.20x.toml`, `pyclm_config.10x.toml`) and
+   put the right one in the directory.
+
+`pyclm check` reads the `.cfg` and prints the pixel size the experiment's
+`[config_groups]` select (`pixel size 0.65 um (preset 'px20')`), warns
+when no preset matches (the run would report 0), and warns when
+experiments in one directory disagree on a global config group. Binning
+needs no preset of its own: PyCLM sets it per acquisition and records the
+binned pixel size with every frame.
 
 ## 4. Choose or Implement a PositionMover
 
@@ -78,7 +143,14 @@ PyCLM needs to know how to move to an imaging position on your hardware. Three c
 
 ### Using a built-in mover
 
-Pass a mover instance to `run_pyclm` or `Controller`:
+Name it in `pyclm_config.toml`; this is what `pyclm run` uses:
+
+```toml
+position_mover = "pfs"     # or "basic" (the default)
+```
+
+`pyclm check` prints the mover it resolved to. In code, a mover instance
+passed to `run_pyclm` or `Controller` takes precedence over the file:
 
 ```python
 from pyclm import run_pyclm
@@ -119,6 +191,14 @@ class MyFocusMover(PositionMover):
 run_pyclm("path/to/experiment_dir", position_mover=MyFocusMover())
 ```
 
+or, so that `pyclm run` finds it, point the configuration at the class
+(the module must be importable, for example installed in the same
+environment or on `PYTHONPATH`):
+
+```toml
+position_mover = "my_lab.movers:MyFocusMover"
+```
+
 The `extras` dict is populated from any devices in the position list beyond the XY and Z stages (see Section 5 below).
 
 ---
@@ -139,15 +219,56 @@ These three positions would use `feedback_ctrl.toml` for the first two and `open
 
 PyCLM also supports the Nikon Elements `multipoints.xml` format (exported from the xy-positions tab of an NDAcquire). If both files are present, `PositionList.pos` takes precedence.
 
+### Grids
+
+A position can be a **grid of tiles** imaged as one stitched frame, so a
+pattern method sees, and lights, a region larger than one field. Grids are
+made in MicroManager with the Stage Position List's **Create Grid** (the
+tile creator) and need nothing in the experiment TOML:
+
+1. Once per objective, run MicroManager's **Pixel Calibrator** so that the
+   pixel-size affine knows the camera's orientation; the tile creator lays
+   tiles out with it, and PyCLM stitches by tile row and column, so tiles
+   abut only if this is right.
+2. Set the camera ROI you will run with (`camera_roi` in `pyclm_config.toml`;
+   `pyclm check` prints the region the DMD covers). Create Grid spaces tiles
+   by the *current* image size, so the ROI must be active when the grid is
+   created. Use overlap 0 for stimulated grids: the overlap strip would be
+   lit from two tiles.
+3. In Create Grid, set the **prefix** to the experiment's TOML stem
+   (`tissue` for `tissue.toml`), mark the corners, and create. MicroManager
+   writes one entry per tile, labelled `tissue-1-000_000`,
+   `tissue-1-001_000`, … with `GridRow` / `GridCol`, each with its own z
+   and, on a Nikon, PFS offset interpolated between the corners.
+4. Save the list as `PositionList.pos` in the experiment directory.
+
+PyCLM folds those entries into one position, `tissue.1`, at the centre of
+the tiles. `pyclm check` reports each grid (rows × columns, spacing, and,
+given `camera_roi` and `--pixel-size-um`, the overlap in pixels). At each
+timepoint every channel visits all the tiles (the stimulation frame with
+its tile's own DMD image) and publishes one stitched frame; the pattern
+method's `pattern_shape` is the stitched frame and the pattern it returns
+is cut into one DMD image per tile. Grids need the OME-Zarr format. Do not
+delete tiles from a grid; PyCLM refuses an incomplete rectangle.
+
 ---
 
 ## 6. Write Experiment TOML Files
+
+`uv run pyclm new path/to/experiment_dir --name my_experiment` writes a
+starting set of files (an open-loop or a closed-loop template) with comments
+saying what to change; the rest of this section explains them.
 
 Each experiment type is described by a TOML file. Multiple positions can share the same experiment file; one experiment file can therefore run simultaneously at several locations.
 
 Below is a fully annotated example for a feedback-controlled optogenetic experiment:
 
 ```toml
+# ── Optional timing offsets (in timepoints, not seconds). Keep them above the ─
+# ── first table: a key written after a table header belongs to that table. ──
+# t_delay = 5    # wait N timepoints before starting this experiment
+# t_stop  = 100  # stop after N timepoints (0 = run until schedule ends)
+
 # ── Optional: device state applied to every channel in this experiment ──────
 [config_groups]
 # "GroupName" = "PresetName"  (MicroManager config group)
@@ -218,10 +339,6 @@ method = "cellpose"
 method = "circle"
 rad = 150            # circle radius in µm
 
-
-# ── Optional timing offsets (in timepoints, not seconds) ────────────────────
-# t_delay = 5    # wait N timepoints before starting this experiment
-# t_stop  = 100  # stop after N timepoints (0 = run until schedule ends)
 ```
 
 ---
@@ -242,6 +359,12 @@ time_between_positions = 2.0 # pause between consecutive positions within a time
 
 ## 8. Experiment Directory Layout
 
+`schedule.toml` and `pyclm_config.toml` may carry a label between the name
+and the suffix, `schedule.fast.toml` or `pyclm_config.ti2.toml`, so a
+directory says what it was run with. Every other `.toml` is an experiment.
+A directory must hold exactly one of each; `pyclm check` and `pyclm run`
+refuse two schedules or two configurations.
+
 Before running, your experiment directory should contain:
 
 ```
@@ -258,37 +381,61 @@ PyCLM writes output files alongside the configuration files:
 
 ```
 experiment_dir/
-├── feedback_ctrl.pos1.hdf5
+├── feedback_ctrl.pos1.hdf5        # or feedback_ctrl.pos1.zarr/ with format = "ome-zarr"
 ├── feedback_ctrl.pos2.hdf5
 ├── open_loop.pos1.hdf5
+├── feedback_ctrl.pos1_imaging.tif # ImageJ hyperstacks, exported when the run ends
+├── frames.parquet / frames.csv    # (ome-zarr) one row per frame and stimulation event
+├── plan.useq.yaml                 # the acquisition plan PyCLM derived from your files
 └── log.log
 ```
 
+`plan.useq.yaml` is a [useq-schema](https://pymmcore-plus.github.io/useq-schema/)
+`MDASequence` describing every position, channel, exposure and the timing,
+plus PyCLM's own settings under `metadata.pyclm`. It is also stored inside
+each HDF5 file. Keep it with the data: it is the exact record of what was
+scheduled.
+
 ---
 
-## 9. Run the Experiment
+## 9. Check, Preview, Run
+
+Before the microscope is touched:
+
+```bash
+uv run pyclm check path/to/experiment_dir
+uv run pyclm preview path/to/experiment_dir my_experiment --image a_snapped_frame.tif
+```
+
+`check` reports every problem in the files, with the file and key it
+concerns; `preview` runs the segmentation and the pattern method once on an
+image and writes what they produce. `pyclm run` performs the same check and
+refuses to start on errors. See [The pyclm command](command_line.md).
 
 **From the command line:**
 
 ```bash
-uv run pyclm path/to/experiment_dir
+uv run pyclm run path/to/experiment_dir
 ```
 
 Pass `--config` if `pyclm_config.toml` is not in the experiment directory or repository root:
 
 ```bash
-uv run pyclm path/to/experiment_dir --config path/to/pyclm_config.toml
+uv run pyclm run path/to/experiment_dir --config path/to/pyclm_config.toml
 ```
 
 Use `--dry` to run a full rehearsal without connecting to the microscope:
 
 ```bash
-uv run pyclm path/to/experiment_dir --dry
+uv run pyclm run path/to/experiment_dir --dry
 ```
 
 In dry mode, PyCLM reads simulated images from TIF files placed inside the experiment directory. Positions are loaded from `PositionList.pos` or `multipoints.xml` if present, and each TIF is matched to a position by label (e.g. `on.00.tif` matches position `on.00`) or stem (e.g. `on.tif` matches any position with stem `on`). For explicit control, add a `dry_run.yml` to the experiment directory mapping position names to TIF files:
 
 ```yaml
+pixel_size_um: 1.333   # the size of one pixel of the TIFs (default 0.33)
+binning: 4             # how the TIFs were binned, relative to the camera the
+                       # affine transform was calibrated for (default 1)
 positions:
   - name: on.00
     x: 0.0
@@ -300,15 +447,33 @@ positions:
     source: off.tif
 ```
 
+The two top-level keys are optional and may also stand alone in a
+`dry_run.yml` without `positions`, in which case the positions come from the
+position list or the TIF names as above. `pixel_size_um` is what the pattern
+methods and the output metadata see; `binning` scales the camera-to-DMD
+affine of `pyclm_config.toml`, which was calibrated on the unbinned camera.
+Without it, images binned 4x land mostly off the DMD and the stored DMD
+pattern is nearly empty even though the pattern in camera coordinates is
+fine. `pyclm preview --image` uses the same two keys when
+`--pixel-size-um` is not given.
+
+The simulated camera reports a frame four times the TIF's size, so the
+closest match to a real camera is to leave `binning` out, set
+`pixel_size_um` to the unbinned pixel size, and give the experiments
+`binning = 4` (the TIFs then are the camera's binned frames). That is how
+`pyclm new --demo` is set up. With `binning` in `dry_run.yml` instead, the
+DMD pattern is right but per-cell patterns are stored in camera
+coordinates at a quarter of the frame (known issue #35).
+
 Add `--gui` to open a live Napari viewer that updates as data is written:
 
 ```bash
-uv run pyclm path/to/experiment_dir --dry --gui
+uv run pyclm run path/to/experiment_dir --dry --gui
 ```
 
 `--gui` can also be used during a real experiment to monitor output in real time.
 
-**Programmatically** (required when using a custom `PositionMover` or custom pattern/segmentation methods):
+**Programmatically** (for a `PositionMover` instance built in code; custom methods can also be passed here, though the `methods` key of `pyclm_config.toml` is enough for the command line):
 
 ```python
 from pyclm import run_pyclm, PFSPositionMover
@@ -355,10 +520,27 @@ class MyPattern(PatternMethod):
         return pattern
 ```
 
-Register and run:
+Save it as `my_patterns.py` next to `pyclm_config.toml` and list the file
+there:
 
-```python
-run_pyclm("path/to/experiment_dir", pattern_methods={"my_pattern": MyPattern})
+```toml
+methods = ["my_patterns.py"]
+```
+
+`pyclm check`, `pyclm preview` and `pyclm run` then know `method =
+"my_pattern"`. Every method class the file defines is registered under its
+`name`, which must be set on the class and must not be a built-in name; a
+shared base class without a `name` that the file's methods build on is
+skipped. A file may import helpers from its own folder. From Python,
+`run_pyclm(..., pattern_methods={"my_pattern": MyPattern})` does the same and
+takes precedence.
+
+A lab package can make its methods available to every installation with an
+entry point in its `pyproject.toml`:
+
+```toml
+[project.entry-points."pyclm.methods"]
+mylab = "mylab.patterns"
 ```
 
 ### Segmentation method
@@ -383,8 +565,7 @@ class MySegmentation(SegmentationMethod):
         return label(binary).astype(np.int32)
 ```
 
-```python
-run_pyclm("path/to/experiment_dir", segmentation_methods={"my_seg": MySegmentation})
-```
-
-The method name is then available as `method = "my_seg"` in the `[segmentation]` block of any experiment TOML.
+Listed in `methods` like a pattern method (or passed as
+`segmentation_methods={"my_seg": MySegmentation}` to `run_pyclm`), the
+method name is then available as `method = "my_seg"` in the `[segmentation]`
+block of any experiment TOML.

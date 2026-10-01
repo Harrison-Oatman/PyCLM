@@ -1,0 +1,21 @@
+# Copied into every experiment directory as pyclm_config.toml by `wet prepare`.
+# Fill in once for the microscope under test.
+
+config_path = "C:\\Program Files\\Micro-Manager-2.0\\ham_cam1.cfg"
+
+# camera -> DMD affine from the MicroManager Projector plugin calibration
+affine_transform = [[0.001, -0.288, 774.873], [0.579, 0.002, 32.381]]
+slm_shape_h = 1140
+slm_shape_w = 912
+
+focus_device = "ZDrive"
+position_mover = "pfs"          # "basic" on a microscope without PFS
+settle_time_seconds = 1.0
+
+# the region the DMD covers, in unbinned camera pixels: item 01 prints it
+# camera_roi = [x, y, width, height]
+
+[output]
+format = "ome-zarr"
+pattern_policy = "on_change"
+export_imagej = true

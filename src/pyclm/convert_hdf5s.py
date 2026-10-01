@@ -1,5 +1,6 @@
 import json
 import re
+import tomllib
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -10,8 +11,6 @@ import tifffile
 from h5py import File
 from natsort import natsorted
 from skimage.transform import downscale_local_mean
-from toml import load
-from tqdm import tqdm
 
 
 def grayscale_lut():
@@ -151,8 +150,11 @@ def make_tif(fp, at, chan="channel_638", binning_override=None):
 
             patterned_stack = [data]
 
-            if "seg" in f[t_val][channel_key].keys():
-                patterned_stack.append(f[t_val][channel_key]["seg"])
+            # seg datasets are pre-allocated for every channel; an unwritten one
+            # stays (0, 0) and must be treated as absent
+            seg = f[t_val][channel_key].get("seg")
+            if seg is not None and seg.shape == data.shape:
+                patterned_stack.append(seg)
                 seg_seen = True
 
             elif seg_seen:
@@ -204,58 +206,67 @@ def make_tif(fp, at, chan="channel_638", binning_override=None):
 
 
 def process_args():
-    parser = ArgumentParser()
-    parser.add_argument("directory", help="directory containing experiment files")
-    parser.add_argument("channels", nargs="*", help="channels to extract")
+    parser = ArgumentParser(
+        description="Export PyCLM outputs (.zarr or .hdf5) to ImageJ hyperstacks"
+    )
+    parser.add_argument("directory", help="directory containing experiment outputs")
+    parser.add_argument(
+        "channels",
+        nargs="*",
+        help="channels/groups to export (default: all); e.g. 545 stim imaging",
+    )
     parser.add_argument(
         "--config", type=str, help="path to pyclm_config.toml file", default=None
     )
     parser.add_argument(
         "--binning",
-        help="binning during experiment (autodetected if not sepcified)",
+        help="ignored (binning is read from the data)",
         default=None,
     )
-
     return parser.parse_args()
 
 
 def find_affine_transform(input_dir, config_path):
-    # copied from main.py
-    # search for config file if not provided
+    """Affine transform from pyclm_config.toml, or None if no config is found."""
     if config_path is None:
-        # look in the experiment directory for pyclm_config.toml
-        config_path = input_dir / "pyclm_config.toml"
+        from .directories import find_config_in
 
-        # look in the current working directory for pyclm_config.toml
-        if not config_path.exists():
-            config_path = Path("pyclm_config.toml")
-
+        config_path = find_config_in(input_dir) or find_config_in(Path.cwd())
+        if config_path is None:
+            return None
     config_path = Path(config_path)
-
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Config file not found at {config_path}. Affine transform is required."
-        )
-
-    config = load(config_path)
+        return None
+    with open(config_path, "rb") as f:
+        config = tomllib.load(f)
     return np.array(config["affine_transform"], dtype=np.float32)
 
 
 def main():
+    from . import io as pyclm_io
+
     args = process_args()
-    input_dir = args.directory
-    config_path = args.config
-    channels = args.channels
+    input_dir = Path(args.directory)
+    fallback_affine = find_affine_transform(input_dir, args.config)
+    wanted = set(args.channels)
 
-    # We require overlay pattern approach, so we need affine transform
-    at = find_affine_transform(Path(input_dir), config_path)
-
-    for val in tqdm(list(Path(input_dir).glob("*.hdf5"))):
-        for c in channels:
-            if c == "stim":
-                make_tif(str(val), at, f"stim_aq", args.binning)
-            else:
-                make_tif(str(val), at, f"channel_{c}", args.binning)
+    for path in pyclm_io.find_experiments(input_dir):
+        with pyclm_io.open(path) as exp:
+            groups = None
+            if wanted:
+                groups = [
+                    name
+                    for name, g in exp.groups.items()
+                    if name in wanted
+                    or any(c in wanted for c in g.channels)
+                    or ("stim" in wanted and g.name == "stim_aq")
+                ]
+            affine = (
+                exp.affine_transform
+                if exp.affine_transform is not None
+                else fallback_affine
+            )
+            pyclm_io.export_imagej(exp, groups=groups, affine=affine)
 
 
 if __name__ == "__main__":

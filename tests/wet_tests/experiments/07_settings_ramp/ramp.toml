@@ -1,0 +1,37 @@
+format_version = 1
+
+[config_groups]
+Objective = "1-Plan Apo LmbdD0.80 20x"
+System = "Startup"
+
+[imaging]
+every_t = 2
+exposure = 50
+save = true
+binning = 1
+
+    [imaging.config_groups]
+    Laser-Intensity = "50%"
+    LightPath = "Fluor"
+
+[channels]
+group = "Channel"
+presets = ["545"]
+
+[stimulation]
+every_t = 1
+exposure = 50
+save = true
+
+    [stimulation.config_groups]
+    Channel = "DMD"
+    LightPath = "DMD"
+    Laser-Intensity = "AllOff"
+    Sola = "30"
+
+[pattern]
+method = "exposure_ramp"
+device = "Sola"
+prop = "Power"
+start = 10.0
+step = 5.0

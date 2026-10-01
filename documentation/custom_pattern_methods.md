@@ -22,7 +22,7 @@ from pyclm import PatternMethod, PatternContext
 class MyCustomPattern(PatternMethod):
     """A custom pattern method."""
 
-    name = "custom_method"  # used in logging; does not need to match the run_pyclm dict key
+    name = "custom_method"  # what method = "..." in the TOML selects
 
     # keyword arguments defined here can be set in the experiment .toml
     def __init__(self, keyword_a="default_value_a", keyword_b=42, **kwargs):
@@ -54,17 +54,29 @@ class MyCustomPattern(PatternMethod):
         return pattern
 ```
 
-When you run pyclm, you must supply any custom generated patterns in a dictionary, with the name of the method 
-as it should be referenced in the .toml
+Save the class in a Python file, say `my_patterns.py` next to
+`pyclm_config.toml`, and list the file in the configuration:
+
+```toml
+# pyclm_config.toml
+methods = ["my_patterns.py"]
+```
+
+Every method class the file defines is registered under its `name`, for
+`pyclm check`, `pyclm preview` and `pyclm run` alike; `pyclm check` lists
+what it loaded and reports a file that fails to import. From Python, the
+same class can be passed directly (this takes precedence over the file):
 
 ```python
 from pyclm import run_pyclm
-from my_pattern import MyCustomPattern
-
-experiment_directory = ...
+from my_patterns import MyCustomPattern
 
 run_pyclm(experiment_directory, pattern_methods={"custom_method": MyCustomPattern})
 ```
+
+A package of methods shared by a lab can register them on installation with
+a `pyclm.methods` entry point (see [First-time setup](first_time_setup.md),
+section 10).
 
 PyCLM will know that you want to use this pattern if you put it in your .toml. The .toml should also supply any keyword 
 arguments that you want to overwrite.
@@ -120,17 +132,7 @@ outer_radius_um = 80
 
 All keys other than `method` are passed verbatim as kwargs to `__init__`. Default values in `__init__` are used when a key is absent from the TOML.
 
-**Registration:**
-
-```python
-from pyclm import run_pyclm
-from my_patterns import AnnulusPattern
-
-run_pyclm(
-    experiment_directory,
-    pattern_methods={"annulus": AnnulusPattern},
-)
-```
+**Registration:** `methods = ["my_patterns.py"]` in `pyclm_config.toml`.
 
 ---
 
@@ -203,16 +205,269 @@ from pyclm.core.patterns.pattern import PatternMethod, PatternContext
 | `self.pixel_size_um` | microns per pixel (accounts for binning) |
 | `self.get_um_meshgrid()` | returns `(xx, yy)` arrays in µm, shape `pattern_shape` |
 | `self.center_um()` | returns `(cx, cy)` center of the FOV in µm |
-| `self.add_requirement(channel_name, raw, seg)` | declare that `generate` needs raw/seg data for a channel |
-| `self.request_stim(raw, seg)` | same, but for the stimulation-output channel |
+| `self.add_requirement(channel_name, raw=False, seg=False, tracks=False, history=1)` | declare that `generate` needs the raw frame, the segmentation and/or the tracks of a channel, and how many past deliveries to keep. `seg` is `True` for the default `[segmentation]` table, the name of a `[segmentation.<name>]` table, or a list of names |
+| `self.request_stim(raw=False, seg=False, history=1)` | same, but for the stimulation-output channel |
+| `pattern_history` (class attribute, default 2) | how many of the method's previous patterns the context keeps |
 
 The `generate` method receives a `PatternContext` and must return a `float` array with values in `[0, 1]` and shape matching `self.pattern_shape`.
 
 ```python
 context.raw(channel_name)           # np.ndarray – raw fluorescence image
 context.segmentation(channel_name)  # np.ndarray – labelled segmentation mask
+context.segmentation(channel_name, "nuclei")   # the labels of a named [segmentation.nuclei] table
+context.regions(channel_name, name="segmentation")  # Regions: measure(), paint(), ... (toolbox below)
+context.tracks(channel_name)        # Tracks – tracked labels + per-object rows (see Tracking)
 context.stim_raw()                  # raw image of the stimulation channel
+context.stim_seg()                  # its segmentation
 context.time                        # elapsed experiment time in seconds
+context.t                           # plan timepoint (int)
+context.generation                  # how many patterns this method has produced so far
+
+context.history(channel_name, kind="seg", n=None)   # past deliveries, oldest first, current last
+context.stim_history(kind="raw", n=None)
+context.last_pattern()              # the array generate() returned last time, or None
+context.pattern_history(n=None)     # previous patterns, oldest first
+
+context.settings(channel_name)      # exposure, presets, device properties in force
+context.grid()                      # GridGeometry of a grid experiment (rows, columns,
+                                    # tile shape, pitch, tile order), None otherwise
+context.set_exposure(channel_name, ms)                 # change settings of this experiment
+context.set_property(channel_name, device, prop, value)  # from the next timepoint on
 ```
 
+History is sampled at the pattern's own cadence: `add_requirement("545",
+seg=True, history=3)` keeps the last three segmentations that reached this
+method, which is what a controller that integrates or differentiates its
+input needs. Only what you asked for is kept, so memory stays bounded.
+Anything that must see *every* acquired frame of a channel belongs in a
+tracking method, not in `generate` (see [Tracking](tracking.md)).
+
 ---
+## The measurement toolbox
+
+Most per-cell methods do the same three chores: measure something per
+cell, remember something per cell, and turn per-cell numbers back into a
+pattern. PyCLM provides them, so a method reads like the experiment it
+runs rather than like image-processing plumbing.
+
+```python
+from pyclm import Regions, PerTrack, nuclear_cytosolic_ratio
+
+regions = context.regions("545")            # a segmentation as Regions
+tracks = context.tracks("545")              # a Tracks is a Regions whose ids persist
+
+regions.ids                                 # object ids, ascending (tracks: in row order)
+regions.measure(image)                      # mean of image per object, aligned with ids
+regions.measure(image, "max")               # also median, min, sum, std, var
+regions.areas(), regions.centroids()        # pixels per object; (N, 2) centroids y, x
+regions.paint(values)                       # an image with each object filled with its value
+regions.paint(0.5)                          # ... the same value for every object
+regions.paint({12: 1.0})                    # ... or a dict by id
+regions.select(ids)                         # the same frame keeping only those objects
+cells.owner_of(nuclei)                      # for each nucleus, the cell under its centroid
+
+memory = PerTrack()                         # a value remembered per track id
+memory.update(tracks.ids, values)           # the latest value wins
+memory.get(tracks.ids, default="median")    # aligned with the ids; unknown ids get the default
+```
+
+With these, the feedback phase of a per-cell controller is a few lines (the
+full method is in [Tracking](tracking.md)):
+
+```python
+means = tracks.measure(context.raw(self.channel))
+low = self.low.get(tracks.ids, default="median")
+high = self.high.get(tracks.ids, default="median")
+duty = 0.5 + self.gain * ((low + high) / 2 - means) / np.maximum(high - low, 1e-6)
+return tracks.paint(np.clip(duty, 0, 1))
+```
+
+`paint` is also the fast path for any per-cell pattern: it fills every
+object in one array operation instead of looping over regions.
+
+---
+
+## Example 3 — two segmentations of one channel (a KTR clamp)
+
+A kinase translocation reporter (KTR) is read out as the ratio of nuclear
+to cytosolic intensity of one channel, which needs two segmentations of
+that channel: nuclei and whole cells. Name them in the TOML:
+
+```toml
+[segmentation.nuclei]
+method = "cellpose"
+model = "nuclei"
+
+[segmentation.cells]
+method = "cellpose"
+model = "cyto3"
+
+[pattern]
+method = "ktr_clamp"
+channel = "ktr"
+target = 1.2
+gain = 2.0
+```
+
+and ask for both by name:
+
+```{literalinclude} examples/ktr_patterns.py
+:language: python
+:pyobject: KTRClamp
+```
+
+`nuclear_cytosolic_ratio` matches every nucleus to the cell under its
+centroid, measures the reporter inside the nucleus and in the cell minus
+every nucleus, and returns the ratio per nucleus together with the cell it
+belongs to, so the pattern can be painted on whole cells. A nucleus outside
+any cell gets `NaN` and no light. With a nuclear marker channel instead,
+segment that channel for the nuclei (`add_requirement("nuc", seg=True)`)
+and the reporter channel for the cells; the measurement is the same.
+
+A named segmentation runs only when a pattern method (or tracking) asks for
+it, at the cadence it is asked for, exactly like the default one. Its
+labels are stored as `labels/<name>` next to the default
+`labels/segmentation` (OME-Zarr only; the HDF5 format keeps the default one
+and warns once about the rest). To track the nuclei, set
+`segmentation = "nuclei"` in `[tracking]`. Both segmentations of a channel
+come from the same camera frame, so they line up pixel for pixel.
+
+---
+
+## Combining methods: `split`
+
+Two methods can share one field, each on its own half, without writing a
+new class. `split` takes the halves as sub-tables of `[pattern]`, either
+`left` / `right` or `top` / `bottom`, each an ordinary pattern table with a
+`method` and that method's arguments:
+
+```toml
+[pattern]
+method = "split"
+boundary = 0.5      # where the halves meet, as a fraction of the width (or height); default 0.5
+feather = 0         # pixels of linear blend across the boundary; default 0 (a hard edge)
+
+[pattern.left]
+method = "move_in"
+channel = "545"
+
+[pattern.right]
+method = "move_out"
+channel = "545"
+```
+
+Each half's method sees the whole field (its segmentation, its history,
+its own arguments) and generates its full pattern; `split` keeps each on
+its side of the boundary. A cell straddling the boundary gets one method
+on one side and the other on the other. What the halves ask for is merged,
+so a frame or a segmentation both need arrives once. `pyclm check`
+validates each half's method name and arguments under `[pattern.left]`
+and the like; a `set_pattern` command reaches a half as `left.<argument>`
+(`boundary` and `feather` are the composite's own). Custom methods work as
+halves as soon as they are registered; a `split` can even hold another
+`split`.
+
+## Grids and blank patterns
+
+**Grids.** When the position is a grid of tiles (MicroManager's Create
+Grid, see the first-time setup), the frames a method receives are the
+**stitched** frames and `self.pattern_shape` is the stitched shape, so a
+method written for one field works over the whole grid unchanged: its µm
+meshgrid spans the grid, its segmentation runs on the stitched image, and
+the pattern it returns is cut into one DMD image per tile by the SLM
+buffer. `context.grid()` returns the layout for methods that want per-tile
+logic (for example `geometry.tile_slices(row, col, self.binning)` for a
+tile's slice of the frame).
+
+**Blank patterns skip the position.** At a timepoint where only the
+stimulation frame is due at a position (the imaging channels have a longer
+cadence) and the method does not need that frame, a pattern of all zeros
+makes the microscope skip the stage move and the exposure altogether. The
+frame is recorded as `kind = "skipped"` in the frames table and the event
+in `events.parquet`. A programme-style method (see the red / far-red
+example) therefore costs no microscope time on its "off" steps.
+
+## Changing settings from a pattern method
+
+A method can change the acquisition settings of **its own experiment**
+while the run is in progress: a channel's exposure, a config preset, a
+device property such as a laser intensity, or the stage position. The
+structure of the experiment never changes (same channels, same cadence,
+same number of timepoints); only the values inside it do.
+
+```python
+context.settings("545")        # what is in force now: exposure_ms, binning,
+                               #   config_groups {group: preset}, device_properties {"Dev-Prop": value}
+context.settings("stimulation")   # the stimulation channel
+context.position()             # {"x", "y", "z", ...} of this experiment
+
+context.set_exposure("545", 50)                          # ms
+context.set_config("545", "Channel", "GFP")              # group, preset
+context.set_property("farred", "LaserFarRed", "Intensity", 40.0)
+context.set_position(z=1234.5)                           # any of x, y, z, pfs_offset
+```
+
+A request made while generating the pattern for timepoint `t` applies
+from the next timepoint whose acquisitions have not been sent to the
+microscope yet, usually `t + 1`, the same delay as the pattern itself. An
+invalid request (an unknown channel, a non-positive exposure) is refused
+with a warning; the pattern and the other requests still go through. A
+preset or property the hardware rejects shows up as an acquisition error.
+
+A method can also be *told* to change from outside: a `set_pattern`
+command (see [commands to a running experiment](command_line.md)) calls its
+`update(**parameters)`; the default implementation sets attributes that
+already exist on the method and refuses unknown names, and a method may
+override it.
+
+Every change is recorded twice. `events.parquet` in the experiment
+directory has one row per request with the timepoint it was made at, the
+timepoint it applied from, the old and the new value, and whether it was
+applied or refused. And the frames table gains a column for every device
+property or config group a method has changed, holding the value in force
+on each frame from the first change on (exposure and position already have
+columns), so each frame remains self-describing. See
+[Data format](data_format.md).
+
+### Example 4 — a red / far-red switch
+
+Red / far-red optogenetic tools work like a switch: red light turns them
+on, far-red turns them off. This method reads a programme string, one
+character per timepoint (`1` = red on, `0` = far-red on; the last
+character holds), and turns the two lasers on and off through a device
+property. Red goes through the DMD as the stimulation channel; far-red is
+an ordinary channel of the experiment. The pattern is the whole field, so
+the programme alone decides what the cells receive:
+
+```toml
+[channels]
+group = "Channel"
+presets = ["545", "farred"]
+
+    [channels.farred]
+    exposure = 500
+    save = false
+
+[pattern]
+method = "red_farred_switch"
+program = "111111000000111111"   # one character per timepoint
+farred_channel = "farred"
+red_device = "LaserRed"
+farred_device = "LaserFarRed"
+property = "Intensity"
+on = 100
+off = 0
+```
+
+```{literalinclude} examples/farred_patterns.py
+:language: python
+:pyobject: RedFarRedSwitch
+```
+
+One principle is at work: a setting requested at timepoint `t` applies
+from `t + 1`, so the method reads the programme one step ahead. The frames
+table then carries `LaserRed-Intensity` on every stimulation frame and
+`LaserFarRed-Intensity` on every `farred` frame from the first change on,
+and `events.parquet` lists each change with the timepoints involved. The
+method needs no image data at all; a closed-loop version would read the
+cells and choose the character itself.

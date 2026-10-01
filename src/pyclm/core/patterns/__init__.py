@@ -9,12 +9,14 @@ from .cell_intensity_patterns import (
     CenteredImageModel,
     GlobalCycleModel,
 )
+from .composite import SplitPattern
 from .embryo_patterns import InnerPatternMethod, OuterPatternMethod
 from .fbc_cell_movement import (
     BounceModel,
     MoveDownModel,
     MoveInModel,
     MoveOutModel,
+    PeriodDirectedPattern,
     RotateCcwModel,
 )
 from .pattern import (
@@ -22,18 +24,25 @@ from .pattern import (
     AcquiredImageRequest,
     CameraProperties,
     DataDock,
+    ExperimentState,
     PatternContext,
     PatternMethod,
-    PatternMethodReturnsSLM,
-    PatternReview,
+)
+from .pulse_patterns import (
+    BlinkingBarPattern,
+    GlobalPulsePattern,
+    PulseSchedulePattern,
 )
 from .static_patterns import CirclePattern, FullOnPattern
 
 known_models = {
     "circle": CirclePattern,
+    "split": SplitPattern,
     "bar": BarPatternBase,
-    "pattern_review": PatternReview,
     "bar_bounce": BouncingBarPattern,
+    "blinking_bar": BlinkingBarPattern,
+    "global_pulse": GlobalPulsePattern,
+    "pulse_schedule": PulseSchedulePattern,
     "full_on": FullOnPattern,
     "rotate_ccw": RotateCcwModel,
     "sawtooth": SawToothMethod,
@@ -47,4 +56,5 @@ known_models = {
     "rotate_bar": RotatingBarPattern,
     "embryo_inner": InnerPatternMethod,
     "embryo_outer": OuterPatternMethod,
+    "direction": PeriodDirectedPattern,
 }

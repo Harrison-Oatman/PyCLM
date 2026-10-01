@@ -4,8 +4,21 @@ import numpy as np
 import tifffile as tiff
 import yaml
 
+DEFAULT_PIXEL_SIZE_UM = 0.33
+
 
 class TimeSeriesImageSource:
+    """
+    Frames for the virtual microscope, per position.  ``pixel_size_um`` is
+    the size of one pixel of the TIFs; ``binning`` is the binning the TIFs
+    were acquired at relative to the camera the affine transform of
+    ``pyclm_config.toml`` was calibrated for (the dry run scales the affine
+    by it).
+    """
+
+    pixel_size_um: float = DEFAULT_PIXEL_SIZE_UM
+    binning: int = 1
+
     def __init__(self, folder: Path, loop: bool = True):
         self._loop = loop
         self._pos_map: dict[tuple[float, float], str] = {}
@@ -21,10 +34,14 @@ class TimeSeriesImageSource:
         cls,
         pos_to_tif: dict[tuple[float, float], Path],
         loop: bool = True,
+        pixel_size_um: float = DEFAULT_PIXEL_SIZE_UM,
+        binning: int = 1,
     ) -> "TimeSeriesImageSource":
         """Build a source directly from a coordinate → TIF-path mapping."""
         instance = cls.__new__(cls)
         instance._loop = loop
+        instance.pixel_size_um = float(pixel_size_um)
+        instance.binning = int(binning)
         instance._pos_map = {}
         instance._index_map = {}
         instance._frames_map = {}
@@ -106,15 +123,31 @@ class TimeSeriesImageSource:
             raise RuntimeError("TimeSeriesImageSource not initialized")
         return self._frames_map[self._default_stack][0].shape
 
+    def nearest(self, pos) -> tuple[float, float] | None:
+        """
+        The listed position closest to ``pos`` (exact match first), or None
+        when the source has no positions. A grid's tiles resolve to the grid
+        position this way.
+        """
+        pos = tuple(float(v) for v in pos)
+        if pos in self._pos_map:
+            return pos
+        if not self._pos_map:
+            return None
+        return min(
+            self._pos_map,
+            key=lambda k: (k[0] - pos[0]) ** 2 + (k[1] - pos[1]) ** 2,
+        )
+
     def next_frame(self, pos) -> np.ndarray:
-        pos = tuple(pos)
-        if pos not in self._pos_map:
+        key = self.nearest(pos)
+        if key is None:
             if self._use_default_for_unknown and self._default_stack is not None:
                 stack_name = self._default_stack
             else:
-                raise KeyError(f"Position {pos} not found in image source")
+                raise KeyError(f"Position {tuple(pos)} not found in image source")
         else:
-            stack_name = self._pos_map[pos]
+            stack_name = self._pos_map[key]
         frames = self._frames_map[stack_name]
         frame = frames[self._index_map[stack_name]]
         self._index_map[stack_name] += 1

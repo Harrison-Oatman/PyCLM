@@ -2,9 +2,13 @@
 Defines the Experiment class and related data structures for managing imaging experiments.
 """
 
+import logging
 from collections import namedtuple
-from typing import Optional
 from uuid import uuid4
+
+from .kinds import DEFAULT_SEGMENTATION
+
+logger = logging.getLogger(__name__)
 
 ConfigGroup = namedtuple("ConfigGroup", ["group", "config"])
 DeviceProperty = namedtuple("DeviceProperty", ["device", "property", "value", "type"])
@@ -109,7 +113,7 @@ class MethodBasedConfig:
         self.save = save_output
         self.every_t = every_t
 
-        print(f"method kwargs: {kwargs}")
+        logger.debug(f"method {method_name} kwargs: {kwargs}")
 
         self.kwargs = kwargs
 
@@ -129,26 +133,73 @@ SegmentationConfig = MethodBasedConfig
 PatternConfig = MethodBasedConfig
 
 
+class TrackingConfig(MethodBasedConfig):
+    """``[tracking]``: the method and its kwargs, plus which segmentation it links."""
+
+    def __init__(
+        self,
+        method_name: str,
+        save_output: bool = True,
+        every_t=1,
+        segmentation: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(method_name, save_output, every_t, **kwargs)
+        self.segmentation = segmentation or DEFAULT_SEGMENTATION
+
+    def as_dict(self):
+        out = super().as_dict()
+        out["segmentation"] = self.segmentation
+        return out
+
+
 class Experiment:
     def __init__(
         self,
         experiment_name,
         imaging_configs: dict[str, ImagingConfig],
         stimulation_config: ImagingConfig,
-        segmentation: SegmentationConfig,
+        segmentation: SegmentationConfig | None,
         pattern: PatternConfig,
         t_delay: int = 0,
         t_stop: int = 0,
+        tracking: TrackingConfig | None = None,
+        segmentations: dict[str, SegmentationConfig] | None = None,
     ):
         self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
         self.stimulation = stimulation_config
-        self.segmentation = segmentation
+        # every [segmentation] table by name, the default one ("segmentation") first
+        named = dict(segmentations or {})
+        default = segmentation
+        if default is None:
+            default = named.pop(DEFAULT_SEGMENTATION, None)
+        self.segmentations: dict[str, SegmentationConfig] = {
+            DEFAULT_SEGMENTATION: default or SegmentationConfig("none")
+        }
+        self.segmentations.update(
+            (k, v) for k, v in named.items() if k != DEFAULT_SEGMENTATION
+        )
         self.pattern = pattern
+        self.tracking = tracking if tracking is not None else TrackingConfig("none")
 
         self.t_delay = t_delay
         self.t_stop = t_stop
+
+    @property
+    def segmentation(self) -> SegmentationConfig:
+        """The default ``[segmentation]`` table (``method = "none"`` if absent)."""
+        return self.segmentations[DEFAULT_SEGMENTATION]
+
+    @segmentation.setter
+    def segmentation(self, cfg: SegmentationConfig):
+        self.segmentations[DEFAULT_SEGMENTATION] = cfg
+
+    @property
+    def segmentation_names(self) -> list[str]:
+        """Names of the segmentation tables that configure a method."""
+        return [n for n, c in self.segmentations.items() if c.method_name != "none"]
 
     def __repr__(self):
         return (
@@ -162,6 +213,8 @@ class Experiment:
             "channels": {k: v.as_dict() for k, v in self.channels.items()},
             "stimulation": self.stimulation.as_dict(),
             "segmentation": self.segmentation.as_dict(),
+            "segmentations": {k: v.as_dict() for k, v in self.segmentations.items()},
+            "tracking": self.tracking.as_dict(),
             "pattern": self.pattern.as_dict(),
             "t_delay": self.t_delay,
             "t_stop": self.t_stop,
@@ -178,6 +231,12 @@ class MicroscopePosition(PositionBase):
     Standard microscope position.  x, y, and z are required.  Any optional
     hardware-specific values (e.g. focus-offset) are stored in ``extras``
     keyed by device name, e.g. ``{"PFSOffset": 11122.0}``.
+
+    A grid (MicroManager's Create Grid, see :mod:`pyclm.core.grid`) is one
+    position at the centre of its tiles: ``tiles`` holds one position per
+    tile (each with ``grid_rc = (row, col)``), ``grid`` the rows, columns
+    and pitch in µm, and ``geometry`` the :class:`~pyclm.core.grid.GridGeometry`
+    once the camera is known. All three are None for a plain position.
     """
 
     def __init__(
@@ -193,6 +252,14 @@ class MicroscopePosition(PositionBase):
         self.z = z
         self.label = label
         self.extras: dict = extras if extras is not None else {}
+        self.tiles: list[MicroscopePosition] | None = None
+        self.grid: dict | None = None
+        self.grid_rc: tuple[int, int] | None = None
+        self.geometry = None
+
+    @property
+    def is_grid(self) -> bool:
+        return bool(self.tiles)
 
     def as_dict(self):
         d = {"label": self.label, "x": self.x, "y": self.y, "z": self.z}
@@ -334,7 +401,3 @@ def get_device_properties(toml_dict, key):
         device_properties.append(DeviceProperty(dev, prop, v, t))
 
     return device_properties
-
-
-# todo: generate positions from micromanager output
-# todo: make grid-based acquisition

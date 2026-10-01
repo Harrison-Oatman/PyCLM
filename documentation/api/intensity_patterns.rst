@@ -1,8 +1,8 @@
-Intensity Control Patterns
-================================
+Intensity-control patterns (``cell_intensity_patterns``)
+========================================================
 
-Patterns that use per-cell intensity from a reporter channel to make binary or graded illumination
-decisions per cell.
+Methods that read a per-cell intensity from a reporter channel and make a
+binary or graded illumination decision per cell.
 
 .. autoclass:: pyclm.core.patterns.cell_intensity_patterns.NucleusControlMethod
    :members: generate, process_prop

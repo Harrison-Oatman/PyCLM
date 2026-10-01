@@ -1,0 +1,67 @@
+cff-version: 1.2.0
+message: >-
+  If you use PyCLM in your research, please cite the paper below
+  (preferred-citation). To record the exact software version, also cite the
+  release you used.
+title: "PyCLM: closed-loop optogenetic microscopy in Python"
+type: software
+authors:
+  - family-names: Oatman
+    given-names: Harrison R.
+    orcid: "https://orcid.org/0000-0002-2699-6374"
+  - family-names: Gubbens
+    given-names: Justin H.
+    orcid: "https://orcid.org/0009-0007-3869-9231"
+  - family-names: Toettcher
+    given-names: Jared E.
+    orcid: "https://orcid.org/0000-0002-1546-4030"
+version: 1.1.0
+# the concept DOI: resolves to the latest release; each release also gets its own
+doi: 10.5281/zenodo.20385964
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.20385964
+    description: All versions of PyCLM (Zenodo concept DOI)
+license: MIT
+repository-code: "https://github.com/Harrison-Oatman/PyCLM"
+url: "https://pyclm.readthedocs.io"
+abstract: >-
+  PyCLM runs many simultaneous closed-loop optogenetic experiments on a
+  Micro-Manager microscope with a DMD: imaging, segmentation, tracking and
+  light-pattern generation in parallel, configured by TOML files and
+  extensible with Python pattern, segmentation and tracking methods.
+keywords:
+  - microscopy
+  - optogenetics
+  - closed-loop control
+  - smart microscopy
+  - Micro-Manager
+preferred-citation:
+  type: article
+  title: >-
+    An optogenetic smart microscopy platform reveals signaling
+    dynamics-dependent control over collective cell migration
+  authors:
+    - family-names: Oatman
+      given-names: Harrison R.
+      orcid: "https://orcid.org/0000-0002-2699-6374"
+    - family-names: Lad
+      given-names: Beena C.
+    - family-names: Nguyen
+      given-names: Long
+    - family-names: Gubbens
+      given-names: Justin H.
+      orcid: "https://orcid.org/0009-0007-3869-9231"
+    - family-names: Toettcher
+      given-names: Jared E.
+      orcid: "https://orcid.org/0000-0002-1546-4030"
+  journal: Cell Systems
+  publisher:
+    name: Elsevier
+  volume: 17
+  issue: 9
+  year: 2026
+  month: 9
+  issn: 2405-4712
+  doi: 10.1016/j.cels.2026.101674
+  url: "https://doi.org/10.1016/j.cels.2026.101674"

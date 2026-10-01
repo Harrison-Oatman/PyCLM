@@ -1,9 +1,12 @@
 # PyCLM
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20385964.svg)](https://doi.org/10.5281/zenodo.20385964)
+
 A Modular Closed-Loop Microscopy Software in Python
 
 Please see our documentation at [readthedocs](https://pyclm.readthedocs.io/en/latest/first_time_setup.html)
 
-![](documentation\imgs\Figure%201.png "PyCLM Overview")
+![](documentation/imgs/Figure%201.png "PyCLM Overview")
 
 ## Overview
 
@@ -24,13 +27,26 @@ Ideally, the number of possible simultaneous experiments should be limited only 
 
 ## Installation
 
-PyCLM is installed with [uv](https://docs.astral.sh/uv/).
+```bash
+pip install "closed-loop-microscopy[gui]"
+```
+
+The package is `closed-loop-microscopy`; the import name and the command are
+`pyclm`. Leave out `[gui]` for a headless install (checking, previews, dry
+runs, reading data). For development, clone the repository and run
+`uv sync`.
+
+Try it without a microscope:
 
 ```bash
-git clone https://github.com/Harrison-Oatman/PyCLM.git
-cd PyCLM
-uv sync
+pyclm new demo --demo
+pyclm run demo --dry --gui
 ```
+
+The demo runs two experiments on the virtual microscope with synthetic cells:
+a sweeping bar of light, and a closed loop that segments the cells with a
+method the directory brings along (`demo_methods.py`) and lights the outward
+half of each.
 
 See [First-Time Setup Guide](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) to get started.
 
@@ -43,3 +59,18 @@ PyCLM controls hardware through [pymmcore-plus](https://github.com/pymmcore-plus
 
 Importing the package and using the dry-run (`--dry`) mode work without a Micro-Manager installation.
 
+
+## Citation
+
+If you use PyCLM in your research, please cite:
+
+> Oatman HR, Lad BC, Nguyen L, Gubbens JH, Toettcher JE. An optogenetic smart
+> microscopy platform reveals signaling dynamics-dependent control over
+> collective cell migration. *Cell Systems* 17(9) (2026).
+> [doi:10.1016/j.cels.2026.101674](https://doi.org/10.1016/j.cels.2026.101674)
+
+The paper describes version 1.0.1. To record the version you used, also cite
+that release: every release has its own DOI on Zenodo, all listed under
+[doi:10.5281/zenodo.20385964](https://doi.org/10.5281/zenodo.20385964)
+(which always resolves to the latest). GitHub's "Cite this repository" button
+gives both, from `CITATION.cff`.

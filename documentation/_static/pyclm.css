@@ -1,0 +1,43 @@
+/* PyCLM documentation: tighter API reference.
+   The RTD theme spaces every <dd> as a paragraph (12px margin, 24px line
+   height); Sphinx renders a wrapped signature as <dl><dd> per parameter, so
+   the parameters came out double-spaced. Autodoc content gets 1.15 here. */
+
+/* wrapped signatures: one parameter per line, no paragraph gaps
+   (the theme's `.rst-content dl dd` rule wins on specificity, hence !important) */
+.rst-content dt.sig dl {
+    margin: 0 !important;
+    padding: 0;
+}
+.rst-content dt.sig dl dd {
+    margin: 0 0 0 2em !important;
+    padding: 0;
+    line-height: 1.15 !important;
+}
+.rst-content dt.sig {
+    line-height: 1.15;
+}
+
+/* the description under each function, class and method */
+.rst-content dl.py dd,
+.rst-content dl.py dd p,
+.rst-content dl.py dd li,
+.rst-content dl.py dd dt,
+.rst-content dl.py .field-list,
+.rst-content dl.py .field-list dd,
+.rst-content dl.py .field-list p {
+    line-height: 1.15;
+}
+.rst-content dl.py dd p {
+    margin-bottom: 8px;
+}
+.rst-content dl.py dd > dl {
+    margin-bottom: 8px;
+}
+.rst-content dl.py .field-list dd {
+    margin-bottom: 4px;
+}
+/* a little air between one object and the next */
+.rst-content dl.py > dt {
+    margin-top: 14px;
+}

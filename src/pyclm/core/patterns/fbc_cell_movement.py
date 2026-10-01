@@ -1,3 +1,5 @@
+from typing import ClassVar, Literal
+
 import numpy as np
 import tifffile
 from scipy.ndimage import distance_transform_edt
@@ -15,12 +17,22 @@ class PerCellPatternMethod(PatternMethod):
     based on the properties of segmented cells. Subclasses should implement the `process_prop` method to define
     how each cell's properties are used to generate the pattern, and include any additional parameters needed for the
     specific pattern in their `__init__` method.
+
+    With ``tracks = true`` in the TOML the per-cell loop runs on the tracked
+    labels instead of the segmentation, so ``prop.label`` is a track id that
+    persists across timepoints (a ``[tracking]`` table is then required).
     """
 
     name = "per_cell_base"
 
     def __init__(
-        self, channel=None, voronoi=False, gradient=False, direction=1, **kwargs
+        self,
+        channel=None,
+        voronoi=False,
+        gradient=False,
+        direction=1,
+        tracks=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
@@ -35,10 +47,20 @@ class PerCellPatternMethod(PatternMethod):
         self.direction = direction
 
         self.channel = channel
+        self.use_tracks = bool(tracks)
 
-        # request the segmentation of the provided channel, to be used by self.generate.
-        # This will ensure that the data is available when generate is called.
-        self.add_requirement(channel_name=channel, seg=True)
+        # request the segmentation (or the tracked labels) of the provided channel,
+        # to be used by self.generate. This ensures the data is available when
+        # generate is called.
+        self.add_requirement(
+            channel_name=channel, seg=not self.use_tracks, tracks=self.use_tracks
+        )
+
+    def cell_labels(self, context) -> np.ndarray:
+        """The label image the per-cell loop runs on: tracked labels with ``tracks = true``, else the segmentation."""
+        if self.use_tracks:
+            return context.tracks(self.channel).labels
+        return context.segmentation(self.channel)
 
     def prop_vector(self, prop, vec):
         """
@@ -87,7 +109,7 @@ class PerCellPatternMethod(PatternMethod):
         return out
 
     def generate(self, context) -> np.ndarray:
-        seg = context.segmentation(self.channel)
+        seg = self.cell_labels(context)
 
         if self.voronoi:
             px_dis = distance_transform_edt(seg == 0)
@@ -172,6 +194,61 @@ class MoveInModel(PerCellPatternMethod):
         vec = -(prop_centroid[0] - center_y), -(prop_centroid[1] - center_x)
 
         return self.prop_vector(prop, vec)
+
+
+class PeriodDirectedPattern(PerCellPatternMethod):
+    name = "direction"
+
+    direction_vec: ClassVar[dict[str, tuple[int, int]]] = {
+        "u": (1, 0),
+        "d": (-1, 0),
+        "r": (0, 1),
+        "l": (0, -1),
+    }
+
+    def __init__(
+        self,
+        sequence: list[Literal["u", "d", "l", "r", "s"]] | str | None = None,
+        period_h=2,
+        channel="545",
+        voronoi=True,
+        gradient=True,
+        **kwargs,
+    ):
+        super().__init__(channel=channel, voronoi=voronoi, gradient=gradient, **kwargs)
+
+        assert sequence, "sequence kwarg required but not provided"
+        assert all([val in ["u", "d", "l", "r", "s"] for val in sequence]), (
+            f"sequence {sequence} contains unrecognized characters"
+        )
+
+        self.sequence = "".join([val for val in sequence])
+        self.period_h = period_h
+
+        self.current_direction = self.sequence[0]
+
+    def process_prop(self, prop) -> np.ndarray:
+        if self.current_direction == "s":
+            return 0 * prop.image
+
+        vec = self.direction_vec.get(self.current_direction, None)
+
+        assert vec is not None, (
+            f"direction {self.current_direction} produced an invalid vector"
+        )
+
+        return self.prop_vector(prop, vec)
+
+    def generate(self, context) -> np.ndarray:
+        t = context.time
+        t_h = t / 3600
+
+        step = t_h // self.period_h
+        step = int(step % len(self.sequence))
+
+        self.current_direction = self.sequence[step]
+
+        return super().generate(context)
 
 
 class MoveDownModel(PerCellPatternMethod):

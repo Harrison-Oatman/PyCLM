@@ -1,164 +1,111 @@
 import json
-from copy import deepcopy
+import logging
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
 
 import yaml
-from toml import load
 
 from .core import ExperimentSchedule
-from .core.experiments import (
-    ConfigGroup,
-    Experiment,
-    ImagingConfig,
-    MicroscopePosition,
-    PatternConfig,
-    PositionWithAutoFocus,
-    SegmentationConfig,
-    get_config_groups,
-    get_device_properties,
+from .core.experiments import MicroscopePosition, PositionWithAutoFocus
+from .core.virtual_microscope.simulated_source import (
+    DEFAULT_PIXEL_SIZE_UM,
+    TimeSeriesImageSource,
 )
-from .core.virtual_microscope.simulated_source import TimeSeriesImageSource
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------- file names
+# ``schedule.toml`` and ``pyclm_config.toml`` may carry a qualifier between the
+# name and the suffix (``schedule.fast.toml``, ``pyclm_config.ti2.toml``) so a
+# directory can be labelled by what it was run with; exactly one of each.
+SCHEDULE_PATTERN = re.compile(r"^schedule(\..+)?\.toml$", re.IGNORECASE)
+CONFIG_PATTERN = re.compile(r"^pyclm_config(\..+)?\.toml$", re.IGNORECASE)
+
+
+class AmbiguousFileError(ValueError):
+    """More than one file in a directory matches a name that must be unique."""
+
+
+def _find_one(directory, pattern: re.Pattern, what: str) -> Path | None:
+    directory = Path(directory)
+    if not directory.is_dir():
+        return None
+    matches = sorted(p for p in directory.iterdir() if pattern.match(p.name))
+    if len(matches) > 1:
+        raise AmbiguousFileError(
+            f"{directory} has {len(matches)} {what} files "
+            f"({', '.join(m.name for m in matches)}); keep exactly one"
+        )
+    return matches[0] if matches else None
+
+
+def find_schedule(directory) -> Path | None:
+    """The directory's ``schedule[.<anything>].toml``; None if absent, error if several."""
+    return _find_one(directory, SCHEDULE_PATTERN, "schedule")
+
+
+def find_config_in(directory) -> Path | None:
+    """The directory's ``pyclm_config[.<anything>].toml``; None if absent, error if several."""
+    return _find_one(directory, CONFIG_PATTERN, "pyclm_config")
+
+
+def is_reserved_toml(name: str) -> bool:
+    """Whether a TOML file name is the schedule or the configuration, not an experiment."""
+    return bool(SCHEDULE_PATTERN.match(name) or CONFIG_PATTERN.match(name))
+
+
+# the ImageJ export writes <label>_<cadence group>.tif next to the stores
+EXPORT_TIF = re.compile(r"^.+_(imaging|stim|imaging_every\d+)$")
+
+
+def is_export_tif(path) -> bool:
+    """Whether a TIF is an ImageJ hyperstack PyCLM exported (not a dry-run source)."""
+    return bool(EXPORT_TIF.match(Path(path).stem))
+
+
+def dry_run_tifs(directory) -> list[Path]:
+    """The TIFs of a directory that can feed a dry run, exports excluded."""
+    return sorted(p for p in Path(directory).glob("*.tif") if not is_export_tif(p))
+
+
+def experiment_tomls(directory) -> dict[str, Path]:
+    """``{stem: path}`` of the experiment TOMLs in a directory (schedule and config excluded)."""
+    directory = Path(directory)
+    return {
+        p.stem: p
+        for p in sorted(directory.glob("*.toml"))
+        if not is_reserved_toml(p.name)
+    }
 
 
 def experiment_from_toml(toml_path, name="SampleExperiment"):
-    with open(toml_path) as f:
-        toml_data = load(f)
+    """
+    The ``Experiment`` described by one experiment TOML, for position ``name``.
+    Validated against :class:`pyclm.schema.ExperimentConfig`; raises
+    :class:`pyclm.schema.ConfigError` listing every problem in the file.
+    """
+    from .schema import ExperimentConfig
 
-    base_config_groups = get_config_groups(toml_data, "config_groups")
-    base_device_props = get_device_properties(toml_data, "device_properties")
+    return ExperimentConfig.from_file(toml_path).to_experiment(name)
 
-    base_config = ImagingConfig(
-        experiment_name=name,
-        config_groups=base_config_groups,
-        device_properties=base_device_props,
-    )
 
-    imaging_exposure = toml_data["imaging"].get("exposure", 10)
-    imaging_every_t = toml_data["imaging"].get("every_t", 1)
-    imaging_save = toml_data["imaging"].get("save", True)
-    imaging_binning = toml_data["imaging"].get("binning", 1)
-    imaging_config_groups = get_config_groups(toml_data["imaging"], "config_groups")
-    imaging_device_props = get_device_properties(
-        toml_data["imaging"], "device_properties"
-    )
-
-    # copy base imaging config and update
-    imaging_config = deepcopy(base_config)
-    imaging_config.set_id()
-    imaging_config.update_config_groups(imaging_config_groups)
-    imaging_config.update_device_properties(imaging_device_props)
-    imaging_config.exposure = imaging_exposure
-    imaging_config.every_t = imaging_every_t
-    imaging_config.save = imaging_save
-    imaging_config.binning = imaging_binning
-
-    channel_group = toml_data["channels"]["group"]
-    presets = toml_data["channels"]["presets"]
-
-    imaging_configs = {}
-    for preset in presets:
-        # copy base imaging config
-        cfg = deepcopy(imaging_config)
-        cfg.set_id()
-        cfg.update_config_groups([ConfigGroup(channel_group, preset)])
-
-        # get channel-specific config, if it exists
-        channel_toml = toml_data["channels"].get(preset, {})
-
-        # get channel specific exposure and t-skipping
-        exposure = channel_toml.get("exposure", imaging_exposure)
-        cfg.exposure = exposure
-
-        channel_every_t = channel_toml.get("every_t", imaging_every_t)
-        cfg.every_t = channel_every_t
-
-        # channel specific binning is not allowed
-        # cfg.binning = channel_toml.get("binning", imaging_binning)
-
-        # get channel-specific config groups and device properties
-        device_properties = channel_toml.get("device_properties", {})
-        device_properties = get_device_properties(
-            device_properties, "device_properties"
+def _schedule_path(directory) -> Path:
+    path = find_schedule(directory)
+    if path is None:
+        raise FileNotFoundError(
+            f"no schedule.toml (or schedule.<name>.toml) in {Path(directory)}"
         )
-        cfg.update_device_properties(device_properties)
-
-        config_groups = channel_toml.get("config_groups", {})
-        config_groups = get_config_groups(config_groups, "config_groups")
-        cfg.update_config_groups(config_groups)
-
-        # get channel-specific segmentation and pattern configs
-        imaging_configs[preset] = cfg
-
-    # make stimulation config - inherits base config
-    stimulation_config = deepcopy(base_config)
-    stimulation_config.set_id()
-    stimulation_config.exposure = toml_data["stimulation"]["exposure"]
-    stimulation_config.every_t = toml_data["stimulation"].get("every_t", 1)
-    stimulation_config.save = toml_data["stimulation"].get("save", True)
-    stimulation_config.binning = toml_data["stimulation"].get(
-        "binning", imaging_binning
-    )
-
-    stimulation_config.update_config_groups(
-        get_config_groups(toml_data["stimulation"], "config_groups")
-    )
-    stimulation_config.update_device_properties(
-        get_device_properties(toml_data["stimulation"], "device_properties")
-    )
-
-    # make segmentation config
-    segmentation = toml_data.get("segmentation", None)
-
-    no_seg = False
-
-    if segmentation:
-        if "method" in segmentation:
-            method = segmentation.pop("method")
-            segmentation_config = SegmentationConfig(method, **segmentation)
-
-        else:
-            no_seg = True
-
-    else:
-        no_seg = True
-
-    if no_seg:
-        segmentation_config = SegmentationConfig("none")
-
-    # make pattern config
-    pattern = toml_data["pattern"]
-    method = pattern.pop("method")
-    pattern_config = PatternConfig(method, **pattern)
-
-    t_delay = int(toml_data.get("t_delay", 0))
-    t_stop = int(toml_data.get("t_stop", 0))
-
-    return Experiment(
-        experiment_name=name,
-        imaging_configs=imaging_configs,
-        stimulation_config=stimulation_config,
-        segmentation=segmentation_config,
-        t_stop=t_stop,
-        pattern=pattern_config,
-        t_delay=t_delay,
-    )
+    return path
 
 
 def read_schedule(toml_path):
-    with open(toml_path) as f:
-        toml_data = load(f)
+    """The timing of ``schedule.toml`` as ``ExperimentSchedule`` keyword arguments."""
+    from .schema import ScheduleConfig
 
-    toml_data = toml_data["timing"]
-
-    out = {}
-
-    out["t_count"] = toml_data.get("steps", 10)
-    out["t_interval"] = toml_data.get("interval_seconds", 10.0)
-    out["t_setup"] = toml_data.get("setup_time_seconds", 2.0)
-    out["t_between"] = toml_data.get("time_between_positions", 2.0)
-
-    return out
+    return ScheduleConfig.from_file(toml_path).timing_kwargs()
 
 
 def positions_from_pos(fp) -> list[MicroscopePosition]:
@@ -174,9 +121,14 @@ def positions_from_pos(fp) -> list[MicroscopePosition]:
         data = json.load(f)
 
     positions = []
+    raw_labels: list[str] = []
+    grid_rc: list[tuple[int, int] | None] = []
 
     for pos_data in data["map"]["StagePositions"]["array"]:
-        label = str(pos_data["Label"]["scalar"]).replace("-", ".")
+        raw_label = str(pos_data["Label"]["scalar"])
+        label = raw_label.replace("-", ".")
+        raw_labels.append(raw_label)
+        grid_rc.append(_grid_rc(pos_data))
         xy_stage = pos_data["DefaultXYStage"]["scalar"]
         z_stage = pos_data["DefaultZStage"]["scalar"]
 
@@ -204,7 +156,20 @@ def positions_from_pos(fp) -> list[MicroscopePosition]:
 
         positions.append(MicroscopePosition(x=x, y=y, z=z, label=label, extras=extras))
 
-    return positions
+    from .core.grid import group_tiles
+
+    return group_tiles(positions, raw_labels, grid_rc)
+
+
+def _grid_rc(pos_data: dict) -> tuple[int, int] | None:
+    """(GridRow, GridCol) of a position-list entry, None when absent."""
+    try:
+        row, col = pos_data["GridRow"], pos_data["GridCol"]
+    except KeyError:
+        return None
+    row = row["scalar"] if isinstance(row, dict) else row
+    col = col["scalar"] if isinstance(col, dict) else col
+    return (int(row), int(col))
 
 
 def positions_from_xml(fp):
@@ -247,8 +212,7 @@ def positions_from_xml(fp):
 
 
 def schedule_from_directory(experiment_dir: Path):
-    tomls = experiment_dir.glob("*.toml")
-    tomls = {f.stem: str(f) for f in tomls}
+    tomls = {stem: str(p) for stem, p in experiment_tomls(experiment_dir).items()}
 
     pos_path = experiment_dir / "PositionList.pos"
     xml_path = experiment_dir / "multipoints.xml"
@@ -274,13 +238,16 @@ def schedule_from_directory(experiment_dir: Path):
         experiment_path = tomls.get(exp_stem)
 
         if experiment_path is None:
-            print(f"could not find {exp_stem} in {list(tomls.keys())}")
+            logger.warning(
+                f"position '{name}': no experiment toml named '{exp_stem}' in "
+                f"{sorted(tomls)}; position skipped"
+            )
             continue
 
         positions[name] = position
         experiments[name] = experiment_from_toml(experiment_path, name)
 
-    timing = read_schedule(str(experiment_dir / "schedule.toml"))
+    timing = read_schedule(str(_schedule_path(experiment_dir)))
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
 
@@ -305,11 +272,12 @@ def _dry_schedule_from_yml(
     fields override the placeholder coordinates.
     """
     with open(yml_path) as f:
-        data = yaml.safe_load(f)
+        data = yaml.safe_load(f) or {}
 
     entries = data.get("positions", [])
     if not entries:
         raise ValueError(f"{yml_path} contains no positions")
+    settings = DrySettings.from_mapping(data, yml_path)
 
     positions: dict[str, MicroscopePosition] = {}
     experiments: dict[str, object] = {}
@@ -342,7 +310,9 @@ def _dry_schedule_from_yml(
         pos_to_tif[(x, y)] = tif_path
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
-    image_source = TimeSeriesImageSource.from_mapping(pos_to_tif, loop=True)
+    image_source = TimeSeriesImageSource.from_mapping(
+        pos_to_tif, loop=True, **settings.as_kwargs()
+    )
     return schedule, image_source
 
 
@@ -350,6 +320,7 @@ def _dry_schedule_from_position_list(
     experiment_dir: Path,
     tomls: dict[str, str],
     timing: dict,
+    settings: "DrySettings | None" = None,
 ) -> tuple[ExperimentSchedule, TimeSeriesImageSource]:
     """Build a dry-run schedule from an existing position list (pos/xml).
 
@@ -366,7 +337,7 @@ def _dry_schedule_from_position_list(
     else:
         pos_list = positions_from_xml(str(xml_path))
 
-    available_tifs = sorted(experiment_dir.glob("*.tif"))
+    available_tifs = dry_run_tifs(experiment_dir)
     if not available_tifs:
         raise FileNotFoundError(f"No TIF files found in {experiment_dir} for dry run")
 
@@ -402,7 +373,9 @@ def _dry_schedule_from_position_list(
         )
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
-    image_source = TimeSeriesImageSource.from_mapping(pos_to_tif, loop=True)
+    image_source = TimeSeriesImageSource.from_mapping(
+        pos_to_tif, loop=True, **(settings or DrySettings()).as_kwargs()
+    )
     return schedule, image_source
 
 
@@ -410,6 +383,7 @@ def _dry_schedule_from_tifs(
     experiment_dir: Path,
     tomls: dict[str, str],
     timing: dict,
+    settings: "DrySettings | None" = None,
 ) -> tuple[ExperimentSchedule, TimeSeriesImageSource]:
     """Build a dry-run schedule from TIF filenames alone.
 
@@ -418,7 +392,7 @@ def _dry_schedule_from_tifs(
     experiment ``fast.toml``).  TIFs with no matching TOML are silently
     skipped.  Placeholder coordinates are assigned sequentially.
     """
-    tif_files = sorted(experiment_dir.glob("*.tif"))
+    tif_files = dry_run_tifs(experiment_dir)
     if not tif_files:
         raise FileNotFoundError(f"No TIF files found in {experiment_dir} for dry run")
 
@@ -448,8 +422,55 @@ def _dry_schedule_from_tifs(
         )
 
     schedule = ExperimentSchedule(experiments, positions, **timing)
-    image_source = TimeSeriesImageSource.from_mapping(pos_to_tif, loop=True)
+    image_source = TimeSeriesImageSource.from_mapping(
+        pos_to_tif, loop=True, **(settings or DrySettings()).as_kwargs()
+    )
     return schedule, image_source
+
+
+@dataclass
+class DrySettings:
+    """
+    The optional top-level keys of ``dry_run.yml``: ``pixel_size_um``, the
+    size of one pixel of the TIFs (default 0.33), and ``binning``, the
+    binning the TIFs were acquired at relative to the camera the affine
+    transform was calibrated for (default 1; the dry run scales the affine).
+    """
+
+    pixel_size_um: float = DEFAULT_PIXEL_SIZE_UM
+    binning: int = 1
+
+    @classmethod
+    def from_mapping(cls, data: dict, path=None) -> "DrySettings":
+        where = f"{path}: " if path else ""
+        px = data.get("pixel_size_um", DEFAULT_PIXEL_SIZE_UM)
+        binning = data.get("binning", 1)
+        try:
+            px = float(px)
+            binning = int(binning)
+        except (TypeError, ValueError) as e:
+            raise ValueError(
+                f"{where}pixel_size_um must be a number and binning an integer"
+            ) from e
+        if px <= 0 or binning < 1:
+            raise ValueError(
+                f"{where}pixel_size_um must be > 0 and binning >= 1 "
+                f"(got {px}, {binning})"
+            )
+        return cls(px, binning)
+
+    def as_kwargs(self) -> dict:
+        return {"pixel_size_um": self.pixel_size_um, "binning": self.binning}
+
+
+def dry_settings_from_directory(experiment_dir: Path) -> DrySettings:
+    """The dry-run pixel size and binning of a directory (its ``dry_run.yml``, if any)."""
+    yml_path = Path(experiment_dir) / "dry_run.yml"
+    if not yml_path.exists():
+        return DrySettings()
+    with open(yml_path) as f:
+        data = yaml.safe_load(f) or {}
+    return DrySettings.from_mapping(data, yml_path)
 
 
 def dry_schedule_from_directory(
@@ -464,17 +485,79 @@ def dry_schedule_from_directory(
       3. TIF filenames in the directory — position labels inferred from stems
     """
     experiment_dir = Path(experiment_dir)
-    tomls = {f.stem: str(f) for f in experiment_dir.glob("*.toml")}
-    timing = read_schedule(str(experiment_dir / "schedule.toml"))
+    tomls = {stem: str(p) for stem, p in experiment_tomls(experiment_dir).items()}
+    timing = read_schedule(str(_schedule_path(experiment_dir)))
 
     yml_path = experiment_dir / "dry_run.yml"
     pos_path = experiment_dir / "PositionList.pos"
     xml_path = experiment_dir / "multipoints.xml"
 
+    settings = DrySettings()
     if yml_path.exists():
-        return _dry_schedule_from_yml(experiment_dir, yml_path, tomls, timing)
+        with open(yml_path) as f:
+            data = yaml.safe_load(f) or {}
+        if data.get("positions"):
+            return _dry_schedule_from_yml(experiment_dir, yml_path, tomls, timing)
+        # a dry_run.yml with only pixel_size_um / binning applies to the
+        # positions found the other two ways
+        settings = DrySettings.from_mapping(data, yml_path)
 
     if pos_path.exists() or xml_path.exists():
-        return _dry_schedule_from_position_list(experiment_dir, tomls, timing)
+        return _dry_schedule_from_position_list(experiment_dir, tomls, timing, settings)
 
-    return _dry_schedule_from_tifs(experiment_dir, tomls, timing)
+    return _dry_schedule_from_tifs(experiment_dir, tomls, timing, settings)
+
+
+def write_position_list(path, positions, xy_stage="XYStage", z_stage="ZDrive"):
+    """
+    Write positions as a MicroManager ``PositionList.pos`` (property map v2),
+    the format :func:`positions_from_pos` reads and MicroManager imports.
+    ``extras`` of a position (e.g. ``PFSOffset``) become single-axis devices.
+    """
+    path = Path(path)
+    entries = []
+    for i, pos in enumerate(positions):
+        devices = [
+            {
+                "Device": {"type": "STRING", "scalar": xy_stage},
+                "Position_um": {
+                    "type": "DOUBLE",
+                    "array": [float(pos.x), float(pos.y)],
+                },
+            },
+            {
+                "Device": {"type": "STRING", "scalar": z_stage},
+                "Position_um": {"type": "DOUBLE", "array": [float(pos.z)]},
+            },
+        ]
+        for device, value in (getattr(pos, "extras", {}) or {}).items():
+            values = list(value) if isinstance(value, (list, tuple)) else [value]
+            devices.append(
+                {
+                    "Device": {"type": "STRING", "scalar": str(device)},
+                    "Position_um": {
+                        "type": "DOUBLE",
+                        "array": [float(v) for v in values],
+                    },
+                }
+            )
+        entries.append(
+            {
+                "DefaultXYStage": {"type": "STRING", "scalar": xy_stage},
+                "DefaultZStage": {"type": "STRING", "scalar": z_stage},
+                "DevicePositions": {"type": "PROPERTY_MAP", "array": devices},
+                "GridCol": {"type": "INTEGER", "scalar": 0},
+                "GridRow": {"type": "INTEGER", "scalar": i},
+                "Label": {"type": "STRING", "scalar": str(pos.label)},
+                "Properties": {"type": "PROPERTY_MAP", "scalar": {}},
+            }
+        )
+    document = {
+        "encoding": "UTF-8",
+        "format": "Micro-Manager Property Map",
+        "major_version": 2,
+        "minor_version": 0,
+        "map": {"StagePositions": {"type": "PROPERTY_MAP", "array": entries}},
+    }
+    path.write_text(json.dumps(document, indent=2), encoding="utf-8")
+    return path

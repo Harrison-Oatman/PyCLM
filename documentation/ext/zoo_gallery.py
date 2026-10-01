@@ -131,6 +131,7 @@ def _build_gallery(app: Sphinx) -> None:
 _PATTERN_MODULES = [
     "pyclm.core.patterns.embryo_patterns",
     "pyclm.core.patterns.bar_patterns",
+    "pyclm.core.patterns.pulse_patterns",
     "pyclm.core.patterns.cell_intensity_patterns",
     "pyclm.core.patterns.fbc_cell_movement",
     "pyclm.core.patterns.wave_patterns",

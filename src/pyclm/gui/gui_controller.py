@@ -1,3 +1,24 @@
+"""
+Live napari viewer for a running (or finished) PyCLM experiment directory.
+
+Reads every output through ``pyclm.io`` so it works for both the HDF5 (format 1)
+and OME-Zarr (format 2) layouts.
+
+Positions are an axis, not layers: every channel of a cadence group is one
+layer whose data is stacked over (position, t, y, x), so the layer list has
+one entry per channel however many positions are imaged, the position slider
+(or the positions list in the dock, the minimap, the ``[`` / ``]`` keys)
+switches between positions, and contrast limits are one setting per channel
+that applies to every position. Groups of different cadence get their own
+layers with the time scale set to the group's ``every_t``, so they line up
+on the plan's time axis without blank frames. A cyan overlay shows the DMD
+pattern in force at each frame when the affine transform is known.
+
+Contrast is normalised automatically as frames arrive until you touch a
+layer's limits; then they stay where you put them ("Auto-contrast" in the
+dock turns it back on, "Normalise now" resets every channel once).
+"""
+
 from __future__ import annotations
 
 import os
@@ -7,515 +28,524 @@ os.environ.setdefault("NAPARI_DISABLE_PLUGIN_AUTOLOAD", "1")
 
 import argparse
 import json
-from collections.abc import Sequence
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import cv2
-import h5py
 import napari
 import numpy as np
-from h5py import File
-from qtpy import QtCore
-from skimage.transform import downscale_local_mean
-from toml import load
+from qtpy import QtCore, QtWidgets
+
+from pyclm import io as pyclm_io
+from pyclm.io.export import pattern_overlay
+
+from .widgets import RunOverview
+
+logger = logging.getLogger(__name__)
+
+AXIS_LABELS = ("position", "t", "y", "x")
 
 
-@dataclass
-class LayerSpec:
-    path: Path
-    channel_key: str
-    name: str | None = None
-
-
-@dataclass
-class ChannelSchedule:
-    every_t: int = 1
-    t_delay: int = 0
-    t_stop: int = 0  # 0 means run to end
-    t_count: int = 0
-
-    def is_scheduled_at(self, t: int) -> bool:
-        if t < self.t_delay:
-            return False
-        this_t = t - self.t_delay
-        if self.t_stop > 0 and this_t >= self.t_stop:
-            return False
-        return this_t % self.every_t == 0
-
-
-def _read_current_t_index(f: h5py.File) -> int:
+def _load_layers_file(path: Path) -> list[tuple[str, str]]:
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    layers = []
     try:
-        f["current_t_index"].id.refresh()
-        return int(f["current_t_index"][()])
-    except Exception:
-        return -1
-
-
-def _read_channel_schedule(f: h5py.File, channel_key: str) -> ChannelSchedule:
-    sched = ChannelSchedule()
-    try:
-        every_t_map = json.loads(f.attrs.get("every_t", "{}"))
-        sched.every_t = int(every_t_map.get(channel_key, 1))
-    except Exception:
-        pass
-    try:
-        sched.t_delay = int(f.attrs.get("t_delay", 0))
-    except Exception:
-        pass
-    try:
-        sched.t_stop = int(f.attrs.get("t_stop", 0))
-    except Exception:
-        pass
-    try:
-        sched.t_count = int(f.attrs.get("t_count", 0))
-    except Exception:
-        pass
-    return sched
-
-
-def _read_data_frame_swmr(
-    f: h5py.File, t_val: str, channel_key: str, at
-) -> np.ndarray | None:
-    if channel_key == "stim_dmd":
-        return _read_stim_frame_swmr(f, t_val, at)
-    else:
-        try:
-            d = f[t_val][channel_key]["data"]
-            d.id.refresh()
-            arr = np.array(d)
-            if arr.size == 0:
-                print(f"t={t_val} no data")
-                return None
-            return arr
-        except Exception:
-            print(f"t = {t_val} exception")
-            return None
-
-
-def _read_stim_frame_swmr(f: h5py.File, t_val: str, at) -> np.ndarray | None:
-    ati = cv2.invertAffineTransform(at)
-    try:
-        if "stim_aq" not in f[t_val].keys() or "dmd" not in f[t_val]["stim_aq"]:
-            return None
-        imaging_key = next(
-            (k for k in f[t_val].keys() if k.startswith("channel_")), None
-        )
-        if imaging_key is None:
-            return None
-        d = f[t_val][imaging_key]["data"]
-        d.id.refresh()
-        data_shape = d.shape
-        if 0 in data_shape:
-            return None
-        b = int(get_binning_from_metadata(f, imaging_key))
-        pattern = np.array(f[t_val]["stim_aq"]["dmd"])
-        tf = cv2.warpAffine(
-            np.round(pattern).astype(np.uint8),
-            ati,
-            (data_shape[1] * b, data_shape[0] * b),
-        ).astype(np.uint16)
-        return downscale_local_mean(tf, (b, b)).astype(np.uint16)
-    except Exception:
-        print(f"t = {t_val} exception")
-        return None
-
-
-def _upsample_to_absolute(
-    frames: list[np.ndarray],
-    acquired_at: list[int],
-    t_display: list[int],
-    frame_shape: tuple[int, ...],
-    hold: bool = True,
-) -> np.ndarray:
-    out = np.zeros(
-        (len(t_display), *frame_shape), dtype=frames[0].dtype if frames else np.uint16
-    )
-    if not frames:
-        return out
-    if hold:
-        acq_idx = 0
-        for i, t in enumerate(t_display):
-            if acq_idx + 1 < len(acquired_at) and acquired_at[acq_idx + 1] <= t:
-                acq_idx += 1
-            if acquired_at[acq_idx] <= t:
-                out[i] = frames[acq_idx]
-    else:
-        for frame, t in zip(frames, acquired_at, strict=False):
-            out[t] = frame
-    return out
-
-
-class LiveHDF5Layer:
-    def __init__(
-        self, viewer: napari.Viewer, spec: LayerSpec, at: np.ndarray | None = None, every_t: int = 1,
-    ):
-        self.viewer = viewer
-        self.spec = spec
-        self.every_t = every_t
-
-        self.at = at
-        self.f: h5py.File | None = None
-        self.last_t_index: int = -1
-        self.frame_shape: tuple[int, ...] | None = None
-        self.schedule: ChannelSchedule = ChannelSchedule()
-        self._stack: np.ndarray | None = None
-        self._last_frame: np.ndarray | None = None
-        self._hold: bool = True
-
-        if sys.platform != "win32":
-            self._open_file()
-
-        layer_name = spec.name or f"{spec.path.name} :: {spec.channel_key}"
-        initial = self._load_initial_stack()
-        if initial is None:
-            initial = np.zeros((1, 800, 800), dtype=np.uint16)
-        print(f"add_image: {layer_name} shape={initial.shape}")
-        self.layer = self.viewer.add_image(initial, name=layer_name)
-        if spec.channel_key == "stim_dmd":
-            self.layer.colormap = "cyan"
-            self.layer.contrast_limits = (0, 255)
-            self.layer.contrast_limits_range = (0, 255)
-            self.layer.opacity = 0.2
-        else:
-            self.layer.reset_contrast_limits()
-
-    def _open_file(self) -> None:
-        try:
-            if self.f is not None:
-                self.f.close()
-        except Exception:
-            pass
-
-        if not self.spec.path.exists():
-            self.f = None
-            return
-
-        self.f = h5py.File(str(self.spec.path), mode="r", libver="latest", swmr=True)
-        self.schedule = _read_channel_schedule(self.f, self.spec.channel_key)
-
-    def _load_initial_stack(self) -> np.ndarray | None:
-        if sys.platform == "win32":
-            try:
-                with h5py.File(
-                    str(self.spec.path), mode="r", libver="latest", swmr=True
-                ) as f:
-                    self.schedule = _read_channel_schedule(f, self.spec.channel_key)
-                    return self._do_load_initial(f)
-            except (PermissionError, OSError, RuntimeError):
-                return None
-        else:
-            if self.f is None:
-                return None
-            return self._do_load_initial(self.f)
-
-    def _do_load_initial(self, f: h5py.File) -> np.ndarray | None:
-        current_t = _read_current_t_index(f)
-        if current_t < 0:
-            return None
-
-        frames: list[np.ndarray] = []
-        acquired_at: list[int] = []
-        for t in range(current_t + 1):
-            if not self.schedule.is_scheduled_at(t):
-                continue
-            t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key, self.at)
-            if frame is None:
-                continue
-            if self.frame_shape is None:
-                self.frame_shape = frame.shape
-            if frame.shape != self.frame_shape:
-                continue
-            frames.append(frame)
-            acquired_at.append(t)
-
-        self.last_t_index = current_t
-
-        if not frames or self.frame_shape is None:
-            return None
-
-        self._last_frame = frames[-1]
-        stack = _upsample_to_absolute(
-            frames, acquired_at, np.arange(0, current_t + 1, self.every_t), self.frame_shape, hold=self._hold
-        )
-        self._stack = stack
-        return stack
-
-    def refresh(self) -> bool:
-        if sys.platform == "win32":
-            try:
-                with h5py.File(
-                    str(self.spec.path), mode="r", libver="latest", swmr=True
-                ) as f:
-                    return self._do_refresh(f)
-            except (PermissionError, OSError, RuntimeError):
-                return False
-        else:
-            if self.f is None:
-                self._open_file()
-            if self.f is None:
-                return False
-            try:
-                return self._do_refresh(self.f)
-            except (PermissionError, OSError, RuntimeError):
-                return False
-
-    def _do_refresh(self, f: h5py.File) -> bool:
-        current_t = _read_current_t_index(f)
-        if current_t <= self.last_t_index:
-            return False
-
-        new_frames: list[np.ndarray] = []
-        acquired_at: list[int] = []
-
-        # reads all frames since last refresh
-        for t in range(self.last_t_index + 1, current_t + 1):
-            if not self.schedule.is_scheduled_at(t):
-                continue
-            t_str = f"{t:05d}"
-            frame = _read_data_frame_swmr(f, t_str, self.spec.channel_key, self.at)
-            if frame is None:
-                continue
-            if self.frame_shape is None:
-                self.frame_shape = frame.shape
-            if frame.shape != self.frame_shape:
-                continue
-            new_frames.append(frame)
-            acquired_at.append(t)
-
-        # determine which new frames to add
-        new_t_values = []
-        for t in range(self.last_t_index, current_t):
-            if t % self.every_t == 0:
-                new_t_values.append(t)
-
-        n_new = len(new_t_values)
-
-        # generate a stack containing the new data
-        prev_last = self.last_t_index
-        self.last_t_index = current_t
-
-        if self.frame_shape is None:
-            return False
-
-        dense_new = np.zeros((n_new, *self.frame_shape), dtype=np.uint16)
-
-        if self._hold:
-            hold_frames = (
-                [self._last_frame] if self._last_frame is not None else []
-            ) + new_frames
-            hold_at = (
-                [prev_last] if self._last_frame is not None else []
-            ) + acquired_at
-            if hold_frames:
-                acq_idx = 0
-                for i, t in enumerate(new_t_values):
-                    if acq_idx + 1 < len(hold_at) and hold_at[acq_idx + 1] <= t:
-                        acq_idx += 1
-                    if hold_at[acq_idx] <= t:
-                        dense_new[i] = hold_frames[acq_idx]
-
-        # this else condition might not work yet
-        else:
-            for frame, t in zip(new_frames, acquired_at, strict=False):
-                dense_new[t - (prev_last + 1)] = frame
-
-        if new_frames:
-            self._last_frame = new_frames[-1]
-
-        cur = self.layer.data
-
-        if cur is None or cur.size == 0 or cur.shape == (1, 1, 1):
-            self.layer.data = dense_new
-            self.viewer.reset_view()
-        else:
-            if cur.shape[1:] != dense_new.shape[1:]:
-                self.layer.data = dense_new
-            else:
-                self.layer.data = np.concatenate([cur, dense_new], axis=0)
-
-        if self.spec.channel_key != "stim_dmd":
-            self.layer.reset_contrast_limits()
-        self.layer.refresh()
-        return True
-
-    def close(self) -> None:
-        try:
-            if self.f is not None:
-                self.f.close()
-        except Exception:
-            pass
-
-
-class HDF5LayerViewerApp:
-    def __init__(self, specs: Sequence[LayerSpec], at: np.ndarray | None = None, every_t: int = 1):
-        self.viewer = napari.Viewer()
-        self.layers = [LiveHDF5Layer(self.viewer, s, at=at, every_t=every_t) for s in specs[::-1]]
-        self.every_t = every_t
-
-        self._poll_timer = QtCore.QTimer()
-        self._poll_timer.setInterval(1000)
-        self._poll_timer.timeout.connect(self.refresh)
-        self._poll_timer.start()
-
-        try:
-            self.viewer.window._qt_window.destroyed.connect(lambda *_: self.close())
-        except Exception:
-            pass
-
-    def refresh(self) -> int:
-        changed = 0
-        for layer in self.layers:
-            if layer.refresh():
-                changed += 1
-        return changed
-
-    def close(self) -> None:
-        for layer in self.layers:
-            layer.close()
-
-    def run(self) -> None:
-        napari.run()
-
-    def show(self) -> None:
-        self.viewer.window.show()
-
-
-def _stim_exposure_nonzero(experiment_dir: Path, hdf5_path: Path) -> bool:
-    stem = hdf5_path.stem.split(".")[0]
-    toml_path = experiment_dir / f"{stem}.toml"
-    if not toml_path.exists():
-        return True
-    try:
-        data = load(toml_path)
-        return data.get("stimulation", {}).get("exposure", 0) != 0
-    except Exception:
-        return True
-
-
-def launch_hdf5_layer_viewer(
-    specs: Sequence[tuple[str, str]],
-    experiment_dir: Path | None = None,
-    at: np.ndarray | None = None,
-    every_t: int = 1,
-) -> HDF5LayerViewerApp:
-    filtered = []
-
-    seen_fps = set()
-
-    for fp, ch in specs:
-        if fp not in seen_fps:
-            if _stim_exposure_nonzero(experiment_dir, Path(fp)):
-                filtered.append((fp, "stim_dmd"))
-
-        filtered.append((fp, ch))
-        seen_fps.add(fp)
-
-    layer_specs = [LayerSpec(path=Path(fp), channel_key=ch) for fp, ch in filtered]
-    return HDF5LayerViewerApp(layer_specs, at=at, every_t=every_t)
+        data = json.loads(text)
+        entries = data["all_layers"] if isinstance(data, dict) else data
+    except json.JSONDecodeError:
+        entries = [line for line in text.splitlines() if line.strip()]
+    for entry in entries:
+        path_str, layer = entry.rsplit(":", 1)
+        layers.append((path_str.strip().strip('"'), layer.strip()))
+    return layers
 
 
 def _parse_src(s: str) -> tuple[str, str]:
     if ":" not in s:
         raise argparse.ArgumentTypeError(
-            'Each --src must be in the form "path:channel_638"'
+            'Each --src must be in the form "path:group/channel"'
         )
-    path, ch = s.rsplit(":", 1)
-    path = path.strip().strip('"')
-    ch = ch.strip()
-    if not path or not ch:
-        raise argparse.ArgumentTypeError(
-            'Each --src must be in the form "path:channel_638"'
-        )
-    return path, ch
+    path, layer = s.rsplit(":", 1)
+    return path.strip().strip('"'), layer.strip()
 
 
-def _parse_all_layers(s: Path) -> tuple[list[tuple[str, str]], int]:
-
-    with open(s) as file:
-        all_layers_json = json.load(file)
-
-    layers = []
-    for line in all_layers_json["all_layers"]:
-        layers.append(_parse_src(line))
-
-    return layers, all_layers_json["t"]
-
-
-def find_affine_transform(input_dir, config_path):
-    # copied from main.py
-    # search for config file if not provided
-    if config_path is None:
-        # look in the experiment directory for pyclm_config.toml
-        config_path = input_dir / "pyclm_config.toml"
-
-        # look in the current working directory for pyclm_config.toml
-        if not config_path.exists():
-            config_path = Path("pyclm_config.toml")
-
-    config_path = Path(config_path)
-
-    if not config_path.exists():
-        raise FileNotFoundError(
-            f"Config file not found at {config_path}. Affine transform is required."
-        )
-
-    config = load(config_path)
-    return np.array(config["affine_transform"], dtype=np.float32)
+def _resolve_layer(exp: pyclm_io.ExperimentData, layer: str) -> tuple[str, str] | None:
+    """Map a layer key ("imaging/545", "channel_545", "stim_aq") to (group, channel)."""
+    if "/" in layer:
+        group, channel = layer.split("/", 1)
+        if group in exp.groups and channel in exp.groups[group].channels:
+            return group, channel
+        return None
+    for name, g in exp.groups.items():
+        if name == layer or (
+            layer.startswith("channel_")
+            and name == layer.replace("channel_", "imaging_", 1)
+        ):
+            return name, g.channels[0]
+        if layer in g.channels:
+            return name, layer
+    return None
 
 
-def get_binning_from_metadata(f: File, chan_key: str):
+# ================================================================ stacks
+@dataclass(eq=False)  # hashed by identity: stacks live in sets
+class ChannelStack:
     """
-    Extract binning from file attributes or return default 1.
+    One napari layer holding one channel of one cadence group for every
+    position: data (position, t, y, x). ``every_t`` / ``t_delay`` are the
+    cadence the layer's time axis is scaled to.
     """
-    if "experiment_metadata" in list(f.attrs.keys()):
+
+    key: str
+    every_t: int
+    t_delay: int
+    layer: napari.layers.Image
+    loaded: set[tuple[int, int]] = field(default_factory=set)
+    auto_contrast: bool = True
+    _resetting: bool = False
+
+    @property
+    def data(self) -> np.ndarray:
+        return self.layer.data
+
+    def put(self, p: int, i: int, frame: np.ndarray) -> None:
+        """Store ``frame`` at (position p, local timepoint i), growing the stack as needed."""
+        data = self.layer.data
+        n_p, n_t = data.shape[0], data.shape[1]
+        h = max(data.shape[2], frame.shape[0])
+        w = max(data.shape[3], frame.shape[1])
+        grow = p >= n_p or i >= n_t or (h, w) != data.shape[2:]
+        if grow:
+            new = np.zeros((max(n_p, p + 1), max(n_t, i + 1), h, w), data.dtype)
+            new[:n_p, :n_t, : data.shape[2], : data.shape[3]] = data
+            data = new
+        data[p, i, : frame.shape[0], : frame.shape[1]] = frame
+        if grow:
+            self.layer.data = data
+        else:
+            self.layer.refresh()
+        self.loaded.add((p, i))
+
+    def reset_contrast(self) -> None:
+        self._resetting = True
         try:
-            meta = json.loads(f.attrs["experiment_metadata"])
-            # chan_key is typically "channel_NAME"
-            # channel keys in metadata are "NAME"
-            if chan_key.startswith("channel_"):
-                short_name = chan_key.replace("channel_", "", 1)
-                if short_name in meta.get("channels", {}):
-                    return meta["channels"][short_name].get("binning", 1)
-            else:
-                return meta["segmentation"].get("binning", 1)
-        except Exception as e:
-            print(f"Error reading binning from metadata: {e}")
-    return 1
+            self.layer.reset_contrast_limits()
+        finally:
+            self._resetting = False
+
+    def _on_contrast_changed(self, event=None) -> None:
+        # the user moved the slider (our own resets are flagged): keep it
+        if not self._resetting:
+            self.auto_contrast = False
+
+
+class Stacks:
+    """The shared layers of a viewer, keyed by cadence group / channel."""
+
+    def __init__(self, viewer: napari.Viewer):
+        self.viewer = viewer
+        self.channels: dict[str, ChannelStack] = {}
+        self.patterns: dict[str, ChannelStack] = {}
+        self._cadence: dict[str, tuple[int, int]] = {}
+
+    def group_key(self, group: str, every_t: int, t_delay: int) -> str:
+        """
+        The layer name for a cadence group: the group's name, or, if another
+        experiment uses the same name at a different cadence, name@every_t.
+        """
+        key = group
+        seen = self._cadence.setdefault(key, (every_t, t_delay))
+        if seen != (every_t, t_delay):
+            key = f"{group}@{every_t}"
+            if t_delay:
+                key += f"+{t_delay}"
+            self._cadence.setdefault(key, (every_t, t_delay))
+        return key
+
+    def _new_layer(self, name, every_t, t_delay, shape, **kwargs):
+        data = np.zeros((1, 1, *shape), dtype=np.uint16)
+        return self.viewer.add_image(
+            data,
+            name=name,
+            scale=(1, every_t, 1, 1),
+            translate=(0, t_delay, 0, 0),
+            **kwargs,
+        )
+
+    def channel(self, gkey: str, channel: str, every_t, t_delay, shape) -> ChannelStack:
+        key = f"{gkey}/{channel}"
+        stack = self.channels.get(key)
+        if stack is None:
+            layer = self._new_layer(key, every_t, t_delay, shape)
+            stack = ChannelStack(key, every_t, t_delay, layer)
+            layer.events.contrast_limits.connect(stack._on_contrast_changed)
+            self.channels[key] = stack
+        return stack
+
+    def pattern(self, gkey: str, every_t, t_delay, shape) -> ChannelStack:
+        key = f"{gkey}/pattern"
+        stack = self.patterns.get(key)
+        if stack is None:
+            layer = self._new_layer(
+                key,
+                every_t,
+                t_delay,
+                shape,
+                colormap="cyan",
+                opacity=0.25,
+                contrast_limits=(0, 255),
+                blending="additive",
+            )
+            stack = ChannelStack(key, every_t, t_delay, layer, auto_contrast=False)
+            self.patterns[key] = stack
+        return stack
+
+    def all(self) -> list[ChannelStack]:
+        return [*self.channels.values(), *self.patterns.values()]
+
+
+# ============================================================ experiments
+class LiveExperiment:
+    """One experiment output feeding position ``index`` of the shared stacks."""
+
+    def __init__(self, stacks: Stacks, path: str, layers: list[str], index: int):
+        self.stacks = stacks
+        self.index = index
+        self.exp = pyclm_io.open(path)
+        self.requested = [_resolve_layer(self.exp, k) for k in layers]
+        self.requested = [r for r in self.requested if r is not None]
+        self.gkeys: dict[str, str] = {}
+        for group, channel in self.requested:
+            g = self.exp.groups[group]
+            shape = g.shape if g.shape != (0, 0) else (1, 1)
+            gkey = self.gkeys.setdefault(
+                group, stacks.group_key(group, g.every_t, g.t_delay)
+            )
+            stacks.channel(gkey, channel, g.every_t, g.t_delay, shape)
+            if self.exp.affine_transform is not None:
+                stacks.pattern(gkey, g.every_t, g.t_delay, shape)
+        self.refresh()
+
+    @property
+    def name(self) -> str:
+        return self.exp.name
+
+    def refresh(self) -> set[ChannelStack]:
+        """Load the frames written since last time; returns the stacks that changed."""
+        try:
+            self.exp.refresh()
+        except Exception as e:  # file being written, retry next tick
+            logger.debug(f"refresh failed: {e}")
+            return set()
+
+        changed: set[ChannelStack] = set()
+        for group, channel in self.requested:
+            g = self.exp.groups[group]
+            gkey = self.gkeys[group]
+            stack = self.stacks.channel(gkey, channel, g.every_t, g.t_delay, (1, 1))
+            for i in g.acquired():
+                if (self.index, i) in stack.loaded:
+                    continue
+                frame = g.frame(i, channel)
+                if frame is None:
+                    continue
+                stack.put(self.index, i, frame)
+                changed.add(stack)
+
+                if self.exp.affine_transform is not None:
+                    pstack = self.stacks.pattern(gkey, g.every_t, g.t_delay, (1, 1))
+                    if (self.index, i) not in pstack.loaded:
+                        overlay = pattern_overlay(
+                            self.exp, g, frame.shape, g.global_t(i)
+                        )
+                        if overlay is not None:
+                            pstack.put(self.index, i, overlay)
+        return changed
+
+    def close(self):
+        self.exp.close()
+
+
+# =============================================================== controls
+class ViewerControls(QtWidgets.QWidget):
+    """
+    The positions list (click to view), "follow the run", and the contrast
+    controls, under the status line and minimap in the viewer's dock.
+    """
+
+    positionChosen = QtCore.Signal(int)
+    normalizeRequested = QtCore.Signal()
+    autoContrastChanged = QtCore.Signal(bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.list = QtWidgets.QListWidget()
+        self.list.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.list.currentRowChanged.connect(self._row_changed)
+        self.follow = QtWidgets.QCheckBox("Follow the run")
+        self.follow.setToolTip(
+            "Show the position the microscope is acquiring (from status.json)"
+        )
+        self.auto_contrast = QtWidgets.QCheckBox("Auto-contrast")
+        self.auto_contrast.setChecked(True)
+        self.auto_contrast.setToolTip(
+            "Normalise each channel as frames arrive; turns off when you move a "
+            "contrast slider"
+        )
+        self.auto_contrast.toggled.connect(self.autoContrastChanged)
+        self.normalize = QtWidgets.QPushButton("Normalise now")
+        self.normalize.setToolTip("Reset the contrast limits of every channel once")
+        self.normalize.clicked.connect(self.normalizeRequested)
+        self.hint = QtWidgets.QLabel("[ / ] : previous / next position")
+        self.hint.setStyleSheet("color: gray")
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.addWidget(QtWidgets.QLabel("Positions"))
+        layout.addWidget(self.list, stretch=1)
+        layout.addWidget(self.follow)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.auto_contrast)
+        row.addWidget(self.normalize)
+        layout.addLayout(row)
+        layout.addWidget(self.hint)
+        self._labels: list[str] = []
+
+    def set_positions(self, labels: list[str]) -> None:
+        self._labels = list(labels)
+        self.list.blockSignals(True)
+        self.list.clear()
+        self.list.addItems(self._labels)
+        self.list.blockSignals(False)
+
+    def select(self, index: int) -> None:
+        """Reflect the viewed position without emitting positionChosen."""
+        if 0 <= index < self.list.count() and self.list.currentRow() != index:
+            self.list.blockSignals(True)
+            self.list.setCurrentRow(index)
+            self.list.blockSignals(False)
+
+    def _row_changed(self, row: int) -> None:
+        if row >= 0:
+            self.positionChosen.emit(row)
+
+
+class ViewerDock(QtWidgets.QWidget):
+    """The status line, the minimap and the viewer controls in one dock."""
+
+    def __init__(self, directory: Path | None, parent=None):
+        super().__init__(parent)
+        self.overview = RunOverview(directory)
+        self.controls = ViewerControls()
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.overview, stretch=2)
+        layout.addWidget(self.controls, stretch=1)
+
+
+# ================================================================== app
+class ViewerApp:
+    def __init__(
+        self,
+        specs: list[tuple[str, str]],
+        status_path: Path | None = None,
+        experiment_dir: Path | None = None,
+        show: bool = True,
+    ):
+        self.viewer = napari.Viewer(show=show)
+        self.status_path = status_path
+        if experiment_dir is None and status_path is not None:
+            experiment_dir = Path(status_path).parent
+        self.dock = ViewerDock(experiment_dir)
+        self.overview = self.dock.overview
+        self.controls = self.dock.controls
+        self.viewer.window.add_dock_widget(
+            self.dock, name="Run", area="right", tabify=False
+        )
+
+        by_path: dict[str, list[str]] = {}
+        for path, layer in specs:
+            by_path.setdefault(path, []).append(layer)
+        self.overview.refresh()
+        order = self._position_order(list(by_path))
+        self.stacks = Stacks(self.viewer)
+        self.experiments = [
+            LiveExperiment(self.stacks, path, by_path[path], index)
+            for index, path in enumerate(order)
+        ]
+        self.positions = [e.name for e in self.experiments]
+        self.controls.set_positions(self.positions)
+        self.viewer.dims.axis_labels = AXIS_LABELS
+        first = next(iter(self.stacks.channels.values()), None)
+        if first is not None:
+            self.viewer.layers.selection.active = first.layer
+        self.normalize_all()
+
+        # position selection: list, minimap, keys, slider -> all in sync
+        self.controls.positionChosen.connect(self.view_position)
+        self.overview.minimap.positionClicked.connect(self.view_label)
+        self.controls.normalizeRequested.connect(self.normalize_all)
+        self.controls.autoContrastChanged.connect(self._set_auto_contrast)
+        self.viewer.dims.events.current_step.connect(self._slider_moved)
+        self.viewer.bind_key("]", self.next_position, overwrite=True)
+        self.viewer.bind_key("[", self.previous_position, overwrite=True)
+        self.controls.select(0)
+
+        self._fov_applied = False
+        self._timer = QtCore.QTimer()
+        self._timer.setInterval(1000)
+        self._timer.timeout.connect(self.refresh)
+        self._timer.start()
+        try:
+            self.viewer.window._qt_window.destroyed.connect(lambda *_: self.close())
+        except Exception:
+            pass
+
+    # ------------------------------------------------------- positions
+    def _position_order(self, paths: list[str]) -> list[str]:
+        """Outputs in the order of the position list (minimap), the rest after."""
+        names = {}
+        for path in paths:
+            try:
+                with pyclm_io.open(path) as exp:
+                    names[path] = exp.name
+            except Exception:
+                names[path] = Path(path).stem
+        listed = [p.label for p in self.overview.minimap.positions]
+        rank = {label: i for i, label in enumerate(listed)}
+        return sorted(paths, key=lambda p: (rank.get(names[p], len(rank)), names[p]))
+
+    @property
+    def current_position(self) -> int:
+        return int(self.viewer.dims.current_step[0])
+
+    def view_position(self, index: int) -> None:
+        """Show position ``index``: the position slider, the list and the minimap follow."""
+        if not 0 <= index < len(self.positions):
+            return
+        if self.current_position != index:
+            self.viewer.dims.set_current_step(0, index)
+        self.controls.select(index)
+
+    def view_label(self, label: str) -> None:
+        if label in self.positions:
+            self.view_position(self.positions.index(label))
+
+    def next_position(self, viewer=None) -> None:
+        self.view_position((self.current_position + 1) % max(len(self.positions), 1))
+
+    def previous_position(self, viewer=None) -> None:
+        self.view_position((self.current_position - 1) % max(len(self.positions), 1))
+
+    def _slider_moved(self, event=None) -> None:
+        self.controls.select(self.current_position)
+
+    # -------------------------------------------------------- contrast
+    def _set_auto_contrast(self, on: bool) -> None:
+        for stack in self.stacks.channels.values():
+            stack.auto_contrast = on
+        if on:
+            self.normalize_all()
+
+    def normalize_all(self) -> None:
+        for stack in self.stacks.channels.values():
+            stack.reset_contrast()
+
+    # --------------------------------------------------------- refresh
+    def refresh(self) -> int:
+        status = self.overview.refresh()
+        self.show_status()
+        self._apply_fov()
+        changed: set[ChannelStack] = set()
+        for e in self.experiments:
+            changed |= e.refresh()
+        for stack in changed:
+            if stack.auto_contrast:
+                stack.reset_contrast()
+        if self.controls.auto_contrast.isChecked() and not all(
+            s.auto_contrast for s in self.stacks.channels.values()
+        ):
+            # a slider was moved: reflect it in the checkbox without re-triggering
+            self.controls.auto_contrast.blockSignals(True)
+            self.controls.auto_contrast.setChecked(False)
+            self.controls.auto_contrast.blockSignals(False)
+        if self.controls.follow.isChecked() and status:
+            current = status.get("current_experiment")
+            if current in self.positions:
+                self.view_label(current)
+        return len(changed)
+
+    def _apply_fov(self):
+        """Draw each position's field of view once the stores report a shape and pixel size."""
+        if self._fov_applied or not self.overview.minimap.positions:
+            return
+        fov = {}
+        for live in self.experiments:
+            for g in live.exp.groups.values():
+                if g.shape != (0, 0) and g.pixel_size_um:
+                    fov[live.exp.name] = (
+                        g.shape[0] * g.pixel_size_um,
+                        g.shape[1] * g.pixel_size_um,
+                    )
+                    break
+        if not fov:
+            return
+        for p in self.overview.minimap.positions:
+            p.fov_um = fov.get(p.label)
+        self.overview.minimap.redraw()
+        self._fov_applied = True
+
+    def show_status(self):
+        """The status line (from status.json, written by the Manager) in napari's status bar."""
+        try:
+            self.viewer.status = self.overview.status.text()
+        except Exception:
+            pass
+
+    def close(self):
+        self._timer.stop()
+        for e in self.experiments:
+            e.close()
+
+    def run(self):
+        napari.run()
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(
-        description="Napari SWMR HDF5 viewer (one layer per file/channel)"
-    )
+    p = argparse.ArgumentParser(description="Live napari viewer for PyCLM outputs")
     p.add_argument("experiment", help="directory containing experiment files")
     p.add_argument(
         "--src",
         action="append",
         type=_parse_src,
-        required=False,
-        help='Repeatable: "file.hdf5:channel_638"',
+        help='Repeatable: "file.zarr:imaging/545"',
     )
-    p.add_argument("--every_t", default=0, type=int, help="which multiple of frames to show")
-    p.add_argument("--config", help="path to pyclm_config.toml file", default=None)
+    p.add_argument(
+        "--every_t", default=0, type=int, help="ignored; kept for compatibility"
+    )
+    p.add_argument("--config", help="ignored; kept for compatibility", default=None)
     args = p.parse_args(argv)
     experiment_dir = Path(args.experiment)
-    at = find_affine_transform(experiment_dir, args.config)
-    if not args.src:
-        all_layers_path = experiment_dir / "all_layers.txt"
-        assert all_layers_path.exists(), (
-            "no all_layers.txt found in experiment directory"
-        )
 
-        layers, every_t = _parse_all_layers(all_layers_path)
-
-        app = launch_hdf5_layer_viewer(layers, experiment_dir=experiment_dir, at=at, every_t=every_t)
+    if args.src:
+        specs = args.src
     else:
-        app = launch_hdf5_layer_viewer(args.src, experiment_dir=experiment_dir, at=at, every_t=args.every_t)
-    app.run()
+        layers_file = experiment_dir / "all_layers.txt"
+        if layers_file.exists():
+            specs = _load_layers_file(layers_file)
+        else:
+            specs = []
+            for out in pyclm_io.find_experiments(experiment_dir):
+                with pyclm_io.open(out) as exp:
+                    for gname, g in exp.groups.items():
+                        specs += [(str(out), f"{gname}/{c}") for c in g.channels]
+    if not specs:
+        raise SystemExit(f"no experiment outputs found in {experiment_dir}")
+
+    ViewerApp(specs, experiment_dir / "status.json", experiment_dir).run()
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

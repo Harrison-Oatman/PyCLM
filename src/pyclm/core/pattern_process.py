@@ -1,57 +1,83 @@
 import logging
 from threading import Event
-from typing import ClassVar
 
-from .datatypes import AcquisitionData, CameraPattern, SegmentationData
+from .base_process import PipelineProcess
+from .datatypes import AcquisitionData, CameraPattern
 from .experiments import Experiment
-from .messages import Message, StreamCloseMessage
-from .queues import AllQueues
-
-logger = logging.getLogger(__name__)
-
-from .base_process import BaseProcess
+from .messages import (
+    Message,
+    PatternParamsResultMessage,
+    SettingsRequestMessage,
+    StreamCloseMessage,
+)
 from .patterns import (
+    ROI,
     AcquiredImageRequest,
     CameraProperties,
     DataDock,
     PatternContext,
     PatternMethod,
-    PatternMethodReturnsSLM,
     known_models,
 )
+from .patterns.pattern import ExperimentState
+from .plan import requirement_kinds
+from .queues import AllQueues
+from .router import Subscription
+
+logger = logging.getLogger(__name__)
 
 
-class PatternProcess(BaseProcess):
-    known_models: ClassVar = known_models
+class PatternProcess(PipelineProcess):
+    """
+    Generates patterns: the Manager announces each pattern-due timepoint with
+    a :class:`RequestPattern`, the Router delivers the required raw / seg /
+    tracks data at that cadence, and once the dock for that timepoint is
+    complete the experiment's method runs and the result goes to the SLM
+    buffer.
+    """
+
+    always_active = True
 
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="pattern")
 
+        # per-instance copy so registrations do not leak between controllers
+        self.known_models: dict[str, type[PatternMethod]] = dict(known_models)
+
         self.inbox = aq.manager_to_pattern
-        self.manager = aq.pattern_to_manager
         self.slm = aq.pattern_to_slm
-
-        self.from_seg = aq.seg_to_pattern
-        self.from_raw = aq.outbox_to_pattern
-
-        self.stream_count = 0
+        self.to_manager = aq.pattern_to_manager
+        # experiment name -> MicroscopePosition, for context.position() (set by the Controller)
+        self.positions: dict = {}
 
         self.camera_properties = None
+        # {experiment: GridGeometry} for grid experiments (set by the Controller)
+        self.grids: dict = {}
         self.initialized = False
 
         self.models = {}
         self.docks = {}
         self.experiments = {}
+        # per-experiment memory: histories of deliveries and generated patterns
+        self.states: dict[str, ExperimentState] = {}
 
         self.register_queue(self.inbox, self.handle_message_wrapper)
-        self.register_queue(self.from_raw, self.handle_from_raw)
-        self.register_queue(self.from_seg, self.handle_from_seg)
 
     def initialize(self, camera_properties: CameraProperties):
         self.camera_properties = camera_properties
 
         self.initialized = True
 
+    # ------------------------------------------------------------ routing
+    def subscriptions(self, plan) -> list[Subscription]:
+        subs = []
+        for name in plan.experiments:
+            for channel, needs in plan.pattern_requirements(name).items():
+                for kind in requirement_kinds(needs):
+                    subs.append(Subscription(self.name, name, channel, kind, "pattern"))
+        return subs
+
+    # ------------------------------------------------------------ methods
     def request_method(self, experiment: Experiment) -> list[AcquiredImageRequest]:
         method_name = experiment.pattern.method_name
 
@@ -66,22 +92,33 @@ class PatternProcess(BaseProcess):
 
         experiment_name = experiment.experiment_name
         method_kwargs = experiment.pattern.kwargs
-        print(method_kwargs)
+        logger.debug(f"{experiment_name}: {method_name} kwargs {method_kwargs}")
 
         model = model_class(**method_kwargs)
+        model.bind_registry(self.known_models)
 
         self.models[experiment_name] = model
         self.experiments[experiment_name] = experiment
 
         logger.info(f'initializing pattern model "{method_name}"')
 
-        return model.initialize(experiment)
+        requirements = model.initialize(experiment)
+        self.states[experiment_name] = ExperimentState(
+            requirements, pattern_history=getattr(model, "pattern_history", 2)
+        )
+        return requirements
 
     def initialize_models(self):
         for experiment_name in self.models:
             model: PatternMethod = self.models[experiment_name]
             experiment: Experiment = self.experiments[experiment_name]
-            model.configure_system(experiment_name, self.camera_properties, experiment)
+            props = self.camera_properties
+            geom = self.grids.get(experiment_name)
+            if geom is not None and props is not None:
+                # a grid experiment's method sees, and returns, the stitched frame
+                h, w = geom.shape(1)
+                props = CameraProperties(ROI(0, 0, int(w), int(h)), props.pixel_size_um)
+            model.configure_system(experiment_name, props, experiment)
 
     def register_method(self, model: type, name: str | None = None):
         assert issubclass(model, PatternMethod), (
@@ -93,7 +130,7 @@ class PatternProcess(BaseProcess):
             model_name = name
 
         if model_name in self.known_models:
-            logging.warning(f"overwriting known model {model_name}")
+            logger.warning(f"overwriting known model {model_name}")
 
         self.known_models[model_name] = model
 
@@ -106,31 +143,35 @@ class PatternProcess(BaseProcess):
             f"self.models[{'experiment_name'}] is not a PatternMethod"
         )
 
-        # Create context wrapper
-
-        # We assume _experiment_ref is available. If not, we might crash, which is acceptable for alpha breakage.
-        # Ideally, we ensure configure_system is called.
         if model._experiment_ref is None:
             raise RuntimeError(
                 f"Model {model.name} for {experiment_name} was not properly configured with an experiment reference."
             )
 
-        context = PatternContext(data_dock, model._experiment_ref)
+        state = self.states.get(experiment_name)
+        if state is None:
+            state = self.states[experiment_name] = ExperimentState(
+                data_dock.requirements
+            )
+        state.absorb(data_dock, dockname[1])
+        context = PatternContext(
+            state, model._experiment_ref, position=self.positions.get(experiment_name)
+        )
 
-        if isinstance(model, PatternMethodReturnsSLM):
-            slm_pattern = model.generate(context)
-            self.slm.put(CameraPattern(experiment_name, slm_pattern, slm_coords=True))
+        pattern = model.generate(context)
+        out = CameraPattern(experiment_name, pattern, binning=model.binning)
+        state.record_pattern(out.pattern_id, pattern)
+        self.slm.put(out)
 
-        else:
-            pattern = model.generate(context)
-            self.slm.put(
-                CameraPattern(
-                    experiment_name, pattern, slm_coords=False, binning=model.binning
-                )
+        # setting changes the method asked for go to the Manager, which applies
+        # them at the next timepoint boundary and records them
+        if context.requests:
+            self.to_manager.put(
+                SettingsRequestMessage(experiment_name, dockname[1], context.requests)
             )
 
-    def dock_string(self, experiment_name, t):
-        return f"{experiment_name}_{t:05d}"
+    def dock_key(self, experiment_name, t) -> tuple[str, int]:
+        return (experiment_name, int(t))
 
     def check(self, experiment_name, dockname):
         dock: DataDock = self.docks.get(dockname)
@@ -138,19 +179,29 @@ class PatternProcess(BaseProcess):
         if dock.check_complete():
             self.run_model(experiment_name, dockname)
 
+    # ----------------------------------------------------------- messages
     def handle_message(self, message: Message):
         match message.message:
             case "close":
                 return False
 
-            case "stream_close":
-                print("pattern received stream close")
-
-                self.stream_count += 1
-                if self.stream_count >= 2:
-                    out_msg = StreamCloseMessage()
-                    self.slm.put(out_msg)
-                    return True
+            case "update_pattern_params":
+                name = message.experiment_name
+                model = self.models.get(name)
+                if model is None:
+                    result = PatternParamsResultMessage(
+                        name, {}, dict.fromkeys(message.parameters, "no pattern method")
+                    )
+                else:
+                    try:
+                        applied, refused = model.update(**message.parameters)
+                    except Exception as e:  # a method's own update() may raise
+                        applied, refused = (
+                            {},
+                            dict.fromkeys(message.parameters, repr(e)),
+                        )
+                    result = PatternParamsResultMessage(name, applied, refused)
+                self.to_manager.put(result)
                 return False
 
             case "request_pattern":
@@ -162,9 +213,9 @@ class PatternProcess(BaseProcess):
                 t_index = message.t_index
 
                 dock = DataDock(t_sec, req)
-                dockname = self.dock_string(name, t_index)
+                dockname = self.dock_key(name, t_index)
 
-                print(f"pattern request {dockname}")
+                logger.debug(f"pattern request {dockname}")
 
                 self.docks[dockname] = dock
 
@@ -180,39 +231,32 @@ class PatternProcess(BaseProcess):
             return True
         return False
 
-    def handle_from_raw(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                return True
-        else:
-            assert isinstance(data, AcquisitionData)
-            name = data.event.experiment_name
-            t_index = data.event.t_index
+    def on_stream_end(self) -> bool:
+        logger.info("pattern process: stream ended, closing the SLM buffer")
+        self.slm.put(StreamCloseMessage())
+        return super().on_stream_end()
 
-            dockname = self.dock_string(name, t_index)
+    # --------------------------------------------------------------- data
+    def handle_data(self, data):
+        assert isinstance(data, AcquisitionData), (
+            f"pattern process received {type(data)}"
+        )
+        name = data.event.experiment_name
+        t_index = data.event.t_index
 
-            self.docks[dockname].add_raw(data)
+        dockname = self.dock_key(name, t_index)
 
-            self.check(name, dockname)
-        return False
+        dock = self.docks.get(dockname)
+        if dock is None:
+            logger.warning(
+                f"received {data.kind} data for {dockname} but no pattern was "
+                "requested for that timepoint; dropping it"
+            )
+            return
 
-    def handle_from_seg(self, data):
-        if isinstance(data, Message):
-            if self.handle_message(data):
-                return True
-        else:
-            assert isinstance(data, SegmentationData)
-            name = data.event.experiment_name
-            t_index = data.event.t_index
+        dock.add(data)
 
-            dockname = self.dock_string(name, t_index)
-
-            print(f"seg found {dockname}")
-
-            self.docks[dockname].add_seg(data)
-
-            self.check(name, dockname)
-        return False
+        self.check(name, dockname)
 
 
 class RequestPattern(Message):
@@ -231,6 +275,7 @@ class RequestPattern(Message):
         experiment_name: str,
         requirements: list[AcquiredImageRequest],
     ):
+        # absolute timepoint, matching AcquisitionEvent.t_index of the data expected
         self.t_index = t_index
         self.time_sec = time_sec
         self.experiment_name = experiment_name
