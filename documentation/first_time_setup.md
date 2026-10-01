@@ -457,6 +457,14 @@ pattern is nearly empty even though the pattern in camera coordinates is
 fine. `pyclm preview --image` uses the same two keys when
 `--pixel-size-um` is not given.
 
+The simulated camera reports a frame four times the TIF's size, so the
+closest match to a real camera is to leave `binning` out, set
+`pixel_size_um` to the unbinned pixel size, and give the experiments
+`binning = 4` (the TIFs then are the camera's binned frames). That is how
+`pyclm new --demo` is set up. With `binning` in `dry_run.yml` instead, the
+DMD pattern is right but per-cell patterns are stored in camera
+coordinates at a quarter of the frame (known issue #35).
+
 Add `--gui` to open a live Napari viewer that updates as data is written:
 
 ```bash

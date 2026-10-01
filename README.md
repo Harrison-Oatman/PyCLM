@@ -36,10 +36,14 @@ runs, reading data). For development, clone the repository and run
 Try it without a microscope:
 
 ```bash
-pyclm new demo --template open-loop
-# add a TIF named experiment.tif to demo/ (any fluorescence frame), then
+pyclm new demo --demo
 pyclm run demo --dry --gui
 ```
+
+The demo runs two experiments on the virtual microscope with synthetic cells:
+a sweeping bar of light, and a closed loop that segments the cells with a
+method the directory brings along (`demo_methods.py`) and lights the outward
+half of each.
 
 See [First-Time Setup Guide](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) to get started.
 

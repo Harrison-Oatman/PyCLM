@@ -8,7 +8,7 @@ The ``pyclm`` command.
     pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N]
     pyclm export <dir> [channels ...] [--config FILE]
     pyclm gui <dir>
-    pyclm new <dir> [--template open-loop|closed-loop] [--name NAME]
+    pyclm new <dir> [--template open-loop|closed-loop] [--name NAME] [--demo]
 
 ``pyclm <dir> [--dry] [--gui]`` (the form before Stage 5) still means ``run``.
 Custom methods are loaded from ``methods`` in ``pyclm_config.toml`` and
@@ -109,6 +109,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--name", default="experiment", help="the experiment name (<name>.toml)"
+    )
+    p.add_argument(
+        "--demo",
+        action="store_true",
+        help="a demo that runs on the virtual microscope: two experiments and "
+        "synthetic images (ignores --template and --name)",
     )
     p.set_defaults(func=cmd_new)
     return parser
@@ -218,6 +224,15 @@ def cmd_gui(args) -> int:
 
 
 def cmd_new(args) -> int:
+    if args.demo:
+        from .demo import create_demo
+
+        written = create_demo(Path(args.directory))
+        print(f"created the demo in {args.directory}")
+        for path in written:
+            print(f"  {path.name}")
+        print(f"try: pyclm run {args.directory} --dry   (add --gui to watch)")
+        return 0
     from .templates import create
 
     written = create(Path(args.directory), args.template, args.name)

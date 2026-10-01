@@ -31,4 +31,11 @@ Mightex Polygon DLL is interface 71), pin the pair:
 `pip install "pymmcore==11.2.1.71.0" "pymmcore-plus==0.14.0"`. The
 repository's `uv.lock` already holds that pair.
 
+To see PyCLM work before connecting a microscope:
+
+```bash
+pyclm new demo --demo
+pyclm run demo --dry --gui
+```
+
 Next: [First-time setup](first_time_setup.md).

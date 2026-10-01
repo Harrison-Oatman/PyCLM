@@ -117,3 +117,50 @@ def test_open_loop_template_needs_no_segmentation(tmp_path):
 def test_export_on_an_empty_directory(tmp_path, capsys):
     assert cli.main(["export", str(tmp_path)]) == 0
     assert "exported 0 stack(s)" in capsys.readouterr().out
+
+
+def test_demo_runs_on_the_virtual_microscope(tmp_path, capsys):
+    """pyclm new --demo: a directory that checks clean and dry-runs, cells lit on their outer half."""
+    import numpy as np
+    import tifffile
+    from skimage.filters import threshold_otsu
+
+    import pyclm.io as pio
+    from pyclm import run_pyclm
+    from pyclm.check import check_directory
+
+    target = tmp_path / "demo"
+    assert cli.main(["new", str(target), "--demo"]) == 0
+    names = {p.name for p in target.iterdir()}
+    assert {
+        "bar.toml",
+        "cells.toml",
+        "demo_methods.py",
+        "bar.tif",
+        "cells.tif",
+    } <= names
+
+    report = check_directory(target)
+    assert report.ok, report.text()
+    assert "segmentation method 'threshold' from demo_methods.py" in report.text()
+
+    # a shorter schedule for the test
+    (target / "schedule.toml").write_text(
+        "[timing]\nsteps = 4\ninterval_seconds = 0.5\nsetup_time_seconds = 0.0\n"
+        "time_between_positions = 0.05\n"
+    )
+    run_pyclm(target, dry=True)
+    movie = tifffile.imread(target / "cells.tif")
+    with pio.open(target / "cells.00.zarr") as exp:
+        cam = exp.camera_pattern_at(exp.current_t) > 0
+        dmd = exp.pattern_at(exp.current_t) > 0
+    assert cam.shape == movie.shape[1:]  # the pattern is at the frames' binning
+    # the virtual microscope advances its TIF with every snap: compare with the
+    # frame the pattern was made from, the one it overlaps best
+    cells = max(
+        (frame > threshold_otsu(frame) for frame in movie),
+        key=lambda mask: (cam & mask).sum(),
+    )
+    assert (cam & cells).sum() / cam.sum() > 0.9  # the light lands on cells
+    assert 0.3 < (cam & cells).sum() / cells.sum() < 0.7  # about half of each
+    assert abs(dmd.mean() - cam.mean()) < 0.03  # the DMD shows the same amount

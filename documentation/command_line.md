@@ -30,6 +30,13 @@ that says what to edit next. `--template open-loop` gives a moving-bar
 experiment with no segmentation; `closed-loop` gives Cellpose segmentation
 and a per-cell pattern. Existing files are never overwritten.
 
+`pyclm new demo --demo` writes a directory that runs anywhere with
+`pyclm run demo --dry`: two experiments (`bar`, open loop; `cells`, closed
+loop with a threshold segmentation defined in the directory's
+`demo_methods.py` and listed under `methods` in its `pyclm_config.toml`),
+synthetic cell images, and a `dry_run.yml`. About thirty seconds; nothing is
+downloaded.
+
 ## `pyclm check`
 
 ```bash

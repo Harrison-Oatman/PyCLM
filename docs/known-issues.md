@@ -306,3 +306,20 @@ Not yet known: what switches the PFS off (the interface lost during a
 large z excursion is the usual cause; see the "Major Z position change"
 warnings in the same logs). If the restart does not bring it back, the
 next thing to try is `core.enableContinuousFocus(True)` / `fullFocus()`.
+
+### 35. Dry runs with `binning` in `dry_run.yml` store per-cell camera patterns at the wrong scale
+
+**Open, found 2026-10-01 while building `pyclm new --demo`.** The virtual
+microscope reports a camera `ROI_FACTOR` (4) times the TIF, so a method's
+`pattern_shape` is 4× the frames when the experiment's binning is 1.
+`dry_run.yml` `binning: b` compensates only in the SLM buffer (the affine
+is scaled by `b`), so the DMD pattern comes out right; but a method that
+paints from the frames' labels (`move_out`) draws into the top-left
+quarter of its 4×-sized canvas, and that is what `patterns/camera` stores
+(seen: 0.6 % of the camera pattern lit against 10 % of the DMD). Patterns
+that fill the field (bars) hide it. Working setup, used by the demo:
+experiments at `binning = 4`, `dry_run.yml` with the unbinned
+`pixel_size_um` and no `binning`; frames, patterns and both stored
+patterns then agree. Fix to decide: make the dry `binning` set the
+simulated camera's reported binning (so the pattern shape follows), or
+retire the key in favour of the TOML binning.
