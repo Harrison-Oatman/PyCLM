@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — next major release (core refactor, Stages 0–3)
+## 1.1.0 — unreleased (core refactor)
 
 This release rebuilds the internals of PyCLM in four staged, individually
 shippable steps while keeping the experiment TOML format, the
@@ -348,6 +348,47 @@ becomes a tagged release.
   while waiting for a lock) when the PFS has switched itself off; a
   repeated "On" alone was ignored and every later position timed out
   (known issue #34). The timeout message lists the status strings seen.
+
+### Distribution: `closed-loop-microscopy` on PyPI, custom methods from the command line
+
+- The package is published as **`closed-loop-microscopy`** (the import
+  name and the command stay `pyclm`): `pip install
+  "closed-loop-microscopy[gui]"` on a microscope PC, without `[gui]` for a
+  headless install (check, preview, dry runs, reading data). Version
+  1.1.0; `pyclm.__version__` is recorded in the OME-Zarr attributes and the
+  plan metadata.
+- The viewer is the **`gui` extra** (napari, PySide6). `pyclm gui` and
+  `run --gui` say how to install it when it is missing, before the
+  hardware is touched. In a clone, `uv sync` still installs it (the default
+  `dev` group includes the test group, which carries it).
+- Core dependencies trimmed: `opencv-python-headless` instead of
+  `opencv-python` (no second Qt next to napari's), `pydantic` and `scipy`
+  declared, `toml` replaced by the standard library's `tomllib`,
+  `notebook` moved to the `analysis` group and `pandas-stubs` to `dev`.
+- **`methods` in `pyclm_config.toml`**: Python files (relative to the
+  configuration) or module names whose `PatternMethod` /
+  `SegmentationMethod` / `TrackingMethod` subclasses are registered by
+  their `name`, for `pyclm run`, `check` and `preview`; installed packages
+  register theirs with a `pyclm.methods` entry point (`pyclm/methods.py`).
+  `pyclm check` lists what it loaded and reports a file that does not
+  import, a class without its own `name`, a built-in name, or one name in
+  two places; an unknown method's error says where custom methods are
+  listed. Methods passed to `run_pyclm` in code still work and win.
+- **`pyclm new <dir> --demo`**: two experiments (an open-loop bar; a
+  closed loop with a threshold segmentation defined in the directory's
+  `demo_methods.py` and loaded through `methods`), synthetic cell images
+  drawn on the spot, a `dry_run.yml` and a calibration covering the whole
+  simulated camera, so `pyclm run <dir> --dry` works on any computer.
+- **`CITATION.cff`**: the software's authors (Oatman, Gubbens, Toettcher)
+  and the Cell Systems paper as the preferred citation; the README has a
+  citation section.
+- **Release checks**: `scripts/check_release.py <tag>` fails unless the
+  tag is `v` + the `pyproject.toml` version and `CHANGELOG.md` has a dated
+  section for it (and `CITATION.cff` the same version); the publish workflow runs it and the test suite before
+  building.
+- TOML files are read with `tomllib` (TOML 1.0); a file the old `toml`
+  package accepted but that is not valid TOML 1.0 is now an error that
+  `pyclm check` names.
 
 ### Breaking changes for developers
 
