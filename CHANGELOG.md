@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 — unreleased (core refactor)
+## 1.1.0 — 2026-10-01 (core refactor)
 
 This release rebuilds the internals of PyCLM in four staged, individually
 shippable steps while keeping the experiment TOML format, the
