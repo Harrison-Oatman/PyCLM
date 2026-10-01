@@ -17,6 +17,7 @@ from .fbc_cell_movement import (
     MoveInModel,
     MoveOutModel,
     RotateCcwModel,
+    PeriodDirectedPattern,
 )
 from .pattern import (
     ROI,
@@ -55,4 +56,5 @@ known_models = {
     "rotate_bar": RotatingBarPattern,
     "embryo_inner": InnerPatternMethod,
     "embryo_outer": OuterPatternMethod,
+    "direction": PeriodDirectedPattern
 }
