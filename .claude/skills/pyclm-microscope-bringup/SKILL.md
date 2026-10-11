@@ -44,9 +44,15 @@ pyclm run demo --dry --gui
 
 ```bash
 pip install "closed-loop-microscopy[gui]"      # add [cellpose] for GPU segmentation
-mmcore use "<the Micro-Manager install folder>"
+mmcore use "<the Micro-Manager install folder>"   # tell pymmcore-plus which install to use
 pyclm check <any experiment dir>                # pyclm new <dir> makes one
 ```
+
+`mmcore` is pymmcore-plus's command (https://pymmcore-plus.github.io/pymmcore-plus/);
+`mmcore install` downloads a Micro-Manager nightly if the PC has none, and
+`mmcore list` shows what is installed. PyCLM does not need the
+Micro-Manager GUI to run, but the GUI is needed for the `.cfg`, the
+pixel-size calibration and the Projector calibration below.
 
 pymmcore loads the device adapters of the Micro-Manager installation,
 and both must be built for the same **device interface**. The interface
@@ -78,7 +84,12 @@ PyCLM switches channels with config-group presets. The researcher needs:
 
 - one group whose presets are the imaging channels;
 - a preset that routes light to the patterning device;
-- pixel-size presets for every objective.
+- pixel-size presets for every objective (Devices → Pixel Size
+  Calibration, or the Pixel Calibrator plugin), each conditioned on the
+  objective's device property, and each experiment TOML naming the
+  objective in `[config_groups]`. See
+  `documentation/first_time_setup.md`, §3b: every µm in a pattern
+  method comes from this pixel size.
 
 `pyclm check` validates every preset the TOMLs name against the `.cfg`
 and reports which pixel-size preset applies. If it reports "no pixel-size
@@ -97,6 +108,19 @@ Every field is documented in `documentation/first_time_setup.md`, §3.
 - `affine_transform` (camera to DMD, 2×3) and `slm_shape_h`/`slm_shape_w`
   come from the Projector plugin's calibration on the **unbinned, full**
   camera frame, per objective. Never type in numbers from another rig.
+  1. In the Micro-Manager GUI, open Plugins → Device Control → Projector,
+     with a uniform fluorescent sample (a highlighter-coated slide, or
+     dye) in focus, and run Calibrate
+     (https://micro-manager.org/Projector).
+  2. With the GUI still open, run `scripts/calibration.ipynb` from a
+     clone of the repository (needs `pip install
+     "closed-loop-microscopy[calibration]"`, which brings pycromanager,
+     and Micro-Manager's Tools → Options → "Run server on port 4827"
+     on). It reads the Projector's mapping and prints the 2×3 affine
+     (the median over the plugin's local maps); `core.get_slm_height`
+     and `get_slm_width` in the same notebook give the DMD shape.
+  3. Paste them into `pyclm_config.toml`, and check them with first light
+     (§4), not by eye on the numbers.
   Keep one config per objective, as `pyclm_config.<objective>.toml`; only
   one may sit in an experiment directory.
 - `camera_roi`: `pyclm check` prints the DMD footprint and suggests it.
