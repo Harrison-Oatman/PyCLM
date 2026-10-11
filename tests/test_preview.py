@@ -13,7 +13,7 @@ import tifffile
 
 from pyclm.core.patterns import PatternMethod
 from pyclm.core.segmentation import SegmentationMethod
-from pyclm.preview import preview
+from pyclm.preview import parse_timepoints, preview
 from pyclm.schema import ConfigError
 
 RESOURCES = Path(__file__).parent / "dry_run_resources"
@@ -141,3 +141,97 @@ def test_stimulation_only_preview(exp_dir, tif):
     assert "raw DMD" in result.paths
     assert result.pattern.shape == (120, 160)
     assert result.pattern.min() == 1.0
+
+
+def test_series_preview_writes_stacks_montage_and_animation(exp_dir, tif):
+    """Several timepoints: the bar moves, and every pattern file is a stack."""
+    schedule = exp_dir / "schedule.toml"
+    schedule.write_text(
+        schedule.read_text().replace(
+            "interval_seconds = 1.0", "interval_seconds = 60.0"
+        )
+    )
+    result = preview(exp_dir, "bar10", image=tif, t=range(0, 61, 10), pixel_size_um=0.5)
+
+    camera = tifffile.imread(result.paths["pattern (camera)"])
+    assert camera.shape == (7, 120, 160)
+    assert tifffile.imread(result.paths["pattern (DMD)"]).shape == (7, 1140, 912)
+    # a moving bar: no two timepoints light the same pixels
+    assert all(not np.array_equal(camera[i], camera[i + 1]) for i in range(6))
+    assert np.array_equal(camera[-1], np.clip(result.pattern, 0, 1))
+    assert result.paths["montage"].exists()
+    assert result.paths["animation"].exists()
+    info = json.loads(result.paths["summary"].read_text())
+    assert [row["t"] for row in info["timepoints"]] == [0, 10, 20, 30, 40, 50, 60]
+    assert all(row["active"] and row["stimulated"] for row in info["timepoints"])
+    assert info["timepoints"][1]["time_s"] == 600.0
+    assert info["t"] == 60
+    assert "7 timepoints, t = 0 to 60" in result.text()
+
+
+def test_series_preview_matches_single_timepoints(exp_dir, tif):
+    """Each frame of a series is what a one-timepoint preview gives at that t."""
+    series = preview(exp_dir, "bar10", image=tif, t=[3, 7], pixel_size_um=0.5)
+    stack = tifffile.imread(series.paths["pattern (camera)"])
+    for i, t in enumerate((3, 7)):
+        single = preview(exp_dir, "bar10", image=tif, t=t, pixel_size_um=0.5)
+        assert np.array_equal(stack[i], np.clip(single.pattern, 0, 1))
+
+
+def test_series_preview_is_dark_outside_t_delay_and_t_stop(exp_dir, tif):
+    toml = exp_dir / "bar10.toml"
+    toml.write_text("t_delay = 2\nt_stop = 3\n" + toml.read_text())
+    result = preview(exp_dir, "bar10", image=tif, t=range(0, 7), pixel_size_um=0.5)
+
+    camera = tifffile.imread(result.paths["pattern (camera)"])
+    info = json.loads(result.paths["summary"].read_text())
+    active = [row["active"] for row in info["timepoints"]]
+    assert active == [False, False, True, True, True, False, False]
+    for i, on in enumerate(active):
+        assert (camera[i].max() > 0) == on
+
+
+def test_series_preview_keeps_state_between_timepoints(exp_dir, tif):
+    """A closed loop sees its own previous pattern and the tracker keeps its ids."""
+    toml = exp_dir / "bar10.toml"
+    text = toml.read_text()
+    toml.write_text(
+        text[: text.index("[pattern]")]
+        + '[segmentation]\nmethod = "threshold"\n\n[tracking]\nmethod = "centroid"\n\n'
+        '[pattern]\nmethod = "alternate"\n'
+    )
+
+    class Alternate(PatternMethod):
+        """Light the tracked cells at every other generation."""
+
+        name = "alternate"
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.add_requirement("545", raw=True, seg=True, tracks=True)
+
+        def generate(self, context):
+            on = context.last_pattern() is None or context.last_pattern().max() == 0
+            return context.tracks("545").paint(1.0 if on else 0.0)
+
+    result = preview(
+        exp_dir,
+        "bar10.00",
+        image=tif,
+        t=range(4),
+        segmentation_methods={"threshold": Threshold},
+        pattern_methods={"alternate": Alternate},
+    )
+    camera = tifffile.imread(result.paths["pattern (camera)"])
+    assert [bool(frame.max()) for frame in camera] == [True, False, True, False]
+    tracks = tifffile.imread(result.paths["labels 545 tracks"])
+    assert set(np.unique(tracks)) == {0, 1, 2}
+
+
+def test_parse_timepoints():
+    assert parse_timepoints("5") == [5]
+    assert parse_timepoints("0:10:5") == [0, 5, 10]
+    assert parse_timepoints("2:4") == [2, 3, 4]
+    for bad in ("a", "5:1", "0:10:0", "1:2:3:4", "-1:3"):
+        with pytest.raises(ValueError, match="start:stop"):
+            parse_timepoints(bad)
