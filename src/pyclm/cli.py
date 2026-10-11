@@ -5,7 +5,7 @@ The ``pyclm`` command.
 
     pyclm run <dir> [--config FILE] [--dry] [--gui] [--no-check | --force]
     pyclm check <dir> [--config FILE] [--mm-config FILE] [--dry]
-    pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N]
+    pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N | --t A:B[:STEP]]
     pyclm export <dir> [channels ...] [--config FILE]
     pyclm gui <dir>
     pyclm new <dir> [--template open-loop|closed-loop] [--name NAME] [--demo]
@@ -76,7 +76,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--out", default=None, help="output directory (default: <dir>/preview/<label>)"
     )
-    p.add_argument("--t", type=int, default=0, help="the timepoint to pretend it is")
+    p.add_argument(
+        "--t",
+        default="0",
+        help="the timepoint to pretend it is, or start:stop[:step] for a series "
+        "(0:240:5; the end is included)",
+    )
     p.add_argument(
         "--pixel-size-um",
         type=float,
@@ -161,8 +166,13 @@ def cmd_check(args) -> int:
 
 def cmd_preview(args) -> int:
     from .methods import MethodLoadError
-    from .preview import preview
+    from .preview import parse_timepoints, preview
 
+    try:
+        timepoints = parse_timepoints(args.t)
+    except ValueError as e:
+        print(f"error: {e}")
+        return 1
     try:
         result = preview(
             Path(args.directory),
@@ -171,7 +181,7 @@ def cmd_preview(args) -> int:
             snap=args.snap,
             config_path=args.config,
             out_dir=args.out,
-            t=args.t,
+            t=timepoints if len(timepoints) > 1 else timepoints[0],
             pixel_size_um=args.pixel_size_um,
         )
     except MethodLoadError as e:

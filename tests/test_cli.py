@@ -60,7 +60,7 @@ def test_old_form_and_subcommands_dispatch(monkeypatch, tmp_path):
     assert (calls[3][1]["experiment"], calls[3][1]["image"], calls[3][1]["t"]) == (
         "bar10",
         "a.tif",
-        3,
+        "3",
     )
     assert calls[4][1]["channels"] == ["545", "stim"]
     assert (calls[6][1]["template"], calls[6][1]["name"]) == ("open-loop", "bar")

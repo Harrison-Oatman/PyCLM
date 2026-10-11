@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `pyclm preview --t START:STOP[:STEP]` previews a stretch of the schedule
+  in seconds: the method runs at each timepoint with its state kept, and
+  the preview adds pattern stacks, a captioned montage and an animation.
+
 ## 1.1.0 — 2026-10-01 (core refactor)
 
 This release rebuilds the internals of PyCLM in four staged, individually

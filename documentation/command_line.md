@@ -108,7 +108,28 @@ into `my_experiment/preview/<label>/`:
 
 The experiment is a position label from the position list or a TOML stem;
 `--t N` sets the timepoint the method believes it is at (for methods that
-depend on time). For a grid position the method sees the stitched frame: a
+depend on time).
+
+`--t START:STOP[:STEP]` previews a stretch of the schedule, `STOP` included:
+
+```bash
+uv run pyclm preview my_experiment bar --image snap.tif --t 0:240:5
+```
+
+The method runs at each timepoint in turn on the same image, keeping its
+state between them as it would in a run (its previous patterns, the
+histories it asked for, the tracker's ids), so a whole schedule of light
+can be checked in seconds instead of a dry run that takes as long as the
+experiment. Segmentation runs once, on the one image. Timepoints before
+`t_delay` or after `t_stop` are left dark. `pattern_camera.tif` and
+`pattern_dmd.tif` become stacks with one frame per timepoint, and two files
+are added: `pattern_montage.png`, up to twelve evenly spaced overlays
+captioned with the timepoint and the minutes since the start, and
+`pattern_overlay.gif`, every overlay in turn. `preview.json` lists, for
+each timepoint, whether the experiment is active, whether the stimulation
+cadence (`every_t`) delivers light then, and the fraction of the field lit.
+A closed-loop method sees the same image at every timepoint, so the series
+shows its timing and memory, not how it responds to cells that move. For a grid position the method sees the stitched frame: a
 tile-sized `--image` is tiled rows × columns, a stitched-size one is used
 as it is, and `pattern_dmd.tif` holds one DMD image per tile. Without `--pixel-size-um`, a TIF is taken to be what the
 directory's `dry_run.yml` says (`pixel_size_um`, `binning`; see the dry run
