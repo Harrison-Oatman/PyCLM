@@ -10,6 +10,23 @@ file checked and a dry run that shows the pattern they meant. Do not
 write a custom pattern method until the built-in ones are ruled out; for
 that, use the `pyclm-write-pattern-method` skill.
 
+**The researcher decides.** You propose; the researcher approves. Before
+writing files, and again before handing over, put each design decision to
+them with a few sentences of plain prose that give the context that
+matters for it, then wait for their answer. Decisions that change the
+science need approval, for example:
+
+- which conditions are tested (speeds, intensities, drugs);
+- how many positions each condition gets, and which are controls;
+- the final list of positions for a run;
+- leaving a position or run out of an analysis.
+
+Choices that do not change the science you make yourself and mention
+briefly: file layout, names, comments, how a check is run. Keep each
+approval short and about one decision. A long list of small approvals
+trains people to approve without reading, and then the researcher has
+lost control of the design without noticing.
+
 **Where the documentation is.** In a clone of the repository, the files
 named below are under `documentation/` and `src/`. After a plain pip
 install, read the same pages on https://pyclm.readthedocs.io (for example
