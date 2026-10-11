@@ -1,7 +1,10 @@
-@ -1,79 +0,0 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Agent skills
+
+`.claude/skills/` holds the skills for people setting PyCLM up in their own lab: `pyclm-microscope-bringup`, `pyclm-design-experiment`, `pyclm-write-pattern-method`. They are linked from the README; keep them in step with the commands, config keys and documentation pages they name when those change.
 
 ## Commands
 

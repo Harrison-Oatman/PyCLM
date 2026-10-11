@@ -50,6 +50,35 @@ half of each.
 
 See [First-Time Setup Guide](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) to get started.
 
+## Setting up with an AI coding agent
+
+New to PyCLM? The repository includes three
+[agent skills](.claude/skills/): step-by-step guides that let a coding
+agent such as [Claude Code](https://claude.com/claude-code) walk you
+through the parts that usually take the longest. The agent runs the
+`pyclm` checks itself, and asks you only about your microscope and your
+experiment.
+
+| Skill | What it helps with |
+|---|---|
+| [`pyclm-microscope-bringup`](.claude/skills/pyclm-microscope-bringup/SKILL.md) | Getting PyCLM running on your microscope: install, the Micro-Manager device interface, the `.cfg` presets, `pyclm_config.toml` (DMD calibration, camera ROI, focus lock), and the first real run. |
+| [`pyclm-design-experiment`](.claude/skills/pyclm-design-experiment/SKILL.md) | Turning an experiment idea ("a bar of light moving at 1 µm/min over half my wells") into a checked experiment folder and a dry run on the virtual microscope. |
+| [`pyclm-write-pattern-method`](.claude/skills/pyclm-write-pattern-method/SKILL.md) | Turning a light rule described in words ("light cells whose reporter is below X") into a tested pattern method. |
+
+To use them, start Claude Code in a clone of this repository; it loads
+the skills from `.claude/skills/` and the project notes from
+`CLAUDE.md`. Then describe what you want, for example "help me set up
+PyCLM on our Nikon Ti2 with a Mightex Polygon". To use the skills from
+another folder, such as the one holding your experiments, copy the three
+folders in `.claude/skills/` into that folder's `.claude/skills/`, or
+into `~/.claude/skills/` to have them everywhere. The skills are plain
+Markdown in the open `SKILL.md` format, so other agents that read skills,
+or a person, can follow them too.
+
+The agent never changes your Micro-Manager configuration; it tells you
+what to change. Its work on the virtual microscope (`--dry`) is safe to
+try before going to the scope.
+
 ### Hardware requirement: Micro-Manager
 
 PyCLM controls hardware through [pymmcore-plus](https://github.com/pymmcore-plus/pymmcore-plus), which wraps the [Micro-Manager](https://micro-manager.org) C++ core.  The Python package installs without issue, but running a real experiment requires:

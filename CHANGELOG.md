@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Agent skills for new users in `.claude/skills/`: microscope bring-up,
+  experiment design, and writing a pattern method. The README points to
+  them. `claude.md` is now `CLAUDE.md`, so Claude Code loads it on
+  case-sensitive file systems.
+
 ## 1.1.0 — 2026-10-01 (core refactor)
 
 This release rebuilds the internals of PyCLM in four staged, individually
