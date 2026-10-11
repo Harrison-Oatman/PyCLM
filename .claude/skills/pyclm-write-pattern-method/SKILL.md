@@ -35,7 +35,7 @@ https://github.com/Harrison-Oatman/PyCLM, or in the installed package
   Never apply the affine yourself. PyCLM sends the DMD 0 to 255; whether
   values between 0 and 1 give intermediate light depends on the device
   and its adapter (many DMDs are binary), so treat the pattern as on/off
-  unless the researcher has checked grey levels on their rig.
+  unless the researcher has checked gray levels on their rig.
 - Every argument of `__init__` is a TOML key under `[pattern]`. Use
   physical units in the names (`radius_um`, `period_min`), not pixels.
 - Derive anything that depends on the field from `self.get_um_meshgrid()`,
