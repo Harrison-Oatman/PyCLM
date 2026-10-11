@@ -8,6 +8,12 @@ camera-to-DMD transform), so what preview shows is what the run does. The
 image is a TIF (used for every channel the method needs) or one frame
 snapped per channel from the microscope.
 
+Given several timepoints (``t=range(...)``, ``--t 0:240:5`` on the command
+line), the method runs at each in turn on the same image, keeping its
+state between them as in a run, so a whole schedule of light can be seen
+in seconds instead of a real-time dry run. The pattern files are then
+stacks, and a labeled montage and an animation are added.
+
 See docs/stage5-schema-setup-design.md §6.
 """
 
@@ -33,6 +39,7 @@ from .core.patterns import (
     ROI,
     CameraProperties,
     DataDock,
+    ExperimentState,
     PatternContext,
 )
 from .core.plan import _channel_group, _stim_channel_name
@@ -58,6 +65,14 @@ class PreviewResult:
     def text(self) -> str:
         lines = [f"preview of {self.label} -> {self.out_dir}"]
         info = self.info
+        series = info.get("timepoints")
+        if series:
+            lit = [row["lit_fraction"] for row in series]
+            lines.append(
+                f"  {len(series)} timepoints, t = {series[0]['t']} to {series[-1]['t']}: "
+                f"{min(lit) * 100:.1f} to {max(lit) * 100:.1f} % of the field lit, "
+                f"{sum(not row['active'] for row in series)} with the experiment inactive"
+            )
         lines.append(
             f"  pattern method '{info.get('method')}' {info.get('kwargs', {})}: "
             f"{info.get('lit_fraction', 0) * 100:.1f} % of the field lit, "
@@ -82,6 +97,57 @@ def _resolve_experiment(directory: Path, experiment: str) -> tuple[Path, str]:
         raise ConfigError(toml, [f"no experiment file for '{experiment}'"])
     label = experiment if "." in experiment else f"{stem}.preview"
     return toml, label
+
+
+def parse_timepoints(text: str) -> list[int]:
+    """``"5"`` -> [5]; ``"0:240:5"`` -> 0, 5, ..., 240 (the end is included)."""
+    parts = [p.strip() for p in str(text).split(":")]
+    try:
+        if len(parts) == 1:
+            return [int(parts[0])]
+        if len(parts) in (2, 3):
+            start, stop = int(parts[0]), int(parts[1])
+            step = int(parts[2]) if len(parts) == 3 else 1
+            if step > 0 and stop >= start >= 0:
+                return list(range(start, stop + 1, step))
+    except ValueError:
+        pass
+    raise ValueError(
+        f"--t {text!r}: give a timepoint (5) or start:stop[:step] (0:240:5), "
+        "with 0 <= start <= stop and step > 0"
+    )
+
+
+def _montage(frames: list[np.ndarray], captions: list[str], n: int = 12) -> np.ndarray:
+    """Up to ``n`` evenly spaced RGB frames in a grid, each captioned."""
+    import cv2
+
+    pick = np.unique(np.linspace(0, len(frames) - 1, min(n, len(frames))).astype(int))
+    tiles = []
+    for i in pick:
+        tile = np.ascontiguousarray(frames[i])
+        scale = max(tile.shape[0], tile.shape[1]) / 400
+        cv2.putText(
+            tile,
+            captions[i],
+            (int(8 * scale), int(28 * scale)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8 * scale,
+            (255, 255, 0),
+            max(1, int(2 * scale)),
+            cv2.LINE_AA,
+        )
+        tiles.append(tile)
+    columns = min(4, len(tiles))
+    rows = -(-len(tiles) // columns)
+    h, w = tiles[0].shape[:2]
+    grid = np.full(
+        (rows * h + (rows - 1) * 4, columns * w + (columns - 1) * 4, 3), 255, np.uint8
+    )
+    for k, tile in enumerate(tiles):
+        r, c = divmod(k, columns)
+        grid[r * (h + 4) : r * (h + 4) + h, c * (w + 4) : c * (w + 4) + w] = tile
+    return grid
 
 
 def _position_for(directory: Path, label: str) -> MicroscopePosition:
@@ -136,16 +202,24 @@ def preview(
     snap: bool = False,
     config_path=None,
     out_dir=None,
-    t: int = 0,
+    t: int | list[int] = 0,
     pixel_size_um: float | None = None,
     pattern_methods=None,
     segmentation_methods=None,
     tracking_methods=None,
 ) -> PreviewResult:
-    """See the module docstring. Returns the written paths and the pattern."""
+    """
+    See the module docstring. Returns the written paths and the pattern (the
+    last one, when ``t`` is several timepoints).
+    """
     import tifffile
     from skimage.io import imsave
 
+    timepoints = [int(t)] if np.isscalar(t) else [int(v) for v in t]
+    if not timepoints:
+        raise ValueError("preview needs at least one timepoint")
+    series = len(timepoints) > 1
+    t = timepoints[0]
     directory = Path(directory)
     toml, label = _resolve_experiment(directory, experiment)
     cfg = ExperimentConfig.from_file(toml)
@@ -288,7 +362,10 @@ def preview(
     by_id[exp.stimulation.channel_id] = ("stimulation", exp.stimulation)
     pp.positions = {label: position}
 
-    dock = DataDock(t * interval_s, reqs)
+    # the inputs are gathered once (segmentation runs once on the one image);
+    # tracking runs again at every timepoint, as it does in a run
+    deliveries: list = []
+    to_track: list = []
     seg_seconds: dict[str, float] = {}
     objects: dict[str, int] = {}
     labels_by_channel: dict[tuple[str, str], np.ndarray] = {}
@@ -309,7 +386,7 @@ def preview(
         data = AcquisitionData(event, raw)
         for kind in req.kinds:
             if kind == "raw":
-                dock.add(data)
+                deliveries.append(data)
             elif is_seg_kind(kind):
                 name = seg_name(kind)
                 if (label, name) not in seg_proc.models:
@@ -322,7 +399,7 @@ def preview(
                 lab = np.asarray(seg.data)
                 objects[name] = len(np.unique(lab[lab > 0]))
                 labels_by_channel[(channel, name)] = lab
-                dock.add(seg)
+                deliveries.append(seg)
             elif kind == "tracks":
                 tracked = exp.tracking.segmentation
                 if (channel, tracked) not in labels_by_channel:
@@ -331,22 +408,73 @@ def preview(
                     seg = seg_proc.run_model(label, data, tracked)
                     labels_by_channel[(channel, tracked)] = np.asarray(seg.data)
                 method = tracking_proc.request_method(exp, channel)
-                lab, rows = method.track(labels_by_channel[(channel, tracked)], t, px)
-                dock.add(TrackingData(event, lab, rows))
-                labels_by_channel[(channel, "tracks")] = lab
-    if not dock.check_complete():
-        raise RuntimeError(f"preview could not gather {dock.get_awaiting()}")
+                to_track.append((channel, event, tracked, method))
     if not frames:
         # an open-loop method asks for nothing; still show the image it would light
         frames[probe_channel] = probe
 
     # -------------------------------------------------------- pattern
-    context = PatternContext(dock, exp, t=t, position=position)
-    started = time.perf_counter()
-    pattern = np.asarray(model.generate(context), dtype=np.float32)
-    generate_s = time.perf_counter() - started
+    # one state across the timepoints, as the pattern process keeps it
+    state = ExperimentState(reqs, pattern_history=getattr(model, "pattern_history", 2))
+    stim_every = max(1, int(exp.stimulation.every_t))
+    patterns: list[np.ndarray] = []
+    rows: list[dict] = []
+    requests: list[str] = []
+    generate_s = 0.0
+    for i, t_now in enumerate(timepoints):
+        relative = t_now - int(exp.t_delay)
+        active = relative >= 0 and (int(exp.t_stop) <= 0 or relative < int(exp.t_stop))
+        if series and not active:
+            # outside t_delay / t_stop the run lights nothing (filled in below)
+            rows.append({"t": t_now, "time_s": t_now * interval_s, "active": False})
+            patterns.append(None)
+            continue
+        dock = DataDock(t_now * interval_s, reqs)
+        for data in deliveries:
+            dock.add(data)
+        for channel, event, tracked, method in to_track:
+            lab, track_rows = method.track(
+                labels_by_channel[(channel, tracked)], t_now, px
+            )
+            dock.add(TrackingData(event, lab, track_rows))
+            labels_by_channel[(channel, "tracks")] = lab
+        if not dock.check_complete():
+            raise RuntimeError(f"preview could not gather {dock.get_awaiting()}")
+        state.absorb(dock, t_now)
+        context = PatternContext(state, exp, position=position)
+        started = time.perf_counter()
+        pattern = np.asarray(model.generate(context), dtype=np.float32)
+        generate_s += time.perf_counter() - started
+        state.record_pattern(i, pattern)
+        for change in (c.describe() for c in context.requests):
+            if change not in requests:
+                requests.append(change)
+        patterns.append(pattern)
+        rows.append(
+            {
+                "t": t_now,
+                "time_s": t_now * interval_s,
+                "active": active,
+                "stimulated": relative % stim_every == 0,
+                "lit_fraction": float((pattern > 0).mean()) if pattern.size else 0.0,
+                "mean_intensity": float(np.clip(pattern, 0, 1).mean()),
+            }
+        )
+    if all(p is None for p in patterns):
+        raise ValueError(
+            f"the experiment is inactive at every timepoint asked for "
+            f"(t_delay = {exp.t_delay}, t_stop = {exp.t_stop})"
+        )
+    # inactive timepoints: no light, at the pattern's shape
+    shape = next(p for p in patterns if p is not None).shape
+    patterns = [np.zeros(shape, np.float32) if p is None else p for p in patterns]
+    for row in rows:
+        row.setdefault("stimulated", False)
+        row.setdefault("lit_fraction", 0.0)
+        row.setdefault("mean_intensity", 0.0)
+    pattern = patterns[-1]
     result.pattern = pattern
-    result.requests = [c.describe() for c in context.requests]
+    result.requests = requests
 
     # ---------------------------------------------------------- outputs
     for channel, raw in frames.items():
@@ -358,29 +486,54 @@ def preview(
         tifffile.imwrite(path, lab.astype(np.uint32 if name == "tracks" else np.uint16))
         result.paths[f"labels {channel} {name}"] = path
     camera_pattern = np.clip(pattern, 0, 1)
+    camera_stack = np.clip(np.stack(patterns), 0, 1).astype(np.float32)
     path = out_dir / "pattern_camera.tif"
-    tifffile.imwrite(path, camera_pattern.astype(np.float32))
+    tifffile.imwrite(
+        path,
+        camera_stack if series else camera_pattern.astype(np.float32),
+        photometric="minisblack",
+    )
     result.paths["pattern (camera)"] = path
     first = next(iter(frames.values()), None)
     if first is not None:
         path = out_dir / "pattern_overlay.png"
         imsave(path, _overlay(first, camera_pattern), check_contrast=False)
         result.paths["overlay"] = path
+        if series:
+            import imageio.v3 as iio
+
+            overlays = [_overlay(first, p) for p in camera_stack]
+            captions = []
+            for row in rows:
+                note = "" if row["active"] and row["stimulated"] else "  no light"
+                captions.append(f"t={row['t']}  {row['time_s'] / 60:.1f} min{note}")
+            path = out_dir / "pattern_montage.png"
+            imsave(path, _montage(overlays, captions), check_contrast=False)
+            result.paths["montage"] = path
+            path = out_dir / "pattern_overlay.gif"
+            iio.imwrite(path, np.stack(overlays), duration=200, loop=0)
+            result.paths["animation"] = path
     if config is not None:
         slm = SLMBuffer(AllQueues())
         slm.initialize(config.slm_shape, config.affine, [label], roi=config.camera_roi)
-        if geometry is not None:
-            # one DMD image per tile, stacked in tile order
-            dmd = np.stack(
-                [
-                    slm.pattern_to_slm(tile, model.binning * source_binning)
-                    for tile in cut(pattern, geometry, model.binning * source_binning)
-                ]
-            )
-        else:
-            dmd = slm.pattern_to_slm(pattern, model.binning * source_binning)
+        scale = model.binning * source_binning
+
+        def to_dmd(p: np.ndarray) -> np.ndarray:
+            if geometry is not None:
+                # one DMD image per tile, stacked in tile order
+                return np.stack(
+                    [
+                        slm.pattern_to_slm(tile, scale)
+                        for tile in cut(p, geometry, scale)
+                    ]
+                )
+            return slm.pattern_to_slm(p, scale)
+
+        dmd = np.stack([to_dmd(p) for p in patterns]) if series else to_dmd(pattern)
         path = out_dir / "pattern_dmd.tif"
-        tifffile.imwrite(path, np.asarray(dmd, dtype=np.uint8))
+        tifffile.imwrite(
+            path, np.asarray(dmd, dtype=np.uint8), photometric="minisblack"
+        )
         result.paths["pattern (DMD)"] = path
         dmd_lit = float((np.asarray(dmd) > 0).mean())
     else:
@@ -390,8 +543,8 @@ def preview(
     result.info = {
         "experiment": stem,
         "label": label,
-        "t": t,
-        "time_s": t * interval_s,
+        "t": timepoints[-1] if series else t,
+        "time_s": (timepoints[-1] if series else t) * interval_s,
         "source": source,
         "pixel_size_um": px,
         "binning": binning,
@@ -406,6 +559,7 @@ def preview(
         "lit_fraction": lit,
         "dmd_lit_fraction": dmd_lit,
         "requested_settings": result.requests,
+        "timepoints": rows if series else None,
         "outputs": {k: str(v) for k, v in result.paths.items()},
     }
     path = out_dir / "preview.json"
