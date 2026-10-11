@@ -12,7 +12,7 @@ Given several timepoints (``t=range(...)``, ``--t 0:240:5`` on the command
 line), the method runs at each in turn on the same image, keeping its
 state between them as in a run, so a whole schedule of light can be seen
 in seconds instead of a real-time dry run. The pattern files are then
-stacks, and a labelled montage and an animation are added.
+stacks, and a labeled montage and an animation are added.
 
 See docs/stage5-schema-setup-design.md §6.
 """
