@@ -5,6 +5,11 @@
 - `pyclm preview --t START:STOP[:STEP]` previews a stretch of the schedule
   in seconds: the method runs at each timepoint with its state kept, and
   the preview adds pattern stacks, a captioned montage and an animation.
+- Agent skills for new users in `.claude/skills/`: microscope bring-up,
+  experiment design, and writing a pattern method. The README points to
+  them. `claude.md` is now `CLAUDE.md`, so Claude Code loads it on
+  case-sensitive file systems. The first-time setup now gives the position
+  naming rule the code uses (`<toml stem>.<suffix>`; it said `-`).
 
 ## 1.1.0 — 2026-10-01 (core refactor)
 

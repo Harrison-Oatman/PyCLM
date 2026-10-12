@@ -207,12 +207,12 @@ The `extras` dict is populated from any devices in the position list beyond the 
 
 Open MicroManager and navigate to **Devices → Stage Position List**. Add all imaging positions, assigning names that match your experiment TOML files (see Section 6). Save the list as `PositionList.pos` and place it in the experiment directory.
 
-**Position naming convention:** Each position name must start with the stem of a `.toml` filename in the same directory, followed by `-` and any suffix. For example:
+**Position naming convention:** Each position name must start with the stem of a `.toml` filename in the same directory, followed by `.` and any suffix (PyCLM reads the stem as everything before the first `.`, so the stem itself cannot contain one). For example:
 
 ```
-feedback_ctrl-pos1
-feedback_ctrl-pos2
-open_loop-pos1
+feedback_ctrl.pos1
+feedback_ctrl.pos2
+open_loop.pos1
 ```
 
 These three positions would use `feedback_ctrl.toml` for the first two and `open_loop.toml` for the third.
