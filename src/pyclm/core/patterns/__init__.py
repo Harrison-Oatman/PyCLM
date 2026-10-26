@@ -58,5 +58,5 @@ known_models = {
     "embryo_inner": InnerPatternMethod,
     "embryo_outer": OuterPatternMethod,
     "direction": PeriodDirectedPattern,
-    "wave": WavePatternBase,
+    "rings": WavePatternBase,
 }

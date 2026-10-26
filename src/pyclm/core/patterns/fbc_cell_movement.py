@@ -203,7 +203,7 @@ class PeriodDirectedPattern(PerCellPatternMethod):
     name = "direction"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"sequence": "urdl", "period_h": 2, "channel": "638", "gradient": False},
+        kwargs={"sequence": "urdl", "period_h": 2, "channel": "638"},
         title="Direction Sequence",
         description="Lights one side of every cell, stepping through a sequence of directions (u, d, l, r, or s for off) every period_h hours.",
         group="per_cell",
@@ -211,8 +211,10 @@ class PeriodDirectedPattern(PerCellPatternMethod):
     )
 
     direction_vec: ClassVar[dict[str, tuple[int, int]]] = {
-        "u": (1, 0),
-        "d": (-1, 0),
+        # (y, x) in image rows and columns: +y is down the image, and cells
+        # move towards the lit side
+        "u": (-1, 0),
+        "d": (1, 0),
         "r": (0, 1),
         "l": (0, -1),
     }
@@ -264,9 +266,10 @@ class PeriodDirectedPattern(PerCellPatternMethod):
 
 class MoveDownModel(PerCellPatternMethod):
     name = "move_down"
+    deprecated = 'use method = "direction" with sequence = "d", voronoi = false, gradient = false'
     zoo_meta = ZooMeta(
         same_as="direction",
-        equivalent='sequence = "u", voronoi = false, gradient = false',
+        equivalent='sequence = "d", voronoi = false, gradient = false',
     )
 
     def __init__(self, channel=None, **kwargs):
@@ -283,9 +286,13 @@ class MoveDownModel(PerCellPatternMethod):
 
 class BounceModel(PerCellPatternMethod):
     name = "fb_bounce"
+    deprecated = (
+        'use method = "direction" with sequence = "du", period_h = t_loop / 120, '
+        "voronoi = false, gradient = false"
+    )
     zoo_meta = ZooMeta(
         same_as="direction",
-        equivalent='sequence = "ud", period_h = t_loop / 120, voronoi = false, gradient = false',
+        equivalent='sequence = "du", period_h = t_loop / 120, voronoi = false, gradient = false',
     )
 
     def __init__(self, channel=None, t_loop=60, **kwargs):

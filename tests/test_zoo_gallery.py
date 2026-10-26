@@ -90,9 +90,9 @@ def test_global_cycle_is_global_pulse_with_the_listed_arguments():
 @pytest.mark.parametrize(
     ("name", "kwargs", "direction_kwargs"),
     [
-        ("move_down", {}, {"sequence": "u"}),
+        ("move_down", {}, {"sequence": "d"}),
         # fb_bounce reverses every half-loop: down, then up, then down again
-        ("fb_bounce", {"t_loop": 60}, {"sequence": "ud", "period_h": 0.5}),
+        ("fb_bounce", {"t_loop": 60}, {"sequence": "du", "period_h": 0.5}),
     ],
 )
 def test_per_cell_aliases_match_direction(name, kwargs, direction_kwargs):
@@ -115,3 +115,22 @@ def test_per_cell_aliases_match_direction(name, kwargs, direction_kwargs):
             np.asarray(alias.generate(context), float),
             np.asarray(general.generate(context), float),
         ), minutes
+
+
+@pytest.mark.parametrize(
+    ("letter", "lit_rows"), [("u", slice(0, 5)), ("d", slice(5, 10))]
+)
+def test_direction_lights_the_side_cells_should_move_to(letter, lit_rows):
+    """Cells move towards the light; rows grow down the image."""
+    from pyclm.core.patterns.zoo import ZooContext
+
+    seg = np.zeros((10, 10), np.int32)
+    seg[:, 2:8] = 1
+    method = known_models["direction"](
+        sequence=letter, channel="638", voronoi=False, gradient=False
+    )
+    method.pattern_shape = seg.shape
+    pattern = np.asarray(method.generate(ZooContext(seg.astype(float), seg)), float)
+    lit = np.zeros_like(pattern, bool)
+    lit[lit_rows, 2:8] = True  # the centroid is at row 4.5
+    assert np.array_equal(pattern > 0, lit)

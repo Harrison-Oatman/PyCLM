@@ -116,6 +116,18 @@ def test_requirements_are_checked_against_the_tables(good_dir):
     assert "needs tracks but the file has no [tracking] table" in errors
 
 
+def test_deprecated_method_is_a_warning_naming_its_replacement(good_dir):
+    toml = good_dir / "bar10.toml"
+    text = toml.read_text()
+    text = text[: text.index("[pattern]")] + '[pattern]\nmethod = "global_cycle"\n'
+    toml.write_text(text)
+    report = check_directory(good_dir)
+    warnings = "\n".join(messages(report, "warning"))
+    assert (
+        "method 'global_cycle' is deprecated: use method = \"global_pulse\"" in warnings
+    )
+
+
 def test_unused_segmentation_and_tracking_are_warnings(good_dir):
     toml = good_dir / "bar10.toml"
     toml.write_text(

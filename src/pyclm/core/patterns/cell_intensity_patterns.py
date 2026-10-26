@@ -66,8 +66,8 @@ class BinaryNucleusClampModel(NucleusControlMethod):
     zoo_meta = ZooMeta(
         source="mcf10a",
         title="Bang-Bang Controller",
-        kwargs={"channel": "545", "clamp_target": 1300},
-        description="Lights each nucleus whose mean intensity is below clamp_target (camera counts).",
+        kwargs={"channel": "545", "clamp_target": 65},
+        description="Lights each nucleus whose mean intensity is below clamp_target.",
         group="per_nucleus",
     )
 
@@ -86,8 +86,8 @@ class CenteredImageModel(NucleusControlMethod):
         kwargs={
             "channel": "545",
             "tif_path": "target_radial.tif",
-            "min_intensity": 800,
-            "max_intensity": 2000,
+            "min_intensity": 40,
+            "max_intensity": 100,
         },
         description="Bang-bang control towards a target image centred on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to min_intensity..max_intensity.",
         group="per_nucleus",
@@ -165,6 +165,9 @@ class CenteredImageModel(NucleusControlMethod):
 class GlobalCycleModel(NucleusControlMethod):
     name = "global_cycle"
 
+    deprecated = (
+        'use method = "global_pulse" with period_min = 2 * period_m, on_min = period_m'
+    )
     zoo_meta = ZooMeta(
         same_as="global_pulse",
         equivalent="period_min = 2 * period_m, on_min = period_m",

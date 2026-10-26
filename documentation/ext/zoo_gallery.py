@@ -61,6 +61,7 @@ def setup(app: Sphinx) -> dict:
     app.add_config_value("zoo_sources_dir", None, "env")
     app.add_config_value("zoo_output_dir", None, "env")
     app.connect("builder-inited", _on_builder_inited)
+    app.add_js_file("zoo.js")
     return {"version": "0.2", "parallel_read_safe": True}
 
 
@@ -191,6 +192,8 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
     pixel_size_um = info.get("pixel_size_um", 1.0)
     raw, seg = _load_source(sources_dir, meta.source)
     display = _display_image(raw, info.get("vmin"), info.get("vmax"))
+    # methods see the display-scaled image, 0-255, not camera counts
+    raw = display * 255
 
     kwargs = {k.lstrip("_"): _resolve(v, sources_dir) for k, v in meta.kwargs.items()}
     method = registry[key](**kwargs)
@@ -203,8 +206,15 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
         return np.clip(out, 0, 1)
 
     pattern = pattern_at(meta.time_seconds)
-    thumb = f"{key}.png"
-    _save_rgb(output_dir / thumb, _overlay(display, pattern))
+    # a method that changes over time gets an animated thumbnail
+    span = (meta.times[0], meta.times[-1]) if meta.times else meta.timeline
+    if span:
+        thumb = f"{key}.webp"
+        frames = [_overlay(display, pattern_at(t)) for t in _frame_times(span)]
+        _save_animation(output_dir / thumb, frames)
+    else:
+        thumb = f"{key}.png"
+        _save_rgb(output_dir / thumb, _overlay(display, pattern))
 
     strip = [(t, _overlay(display, pattern_at(t))) for t in meta.times]
     timeline = None
@@ -212,10 +222,15 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
         ts = np.linspace(meta.timeline[0], meta.timeline[1], 400)
         timeline = (ts, [float(pattern_at(t).mean()) for t in ts])
 
+    # a method built around an image (centered_image) shows it
+    extra = []
+    target = getattr(method, "target_image", None)
+    if target is not None:
+        lo, hi = float(np.min(target)), float(np.max(target))
+        extra.append(((np.asarray(target, float) - lo) / max(hi - lo, 1e-9), "target"))
+
     detail = f"{key}_detail.png"
-    _render_detail(
-        output_dir / detail, display, pattern, meta.time_seconds, strip, timeline
-    )
+    _render_detail(output_dir / detail, display, pattern, strip, timeline, extra)
 
     cls = type(method)
     return {
@@ -292,6 +307,36 @@ def _overlay(display: np.ndarray, pattern: np.ndarray) -> np.ndarray:
     return np.clip(grey * (1 - weight) + _CYAN * weight, 0, 1)
 
 
+# animated thumbnails (WebP: a tenth of a GIF's size on these textured
+# images): frames, ms per frame, longest side in pixels
+ANIM_FRAMES = 24
+ANIM_MS = 150
+ANIM_SIZE = 200
+
+
+def _frame_times(span) -> np.ndarray:
+    """Evenly spaced times over *span*, the last one included."""
+    return np.linspace(span[0], span[1], ANIM_FRAMES)
+
+
+def _save_animation(path: Path, frames: list[np.ndarray]) -> None:
+    from PIL import Image
+
+    images = []
+    for rgb in frames:
+        image = Image.fromarray((np.clip(rgb, 0, 1) * 255).astype(np.uint8))
+        image.thumbnail((ANIM_SIZE, ANIM_SIZE))
+        images.append(image)
+    images[0].save(
+        path,
+        save_all=True,
+        append_images=images[1:],
+        duration=ANIM_MS,
+        loop=0,
+        quality=75,
+    )
+
+
 def _save_rgb(path: Path, rgb: np.ndarray) -> None:
     import matplotlib.pyplot as plt
 
@@ -314,36 +359,37 @@ def _frame(ax) -> None:
         spine.set_linewidth(0.8)
 
 
-def _render_detail(path, display, pattern, t_seconds, strip, timeline) -> None:
-    """raw | pattern | overlay, then the filmstrip or the timeline below."""
+def _render_detail(path, display, pattern, strip, timeline, extra=()) -> None:
+    """sample | pattern | overlay (| extra panels), then the filmstrip or the timeline."""
     import matplotlib.pyplot as plt
-
-    extra = 1 if (strip or timeline) else 0
-    ncols = max(3, len(strip))
-    fig = plt.figure(figsize=(2.4 * ncols, 2.6 * (1 + extra)), dpi=110)
-    grid = fig.add_gridspec(1 + extra, ncols * 2)
-    width = (ncols * 2) // 3
 
     panels = [
         (display, "gray", "sample image"),
         (pattern, "gray", "pattern (DMD)"),
         (_overlay(display, pattern), None, "overlay"),
-    ]
+    ] + [(img, "gray", label) for img, label in extra]
+    below = bool(strip or timeline)
+    ncols = max(len(panels), len(strip))
+    fig = plt.figure(figsize=(2.4 * ncols, 2.6 * (1 + below)), dpi=110)
+    rows = fig.add_gridspec(1 + below, 1)
+
+    top = rows[0].subgridspec(1, len(panels))
     for i, (img, cmap, label) in enumerate(panels):
-        ax = fig.add_subplot(grid[0, i * width : (i + 1) * width])
+        ax = fig.add_subplot(top[0, i])
         ax.imshow(img, cmap=cmap, vmin=0, vmax=1, interpolation="nearest")
         ax.set_title(label, fontsize=10)
         _frame(ax)
 
     if strip:
+        film = rows[1].subgridspec(1, ncols)
         for i, (t, rgb) in enumerate(strip):
-            ax = fig.add_subplot(grid[1, i * 2 : i * 2 + 2])
+            ax = fig.add_subplot(film[0, i])
             ax.imshow(rgb, interpolation="nearest")
             ax.set_title(_minutes(t), fontsize=10)
             _frame(ax)
     elif timeline:
         ts, lit = timeline
-        ax = fig.add_subplot(grid[1, :])
+        ax = fig.add_subplot(rows[1])
         ax.fill_between(ts / 60, lit, step="post", color=_CYAN, alpha=0.6, lw=0)
         ax.plot(ts / 60, lit, drawstyle="steps-post", color="#007a7a", lw=1)
         ax.set_xlabel("experiment time (min)", fontsize=9)
@@ -424,11 +470,12 @@ def _write_fragment(fragment: Path, output_dir: Path, docs_dir: Path, entries) -
         "Grouped by family; click a card for the example's parameters and its pattern over time.",
         "",
     ]
-    # one grid, in family order, each card labelled with its family
+    # one grid, in family order, each card labelled with its family;
+    # _static/zoo.js adds filter buttons from the cards' data attributes
     lines.append('<div class="zoo-grid">')
-    for _g, title, _blurb, members in groups:
+    for g, title, _blurb, members in groups:
         for e in members:
-            lines.append(_card_html(e, title, static_prefix))
+            lines.append(_card_html(e, g, title, static_prefix))
     lines += ["</div>", ""]
 
     lines += ["## Methods", ""]
@@ -442,7 +489,7 @@ def _write_fragment(fragment: Path, output_dir: Path, docs_dir: Path, entries) -
     fragment.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _card_html(e: dict, family: str, static_prefix: str) -> str:
+def _card_html(e: dict, group: str, family: str, static_prefix: str) -> str:
     title = html.escape(e["title"])
     tags = [_needs_label(e["needs"])]
     if e["varies"]:
@@ -452,8 +499,13 @@ def _card_html(e: dict, family: str, static_prefix: str) -> str:
     if e["aliases"]:
         names = ", ".join(a for a, _ in e["aliases"])
         also = f'<span class="zoo-also">also {html.escape(names)}</span>'
+    loop = "closed" if e["needs"] else "open"
+    data = (
+        f'data-family="{html.escape(group)}" data-family-title="{html.escape(family)}" '
+        f'data-loop="{loop}" data-varies="{"yes" if e["varies"] else "no"}"'
+    )
     return (
-        f'<a class="zoo-card" href="#{_anchor(e["key"])}">'
+        f'<a class="zoo-card" href="#{_anchor(e["key"])}" {data}>'
         f'<span class="zoo-family">{html.escape(family)}</span>'
         f'<img src="{static_prefix}/{e["thumb"]}" alt="{title}" loading="lazy">'
         f'<span class="zoo-title">{title}</span>'
@@ -474,8 +526,6 @@ def _entry_md(e: dict, rel_prefix: str) -> list[str]:
         f"({_anchor(e['key'])})=",
         f"#### {e['title']}",
         "",
-        f"![{e['title']}]({rel_prefix}/{e['detail']})",
-        "",
     ]
     if e["description"]:
         lines += [e["description"], ""]
@@ -486,10 +536,13 @@ def _entry_md(e: dict, rel_prefix: str) -> list[str]:
         toml_block(e["key"], e["kwargs"]),
         "```",
         "",
+        f"![{e['title']}]({rel_prefix}/{e['detail']})",
+        "",
     ]
     for alias, equivalent in e["aliases"]:
         lines += [
-            f'**Also registered:** `"{alias}"` is this method with `{equivalent}`.',
+            f'**Deprecated alias:** `"{alias}"` is this method with `{equivalent}`; '
+            "`pyclm check` warns when it is used.",
             "",
         ]
     return lines

@@ -406,6 +406,9 @@ class PatternContext:
 
 class PatternMethod:
     name = "base"
+    # set on a method kept only as a fixed case of another: what to use
+    # instead (pyclm check warns with it)
+    deprecated = ""
     # how many of this method's previous patterns the context keeps
     pattern_history = 2
 

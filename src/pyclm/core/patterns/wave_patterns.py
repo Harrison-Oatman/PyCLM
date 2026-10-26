@@ -26,7 +26,7 @@ class StationaryWavePattern(WavePatternBase):
     Wave coming out from the center
     """
 
-    name = "wave (stationary)"
+    name = "rings (stationary)"
 
     def __init__(self, duty_cycle=0.2, wave_speed=0, period=30, **kwargs):
         """
@@ -57,11 +57,11 @@ class WavePattern(WavePatternBase):
     moves a wave in or out of the center
     """
 
-    name = "wave"
+    name = "rings"
     zoo_meta = ZooMeta(
         source="mdck",
         kwargs={"duty_cycle": 0.2, "wave_speed": 10, "period": 100, "direction": 1},
-        title="Radial Wave",
+        title="Rings",
         description="Concentric rings propagating outward from the center (direction = -1: inward; wave_speed = 0: still).",
         group="moving",
         times=(0, 150, 300, 450),

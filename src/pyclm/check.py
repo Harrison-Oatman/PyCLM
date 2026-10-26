@@ -382,7 +382,7 @@ def check_kwargs(
     named, var_kw = _named_parameters(cls, supplied)
     dispatching = False
     if not named and "__new__" in vars(cls):
-        # a base that picks a subclass in __new__ (bar, wave): accept what any subclass accepts
+        # a base that picks a subclass in __new__ (bar, rings): accept what any subclass accepts
         dispatching = True
         for sub in _all_subclasses(cls):
             sub_named, _ = _named_parameters(sub, supplied)
@@ -409,6 +409,14 @@ def check_kwargs(
             if param.default is inspect.Parameter.empty and name not in kwargs:
                 problems.append(f"method '{label}' requires the argument {name!r}")
     return problems
+
+
+def _warn_deprecated(report, file, where, cls: type, method_name: str) -> None:
+    """A pattern method kept only as a fixed case of another says which to use."""
+    if getattr(cls, "deprecated", ""):
+        report.warning(
+            file, where, f"method '{method_name}' is deprecated: {cls.deprecated}"
+        )
 
 
 def _load_positions(directory: Path):
@@ -593,6 +601,7 @@ def check_directory(
                 f"(known: {', '.join(sorted(patterns))}){CUSTOM_HINT}",
             )
         else:
+            _warn_deprecated(report, file, "[pattern]", pattern_cls, cfg.pattern.method)
             for problem in check_kwargs(
                 pattern_cls, cfg.pattern.kwargs, "pattern", cfg.pattern.method
             ):
@@ -610,6 +619,7 @@ def check_directory(
                         f"(known: {', '.join(sorted(patterns))}){CUSTOM_HINT}",
                     )
                     continue
+                _warn_deprecated(report, file, f"[pattern.{label}]", sub_cls, sub_name)
                 for problem in check_kwargs(sub_cls, sub_kwargs, "pattern", sub_name):
                     report.error(file, f"[pattern.{label}]", problem)
 

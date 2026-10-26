@@ -79,16 +79,16 @@ arguments. The common ones:
 | Want | `method` |
 |---|---|
 | A fixed shape | `circle`, `full_on` |
-| Field of moving stripes (negative speed reverses) | `bar`, `sawtooth`, `bar_bounce`, `rotate_bar`, `wave` |
+| Field of moving stripes (negative speed reverses) | `bar`, `sawtooth`, `bar_bounce`, `rotate_bar`, `rings` |
 | Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar` |
-| Light one side of each cell | `move_out`, `move_in`, `rotate_ccw`, `direction` (a sequence of directions) |
+| Light one side of each cell (cells move towards the light) | `move_out`, `move_in`, `rotate_ccw`, `direction` (a sequence of `u`, `d`, `l`, `r`, `s`) |
 | Light each nucleus by its own intensity | `binary_nucleus_clamp`, `centered_image` (towards a target image) |
 | Light the middle or the poles of an embryo | `embryo_inner`, `embryo_outer` |
 | Different methods on two halves of the field | `split` with `[pattern.left]`/`[pattern.right]` or `top`/`bottom` |
 
-`global_cycle`, `move_down` and `fb_bounce` are fixed cases of
-`global_pulse` and `direction`; the zoo lists the equivalent arguments.
-Prefer the general method in a new experiment.
+`global_cycle`, `move_down` and `fb_bounce` are deprecated fixed cases of
+`global_pulse` and `direction`; `pyclm check` warns and gives the
+equivalent arguments. Use the general method.
 
 The authoritative list is `known_models` in
 `src/pyclm/core/patterns/__init__.py`. Read the class's `__init__` for
