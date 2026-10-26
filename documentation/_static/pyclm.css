@@ -41,3 +41,65 @@
 .rst-content dl.py > dt {
     margin-top: 14px;
 }
+
+/* method zoo: a grid of thumbnail cards (documentation/ext/zoo_gallery.py) */
+.zoo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 0 0 24px 0;
+}
+.rst-content a.zoo-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid #e1e4e5;
+    border-radius: 4px;
+    color: inherit;
+    text-decoration: none;
+    line-height: 1.25;
+    font-size: 90%;
+}
+.rst-content a.zoo-card:hover {
+    border-color: #2980b9;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.zoo-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 2px;
+    margin-bottom: 4px;
+}
+.zoo-family {
+    color: #6a6a6a;
+    font-size: 75%;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.zoo-title {
+    font-weight: bold;
+}
+.rst-content .zoo-card code.zoo-key {
+    align-self: flex-start;
+    max-width: 100%;
+    font-size: 85%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.zoo-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+.zoo-tag {
+    background: #e7f2fa;
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 80%;
+}
+.zoo-also {
+    color: #6a6a6a;
+    font-size: 80%;
+}

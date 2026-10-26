@@ -62,7 +62,9 @@ class WavePattern(WavePatternBase):
         source="mdck",
         kwargs={"duty_cycle": 0.2, "wave_speed": 10, "period": 100, "direction": 1},
         title="Radial Wave",
-        description="Concentric rings propagating outward from the center.",
+        description="Concentric rings propagating outward from the center (direction = -1: inward; wave_speed = 0: still).",
+        group="moving",
+        times=(0, 150, 300, 450),
     )
 
     def __init__(self, duty_cycle=0.2, wave_speed=1, period=30, direction=1, **kwargs):

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The method zoo opens with a grid of thumbnail cards, one per built-in
+  pattern method, grouped by family and tagged with what each needs
+  (open loop, segmentation, tracks) and whether it changes over time. Each
+  links to an entry with the sample image, the pattern the DMD receives,
+  a filmstrip or a timeline for methods that change over time, and a
+  `[pattern]` table to paste. Every registered method is now covered (9
+  were missing); `global_cycle`, `move_down` and `fb_bounce` are listed on
+  the card of the general method they are fixed cases of, with the
+  equivalent arguments. Methods see the sample images in camera counts, so
+  example thresholds are realistic. A test fails for a built-in without
+  `zoo_meta`. Design note: `docs/method-zoo-design.md`.
+- `method = "wave"` (concentric rings; `wave_speed = 0` holds them still)
+  is registered. It had a zoo card but `pyclm check` rejected the name.
+- `fb_bounce` reverses every half-loop; it reversed once and then kept
+  one direction for the rest of the run (known issue 36).
 - `pyclm preview --t START:STOP[:STEP]` previews a stretch of the schedule
   in seconds: the method runs at each timepoint with its state kept, and
   the preview adds pattern stacks, a captioned montage and an animation.

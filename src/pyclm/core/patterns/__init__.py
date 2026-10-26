@@ -34,6 +34,7 @@ from .pulse_patterns import (
     PulseSchedulePattern,
 )
 from .static_patterns import CirclePattern, FullOnPattern
+from .wave_patterns import WavePatternBase
 
 known_models = {
     "circle": CirclePattern,
@@ -57,4 +58,5 @@ known_models = {
     "embryo_inner": InnerPatternMethod,
     "embryo_outer": OuterPatternMethod,
     "direction": PeriodDirectedPattern,
+    "wave": WavePatternBase,
 }

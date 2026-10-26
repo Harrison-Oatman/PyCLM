@@ -80,7 +80,9 @@ class BarPattern(BarPatternBase):
         source="mdck",
         kwargs={"duty_cycle": 0.2, "bar_speed": 1.0, "period": 100},
         title="Moving Bar",
-        description="Periodic bar sweeping along the y-axis at constant speed; a negative speed reverses it.",
+        description="Periodic bar sweeping along the y-axis at constant speed; a negative speed reverses it and 0 holds it still.",
+        group="moving",
+        times=(0, 1500, 3000, 4500),
     )
 
     def __init__(self, duty_cycle=0.2, bar_speed=1, period=30, **kwargs):
@@ -118,6 +120,14 @@ class BarPattern(BarPatternBase):
 
 class SawToothMethod(PatternMethod):
     name = "sawtooth"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"duty_cycle": 0.5, "bar_speed": 1.0, "period": 100},
+        title="Sawtooth",
+        description="The moving bar with an intensity ramp across each bar: brightest at the leading edge, or the trailing edge with inverse = true.",
+        group="moving",
+        times=(0, 1500, 3000, 4500),
+    )
 
     def __init__(self, duty_cycle=0.2, bar_speed=1, period=30, inverse=False, **kwargs):
         """
@@ -160,6 +170,14 @@ class SawToothMethod(PatternMethod):
 
 class BouncingBarPattern(BarPattern):
     name = "bar_bounce"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"duty_cycle": 0.2, "bar_speed": 2.0, "period": 100, "t_loop": 100},
+        title="Bouncing Bar",
+        description="The moving bar, reversing direction every half of t_loop minutes.",
+        group="moving",
+        times=(0, 1500, 3000, 4500),
+    )
 
     def __init__(self, duty_cycle=0.2, bar_speed=1, period=30, t_loop=60, **kwargs):
         """
@@ -194,6 +212,8 @@ class RotatingBarPattern(PatternMethod):
         kwargs={"num_bars": 12, "angular_velocity": 2.0, "bar_width": 20},
         title="Rotating Bar",
         description="Spoke-like bars rotating around the center of the field.",
+        group="moving",
+        times=(0, 600, 1200, 1800),
     )
 
     def __init__(

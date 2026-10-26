@@ -137,8 +137,9 @@ class RotateCcwModel(PerCellPatternMethod):
     name = "rotate_ccw"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"channel": "seg_channel"},
+        kwargs={"channel": "638"},
         title="Rotate CCW",
+        group="per_cell",
         description="Illuminates the half of each cell pointing counter-clockwise around the field center.",
     )
 
@@ -158,8 +159,9 @@ class MoveOutModel(PerCellPatternMethod):
     name = "move_out"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"channel": "seg_channel"},
+        kwargs={"channel": "638"},
         title="Move Out",
+        group="per_cell",
         description="Illuminates the outward-facing half of each cell.",
     )
 
@@ -179,8 +181,9 @@ class MoveInModel(PerCellPatternMethod):
     name = "move_in"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"channel": "seg_channel"},
+        kwargs={"channel": "638"},
         title="Move In",
+        group="per_cell",
         description="Illuminates the inward-facing half of each cell.",
     )
 
@@ -198,6 +201,14 @@ class MoveInModel(PerCellPatternMethod):
 
 class PeriodDirectedPattern(PerCellPatternMethod):
     name = "direction"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"sequence": "urdl", "period_h": 2, "channel": "638", "gradient": False},
+        title="Direction Sequence",
+        description="Lights one side of every cell, stepping through a sequence of directions (u, d, l, r, or s for off) every period_h hours.",
+        group="per_cell",
+        times=(0, 7200, 14400, 21600),
+    )
 
     direction_vec: ClassVar[dict[str, tuple[int, int]]] = {
         "u": (1, 0),
@@ -253,6 +264,10 @@ class PeriodDirectedPattern(PerCellPatternMethod):
 
 class MoveDownModel(PerCellPatternMethod):
     name = "move_down"
+    zoo_meta = ZooMeta(
+        same_as="direction",
+        equivalent='sequence = "u", voronoi = false, gradient = false',
+    )
 
     def __init__(self, channel=None, **kwargs):
         super().__init__(channel=channel, **kwargs)
@@ -268,6 +283,10 @@ class MoveDownModel(PerCellPatternMethod):
 
 class BounceModel(PerCellPatternMethod):
     name = "fb_bounce"
+    zoo_meta = ZooMeta(
+        same_as="direction",
+        equivalent='sequence = "ud", period_h = t_loop / 120, voronoi = false, gradient = false',
+    )
 
     def __init__(self, channel=None, t_loop=60, **kwargs):
         self.t_loop_s = t_loop * 60
@@ -289,7 +308,6 @@ class BounceModel(PerCellPatternMethod):
 
         halfway = self.t_loop_s / 2
 
-        if t > halfway:
-            self.down = False
+        self.down = t <= halfway
 
         return super().generate(context)

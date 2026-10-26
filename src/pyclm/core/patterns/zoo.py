@@ -13,12 +13,27 @@ to include it in the generated gallery::
             time_seconds=120.0,
             title="My Pattern",
             description="A one-line description shown in the gallery card.",
+            group="moving",
         )
 
 The ``source`` field names a sample image stored in
-``documentation/zoo_sources/<source>.tif`` (and optionally
-``<source>_seg.tif`` for a label image).  ``kwargs`` are passed verbatim
-to the pattern constructor.
+``documentation/zoo_sources/<source>.tif`` with its label image
+``<source>_seg.tif``.  ``kwargs`` are passed verbatim to the pattern
+constructor; a key with a leading underscore is passed but left out of the
+TOML shown on the page.
+
+A registered method that is another method with fixed arguments does not
+get a card of its own; it names that method instead and is listed on its
+card::
+
+    class GlobalCycleModel(PatternMethod):
+        zoo_meta = ZooMeta(
+            same_as="global_pulse",
+            equivalent="period_min = 2 * period_m, on_min = period_m",
+        )
+
+The gallery is built from ``known_models``; ``tests/test_zoo_gallery.py``
+fails when a registered method has no ``zoo_meta``.
 """
 
 from __future__ import annotations
@@ -31,6 +46,37 @@ import numpy as np
 # ZooMeta
 # ---------------------------------------------------------------------------
 
+# The gallery's families, in page order: (key, heading, one-line blurb).
+ZOO_GROUPS: tuple[tuple[str, str, str], ...] = (
+    ("static", "Static shapes", "Fixed patterns that never change."),
+    (
+        "moving",
+        "Moving stripes",
+        "Open-loop patterns that travel across the field.",
+    ),
+    (
+        "timed",
+        "Timed and blinking",
+        "Open-loop stimulation that switches on and off on a schedule.",
+    ),
+    (
+        "per_cell",
+        "Per-cell direction",
+        "Closed loop: light one side of every segmented cell.",
+    ),
+    (
+        "per_nucleus",
+        "Per-nucleus feedback",
+        "Closed loop: light each nucleus according to its own intensity.",
+    ),
+    (
+        "embryo",
+        "Embryo axis",
+        "Closed loop: light a fraction of the largest object's long axis.",
+    ),
+    ("composite", "Combining methods", "One method per half of the field."),
+)
+
 
 @dataclass
 class ZooMeta:
@@ -40,24 +86,42 @@ class ZooMeta:
     ----------
     source:
         Name of the sample image set, e.g. ``"mdck"``, ``"fly"``, or
-        ``"mcf10a"``.  A file ``documentation/zoo_sources/<source>.tif``
-        must exist; ``<source>_seg.tif`` is optional (synthetic blobs are
-        used when absent).
+        ``"mcf10a"``.  ``documentation/zoo_sources/<source>.tif`` and
+        ``<source>_seg.tif`` must exist.  The method sees the image in
+        camera counts.
     kwargs:
         Keyword arguments forwarded to the pattern-method constructor.
     time_seconds:
-        Experiment time (seconds) injected into the context.
+        Experiment time (seconds) of the thumbnail and the main panels.
     title:
         Gallery-card heading.  Defaults to the class ``name`` attribute.
     description:
         One-sentence description shown beneath the image.
+    group:
+        Key of the family the card is listed under (see ``ZOO_GROUPS``).
+    times:
+        Experiment times (seconds) for a filmstrip of the pattern, for a
+        method that moves.
+    timeline:
+        ``(start, stop)`` in seconds: plot the lit fraction of the field
+        over that stretch, for a method that switches on and off.
+    same_as:
+        Registered name of the method this one duplicates; no card of its
+        own, it is listed on that method's card.
+    equivalent:
+        The arguments of ``same_as`` that give this method's pattern.
     """
 
-    source: str
+    source: str = ""
     kwargs: dict = field(default_factory=dict)
     time_seconds: float = 0.0
     title: str = ""
     description: str = ""
+    group: str = ""
+    times: tuple[float, ...] = ()
+    timeline: tuple[float, float] | None = None
+    same_as: str = ""
+    equivalent: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -182,50 +246,3 @@ class ZooContext:
 
     def pattern_history(self, n=None) -> list:
         return []
-
-
-# ---------------------------------------------------------------------------
-# Zoo subclass factory
-# ---------------------------------------------------------------------------
-
-
-def make_zoo_subclass(cls: type, pattern_shape: tuple[int, int], pixel_size_um: float):
-    """Return a zoo-safe subclass of *cls*.
-
-    The subclass pre-computes the um-coordinate meshgrid from the sample
-    image geometry and overrides :meth:`get_um_meshgrid` and
-    :meth:`center_um` so that ``generate()`` is fully independent of any
-    hardware state that would normally be injected by
-    :meth:`PatternMethod.configure_system`.
-
-    Parameters
-    ----------
-    cls:
-        A :class:`PatternMethod` subclass.
-    pattern_shape:
-        ``(height, width)`` of the sample image in pixels.
-    pixel_size_um:
-        Physical pixel size in micrometres (from the source metadata).
-
-    Returns
-    -------
-    type
-        A new class (not an instance) ready to be instantiated with the
-        pattern's ``zoo_meta.kwargs``.
-    """
-    h, w = pattern_shape
-    y_range = np.arange(h) * pixel_size_um
-    x_range = np.arange(w) * pixel_size_um
-    _xx, _yy = np.meshgrid(x_range, y_range)
-    _center = (h * pixel_size_um / 2.0, w * pixel_size_um / 2.0)
-
-    class _ZooVariant(cls):
-        def get_um_meshgrid(self) -> tuple[np.ndarray, np.ndarray]:
-            return _xx, _yy
-
-        def center_um(self) -> tuple[float, float]:
-            return _center
-
-    _ZooVariant.__name__ = f"{cls.__name__}ZooVariant"
-    _ZooVariant.__qualname__ = _ZooVariant.__name__
-    return _ZooVariant

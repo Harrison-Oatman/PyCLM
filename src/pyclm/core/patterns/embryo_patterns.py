@@ -56,6 +56,7 @@ class InnerPatternMethod(PatternAlongAxis):
     zoo_meta = ZooMeta(
         source="fly",
         title="Inner fraction",
+        group="embryo",
         description="Applies a bar to the center of the long axis",
         kwargs={"fraction_length": 0.1},
     )
@@ -75,6 +76,7 @@ class OuterPatternMethod(PatternAlongAxis):
     zoo_meta = ZooMeta(
         source="fly",
         title="Outer fraction",
+        group="embryo",
         description="Applies a bar to the poles of the long axis",
         kwargs={"fraction_length": 0.1},
     )

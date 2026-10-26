@@ -33,6 +33,7 @@ import numpy as np
 
 from ..experiments import Experiment
 from .pattern import AcquiredImageRequest, CameraProperties, PatternMethod
+from .zoo import ZooMeta
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,17 @@ class SplitPattern(PatternMethod):
     """One pattern method per half of the field; see the module docstring."""
 
     name = "split"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={
+            "boundary": 0.5,
+            "left": {"method": "move_in", "channel": "638"},
+            "right": {"method": "move_out", "channel": "638"},
+        },
+        title="Split Field",
+        description="Two methods side by side (left / right) or one above the other (top / bottom), each in its own sub-table.",
+        group="composite",
+    )
 
     def __init__(
         self,
