@@ -85,8 +85,8 @@ class CenteredImageModel(NucleusControlMethod):
         title="Target Image",
         kwargs={
             "channel": "545",
-            "tif_path": "target_radial.tif",
-            "min_intensity": 40,
+            "tif_path": "target_shield.tif",
+            "min_intensity": 0,
             "max_intensity": 100,
         },
         description="Bang-bang control towards a target image centred on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to min_intensity..max_intensity.",

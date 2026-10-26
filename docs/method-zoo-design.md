@@ -120,9 +120,11 @@ Not done:
    display-normalised image (0–255), so example thresholds are in those
    units (`clamp_target = 65` lights about half the MCF10A nuclei).*
 8. **`centered_image` example** with a target in `zoo_sources/`, shown as
-   a panel. *Confirmed; the target is to be the Princeton shield* (the
-   file was not found in the repository or the project folder yet;
-   `target_radial.tif` stands in).
+   a panel. *Confirmed, with the Princeton shield as the target*:
+   `documentation/zoo_sources/target_shield.tif`, 300 px tall, inverted
+   from the file Harrison supplied so the shield is bright (lit) and the
+   background dark, and saved uncompressed (`tifffile` reads LZW only
+   with `imagecodecs`, which PyCLM does not depend on).
 
 The single-cell direction example keeps the default `gradient = true`
 (Harrison).
