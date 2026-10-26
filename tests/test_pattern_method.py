@@ -73,10 +73,13 @@ def test_negative_bar_speed_reverses_the_direction(cls):
 def test_bar_period_follows_a_speed_change():
     from pyclm.core.patterns import known_models
 
-    m = known_models["bar"](duty_cycle=0.2, bar_speed=1.0, period=100)
+    m = known_models["bar"](width_um=20, spacing_um=100, speed_um_per_min=1.0)
     assert m.period_time == 100.0
-    applied, _refused = m.update(bar_speed=4.0)
-    assert applied == {"bar_speed": 4.0}
+    applied, _refused = m.update(speed_um_per_min=4.0)
+    assert applied == {"speed_um_per_min": 4.0}
     assert m.period_time == 25.0
+    # a set_pattern command may still use the old name
+    applied, _refused = m.update(bar_speed=2.0)
+    assert applied == {"speed_um_per_min": 2.0}
     with pytest.raises(ValueError, match="non-zero"):
-        known_models["sawtooth"](bar_speed=0)
+        known_models["sawtooth"](speed_um_per_min=0)

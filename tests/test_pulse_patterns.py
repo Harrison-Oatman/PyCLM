@@ -208,5 +208,5 @@ def test_reference_bar_speed_follows_the_field_and_the_binning():
 
 
 def test_global_pulse_rejects_a_stationary_reference():
-    with pytest.raises(ValueError, match="reference_bar_speed must be non-zero"):
+    with pytest.raises(ValueError, match="reference_speed_um_per_min must be non-zero"):
         make("global_pulse", reference_bar_speed=0)

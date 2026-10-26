@@ -337,7 +337,7 @@ method = "cellpose"
 # All other keys are forwarded as constructor kwargs to the pattern method.
 [pattern]
 method = "circle"
-rad = 150            # circle radius in µm
+radius_um = 150      # circle radius
 
 ```
 

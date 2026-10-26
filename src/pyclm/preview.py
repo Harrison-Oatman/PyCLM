@@ -443,7 +443,7 @@ def preview(
         state.absorb(dock, t_now)
         context = PatternContext(state, exp, position=position)
         started = time.perf_counter()
-        pattern = np.asarray(model.generate(context), dtype=np.float32)
+        pattern = np.asarray(model.render(context), dtype=np.float32)
         generate_s += time.perf_counter() - started
         state.record_pattern(i, pattern)
         for change in (c.describe() for c in context.requests):

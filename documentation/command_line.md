@@ -50,7 +50,7 @@ naming the file and the table or key it concerns:
 pyclm check my_experiment
   INFO    pyclm_config.toml: ok (my_experiment\pyclm_config.toml)
   INFO    schedule.toml: 60 timepoints every 60 s (60.0 min)
-  ERROR   cells.toml [pattern]: unknown argument 'bar_sped' for method 'bar' (did you mean 'bar_speed'?); accepted: bar_speed, duty_cycle, period
+  ERROR   cells.toml [pattern]: unknown argument 'speed_um_per_mn' for method 'bar' (did you mean 'speed_um_per_min'?); accepted: spacing_um, speed_um_per_min, start_min, stop_min, width_um
   WARNING cells.toml [segmentation]: configured but the pattern method 'bar' does not ask for it; it will not run
   INFO    PositionList.pos: 3 position(s): cells.00, cells.01, cells.02
   INFO    cells.00: 12 frames over 60 timepoints
@@ -77,6 +77,17 @@ What it checks:
   the position list (rows × columns, spacing; with `camera_roi` set and
   `--pixel-size-um` given, whether the tiles abut, overlap or leave gaps);
 - outputs that already exist.
+
+Pattern methods and arguments renamed in 2.0 (for example `direction` →
+`move_sequence`, `rad` → `radius_um`, `duty_cycle` and `period` →
+`width_um` and `spacing_um`) still run; each old name is a warning that
+says what replaces it. `--fix` first rewrites the experiment TOMLs to the
+current names, keeping comments and layout and the original file as
+`<name>.toml.bak`, then checks:
+
+```bash
+uv run pyclm check my_experiment --fix
+```
 
 `--dry` additionally copies the directory, shortens it to two timepoints,
 and runs it on the virtual microscope, which needs TIF files in the

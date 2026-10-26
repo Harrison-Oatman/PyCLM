@@ -23,7 +23,7 @@ which sends, with pauses between them: `pause` (watch: t stops
 advancing), `resume`, `set_exposure` 80 ms on the stimulation channel,
 `set_property` Sola Power 40 (edit `wet/cli.py` `send_commands` if your
 light source differs), `set_position` (a relative z nudge recorded as an
-event), `set_pattern` bar_speed 2.0, and `stop_run`. The first terminal
+event), `set_pattern` speed_um_per_min 2.0, and `stop_run`. The first terminal
 then finishes early.
 
 ## Pass means

@@ -6,9 +6,11 @@ it on an explicit list of intervals; ``blinking_bar`` gates the stationary
 bar's stripes with the same temporal gate as ``global_pulse``.
 """
 
+from typing import ClassVar
+
 import numpy as np
 
-from .bar_patterns import _stripe_is_on
+from .bar_patterns import _check_stripes, _stripe_is_on
 from .pattern import PatternMethod
 from .zoo import ZooMeta
 
@@ -48,12 +50,15 @@ class GlobalPulsePattern(PatternMethod):
     every ``period_min``, within ``[start_min, stop_min)``.
 
     ``phase_min`` offsets the first on-edge from ``start_min``. To make the
-    train the temporal twin of a ``bar``, set ``reference_bar_speed`` to that
+    train the temporal twin of a ``bar``, set ``reference_speed_um_per_min`` to that
     bar's speed instead and the phase is derived from the field geometry: see
     :attr:`effective_phase_min`.
     """
 
     name = "global_pulse"
+    renamed_kwargs: ClassVar[dict[str, str]] = {
+        "reference_bar_speed": "reference_speed_um_per_min"
+    }
     zoo_meta = ZooMeta(
         source="mdck",
         kwargs={"period_min": 100, "on_min": 20, "start_min": 60},
@@ -69,16 +74,14 @@ class GlobalPulsePattern(PatternMethod):
         period_min=100.0,
         on_min=20.0,
         phase_min=0.0,
-        reference_bar_speed=None,
-        start_min=0.0,
-        stop_min=None,
+        reference_speed_um_per_min=None,
         **kwargs,
     ):
         """
         :param period_min: minutes between successive on-edges
         :param on_min: minutes the field stays on at each on-edge
         :param phase_min: minutes from ``start_min`` to the first on-edge
-        :param reference_bar_speed: um/min of the ``bar`` this train twins;
+        :param reference_speed_um_per_min: speed of the ``bar`` this train twins;
                                     phases the first on-edge to that bar
                                     reaching the field centre
         :param start_min: experiment minute stimulation begins
@@ -87,25 +90,23 @@ class GlobalPulsePattern(PatternMethod):
         super().__init__(**kwargs)
 
         _check_gate(period_min, on_min, self.name)
-        if reference_bar_speed == 0:
+        if reference_speed_um_per_min == 0:
             raise ValueError(
-                f"{self.name}: reference_bar_speed must be non-zero "
+                f"{self.name}: reference_speed_um_per_min must be non-zero "
                 "(a stationary bar has no arrival time)"
             )
 
         self.period_min = period_min
         self.on_min = on_min
         self.phase_min = phase_min
-        self.reference_bar_speed = reference_bar_speed
-        self.start_min = start_min
-        self.stop_min = stop_min
+        self.reference_speed_um_per_min = reference_speed_um_per_min
 
     @property
     def effective_phase_min(self) -> float:
         """
         The phase actually used, in minutes after ``start_min``.
 
-        With ``reference_bar_speed`` set, ``phase_min`` is added to the minute
+        With ``reference_speed_um_per_min`` set, ``phase_min`` is added to the minute
         at which a ``bar`` of that speed reaches the centre of the field.
         ``bar`` lights a point ``y`` when ``(t - y / bar_speed) % period_time``
         is within its duty cycle, so that on-edge falls at ``y / bar_speed``;
@@ -118,9 +119,9 @@ class GlobalPulsePattern(PatternMethod):
         temporal period, i.e. its spacing divided by its speed.
         """
         phase = self.phase_min
-        if self.reference_bar_speed:
-            _centre_x, centre_y = self.center_um()
-            phase += centre_y / self.reference_bar_speed
+        if self.reference_speed_um_per_min:
+            _center_x, center_y = self.center_um()
+            phase += center_y / self.reference_speed_um_per_min
         return phase % self.period_min
 
     def is_on(self, t_minutes) -> bool:
@@ -162,16 +163,16 @@ class PulseSchedulePattern(PatternMethod):
         timeline=(0, 21600),
     )
 
-    def __init__(self, pulses=(), start_min=0.0, **kwargs):
+    def __init__(self, pulses=(), **kwargs):
         """
         :param pulses: list of ``[start_min, duration_min]`` pairs, each
                        measured from ``start_min``
         :param start_min: experiment minute the schedule is measured from
+            (and before which the field is dark)
         """
         super().__init__(**kwargs)
 
         self.pulses = [self._check_pulse(p) for p in pulses]
-        self.start_min = start_min
 
     def _check_pulse(self, pulse):
         try:
@@ -203,7 +204,7 @@ class PulseSchedulePattern(PatternMethod):
 class BlinkingBarPattern(PatternMethod):
     """
     Stationary stripes that blink: the spatial mask of ``bar`` at speed 0
-    (stripes of width ``duty_cycle * spacing_um``, repeating every
+    (stripes of width ``width_um``, repeating every
     ``spacing_um``, the first edge at ``offset_um``) ANDed with the temporal
     gate of ``global_pulse``. ``on_min = period_min`` is the limiting case of
     stripes that never blink.
@@ -212,28 +213,39 @@ class BlinkingBarPattern(PatternMethod):
     name = "blinking_bar"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"spacing_um": 100, "duty_cycle": 0.2, "period_min": 100, "on_min": 20},
+        kwargs={"width_um": 20, "spacing_um": 100, "period_min": 100, "on_min": 20},
         title="Blinking Bar",
         description="Stationary stripes gated on and off by a periodic pulse train.",
         group="timed",
         timeline=(0, 30000),
     )
 
+    @classmethod
+    def migrate_kwargs(cls, kwargs):
+        kwargs, notes = super().migrate_kwargs(kwargs)
+        if "duty_cycle" in kwargs:
+            if "width_um" in kwargs:
+                raise ValueError(
+                    f"{cls.name}: give width_um or the old duty_cycle, not both"
+                )
+            width = kwargs.pop("duty_cycle") * kwargs.get("spacing_um", 100.0)
+            kwargs["width_um"] = width
+            notes.append(f"duty_cycle is now width_um = {width:g}")
+        return kwargs, notes
+
     def __init__(
         self,
+        width_um=20.0,
         spacing_um=100.0,
-        duty_cycle=0.2,
         period_min=100.0,
         on_min=20.0,
         offset_um=0.0,
         phase_min=0.0,
-        start_min=0.0,
-        stop_min=None,
         **kwargs,
     ):
         """
+        :param width_um: width of each stripe, in um
         :param spacing_um: stripe period along the bar axis, in um
-        :param duty_cycle: fraction of ``spacing_um`` that is lit (float 0-1)
         :param period_min: minutes between successive on-edges
         :param on_min: minutes the stripes stay on at each on-edge
         :param offset_um: position of the first stripe edge, in um
@@ -244,17 +256,14 @@ class BlinkingBarPattern(PatternMethod):
         super().__init__(**kwargs)
 
         _check_gate(period_min, on_min, self.name)
-        if spacing_um <= 0:
-            raise ValueError(f"{self.name}: spacing_um must be positive")
+        _check_stripes(self.name, width_um, spacing_um)
 
+        self.width_um = width_um
         self.spacing_um = spacing_um
-        self.duty_cycle = duty_cycle
         self.period_min = period_min
         self.on_min = on_min
         self.offset_um = offset_um
         self.phase_min = phase_min
-        self.start_min = start_min
-        self.stop_min = stop_min
 
     def is_on(self, t_minutes) -> bool:
         """Whether the stripes are lit at ``t_minutes`` of the experiment."""
@@ -271,7 +280,9 @@ class BlinkingBarPattern(PatternMethod):
         """The stripes, as ``bar`` draws them at speed 0."""
         _xx, yy = self.get_um_meshgrid()
 
-        return _stripe_is_on(yy, self.spacing_um, self.duty_cycle, self.offset_um)
+        return _stripe_is_on(
+            yy, self.spacing_um, self.width_um / self.spacing_um, self.offset_um
+        )
 
     def generate(self, context):
         if not self.is_on(context.time / 60):

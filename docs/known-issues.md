@@ -341,3 +341,25 @@ the run. It now follows the half of the loop it is in, like `bar_bounce`;
 projection in the cell; a cell with no pixel ahead of its centroid (a
 one-pixel label) divided 0 by 0, and the NaN reached the pattern. Such a
 cell now stays dark; `tests/test_zoo_gallery.py` checks it.
+
+### 38. `embryo_inner` / `embryo_outer` crashed on a non-square field
+
+**Fixed 2026-10-26** (keyword-conventions PR,
+`docs/pattern-methods-expansion-design.md`). `PatternAlongAxis.generate`
+(`src/pyclm/core/patterns/embryo_patterns.py`) built its grid with
+`np.meshgrid(y, x)` (default `xy` indexing), which is `(w, h)`; multiplying
+by the `(h, w)` mask raised `ValueError: operands could not be broadcast
+together with shapes (100,60) (60,100)` on a 60 × 100 field. A square
+field worked because the swapped axes and the swapped centroid indices
+cancelled. It now uses `indexing="ij"` with the major axis as a
+`(row, column)` vector; patterns on square fields are unchanged (checked
+pixel for pixel against the old code), and
+`tests/test_keyword_migration.py` covers a 60 × 100 field.
+
+### 39. `nuc_channel` was silently ignored
+
+**Fixed 2026-10-26** (same PR). Early nucleus-clamp TOMLs (the archived
+`resources/tomls/tag-rfp/*.toml`) set `nuc_channel = "545"`, which the
+methods swallowed through `**kwargs`; the run used the default `channel`,
+which happened to be `"545"` too. `nuc_channel` is now an old name of
+`channel`, so it takes effect, and `pyclm check --fix` renames it.

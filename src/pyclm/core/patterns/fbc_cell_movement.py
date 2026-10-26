@@ -25,15 +25,32 @@ class PerCellPatternMethod(PatternMethod):
 
     name = "per_cell_base"
 
+    @classmethod
+    def migrate_kwargs(cls, kwargs):
+        kwargs, notes = super().migrate_kwargs(kwargs)
+        if "direction" in kwargs and not isinstance(kwargs["direction"], str):
+            # an integer direction was accepted by every per-cell method and
+            # never used
+            kwargs.pop("direction")
+            notes.append("direction had no effect and is gone; remove it")
+        return kwargs, notes
+
     def __init__(
         self,
         channel=None,
         voronoi=False,
         gradient=False,
-        direction=1,
         tracks=False,
         **kwargs,
     ):
+        """
+        :param channel: the channel whose segmentation (or tracks) is lit
+        :param voronoi: grow each cell to the Voronoi region of its centroid
+            (within 50 px of a cell) before lighting it
+        :param gradient: light the chosen side with a ramp rising away from
+            the centroid, instead of uniformly
+        :param tracks: run on the tracked labels (needs a ``[tracking]`` table)
+        """
         super().__init__(**kwargs)
 
         if channel is None:
@@ -44,7 +61,6 @@ class PerCellPatternMethod(PatternMethod):
 
         self.gradient = gradient
         self.voronoi = voronoi
-        self.direction = direction
 
         self.channel = channel
         self.use_tracks = bool(tracks)
@@ -137,23 +153,30 @@ class PerCellPatternMethod(PatternMethod):
 
 
 class RotateCcwModel(PerCellPatternMethod):
-    name = "rotate_ccw"
+    name = "move_rotate"
     zoo_meta = ZooMeta(
         source="mdck",
         kwargs={"channel": "638", "gradient": True},
-        title="Rotate CCW",
+        title="Rotate",
         group="per_cell",
-        description="Illuminates the half of each cell pointing counter-clockwise around the field center.",
+        description="Illuminates the half of each cell pointing counterclockwise around the field center (reverse = true: clockwise).",
     )
 
-    def __init__(self, channel=None, **kwargs):
+    def __init__(self, channel=None, reverse=False, **kwargs):
+        """
+        :param channel: the channel whose segmentation (or tracks) is lit
+        :param reverse: steer the cells clockwise instead of counterclockwise
+        """
         super().__init__(channel=channel, **kwargs)
+        self.reverse = bool(reverse)
 
     def process_prop(self, prop) -> np.ndarray:
         center_y, center_x = self.pattern_shape[0] / 2, self.pattern_shape[1] / 2
         prop_centroid = prop.centroid
 
         vec = -(prop_centroid[1] - center_x), prop_centroid[0] - center_y
+        if self.reverse:
+            vec = -vec[0], -vec[1]
 
         return self.prop_vector(prop, vec)
 
@@ -203,12 +226,12 @@ class MoveInModel(PerCellPatternMethod):
 
 
 class PeriodDirectedPattern(PerCellPatternMethod):
-    name = "direction"
+    name = "move_sequence"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"sequence": "urdl", "period_h": 2, "channel": "638"},
+        kwargs={"sequence": "urdl", "step_min": 120, "channel": "638"},
         title="Direction Sequence",
-        description="Lights one side of every cell, stepping through a sequence of directions (u, d, l, r, or s for off) every period_h hours.",
+        description="Lights one side of every cell, stepping through a sequence of directions (u, d, l, r, or s for off) every step_min minutes.",
         group="per_cell",
         times=(0, 7200, 14400, 21600),
     )
@@ -222,15 +245,35 @@ class PeriodDirectedPattern(PerCellPatternMethod):
         "l": (0, -1),
     }
 
+    @classmethod
+    def migrate_kwargs(cls, kwargs):
+        kwargs, notes = super().migrate_kwargs(kwargs)
+        if "period_h" in kwargs:
+            if "step_min" in kwargs:
+                raise ValueError(
+                    f"{cls.name}: give step_min or the old period_h, not both"
+                )
+            step = kwargs.pop("period_h") * 60
+            kwargs["step_min"] = step
+            notes.append(f"period_h is now step_min = {step:g} (minutes)")
+        return kwargs, notes
+
     def __init__(
         self,
         sequence: list[Literal["u", "d", "l", "r", "s"]] | str | None = None,
-        period_h=2,
-        channel="545",
+        step_min=120.0,
+        channel=None,
         voronoi=True,
         gradient=True,
         **kwargs,
     ):
+        """
+        :param sequence: the directions to step through, e.g. ``"urdl"``:
+            ``u`` up (towards row 0), ``d`` down, ``l`` left, ``r`` right,
+            ``s`` dark; it repeats
+        :param step_min: minutes spent on each direction
+        :param channel: the channel whose segmentation (or tracks) is lit
+        """
         super().__init__(channel=channel, voronoi=voronoi, gradient=gradient, **kwargs)
 
         assert sequence, "sequence kwarg required but not provided"
@@ -238,8 +281,10 @@ class PeriodDirectedPattern(PerCellPatternMethod):
             f"sequence {sequence} contains unrecognized characters"
         )
 
+        if step_min <= 0:
+            raise ValueError(f"{self.name}: step_min must be positive, got {step_min}")
         self.sequence = "".join([val for val in sequence])
-        self.period_h = period_h
+        self.step_min = step_min
 
         self.current_direction = self.sequence[0]
 
@@ -256,10 +301,9 @@ class PeriodDirectedPattern(PerCellPatternMethod):
         return self.prop_vector(prop, vec)
 
     def generate(self, context) -> np.ndarray:
-        t = context.time
-        t_h = t / 3600
+        t_min = context.time / 60
 
-        step = t_h // self.period_h
+        step = t_min // self.step_min
         step = int(step % len(self.sequence))
 
         self.current_direction = self.sequence[step]
@@ -269,9 +313,9 @@ class PeriodDirectedPattern(PerCellPatternMethod):
 
 class MoveDownModel(PerCellPatternMethod):
     name = "move_down"
-    deprecated = 'use method = "direction" with sequence = "d", voronoi = false, gradient = false'
+    deprecated = 'use method = "move_sequence" with sequence = "d", voronoi = false, gradient = false'
     zoo_meta = ZooMeta(
-        same_as="direction",
+        same_as="move_sequence",
         equivalent='sequence = "d", voronoi = false, gradient = false',
     )
 
@@ -290,12 +334,12 @@ class MoveDownModel(PerCellPatternMethod):
 class BounceModel(PerCellPatternMethod):
     name = "fb_bounce"
     deprecated = (
-        'use method = "direction" with sequence = "du", period_h = t_loop / 120, '
+        'use method = "move_sequence" with sequence = "du", step_min = t_loop / 2, '
         "voronoi = false, gradient = false"
     )
     zoo_meta = ZooMeta(
-        same_as="direction",
-        equivalent='sequence = "du", period_h = t_loop / 120, voronoi = false, gradient = false',
+        same_as="move_sequence",
+        equivalent='sequence = "du", step_min = t_loop / 2, voronoi = false, gradient = false',
     )
 
     def __init__(self, channel=None, t_loop=60, **kwargs):

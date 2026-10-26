@@ -341,24 +341,56 @@ SUPPLIED = {
 
 
 def _named_parameters(cls: type, supplied: set) -> tuple[dict, bool]:
-    """``cls.__init__``'s named parameters (minus the ones PyCLM supplies) and whether it takes **kwargs."""
-    try:
-        sig = inspect.signature(cls.__init__)
-    except (TypeError, ValueError):
-        return {}, True
+    """
+    ``cls.__init__``'s named parameters (minus the ones PyCLM supplies) and
+    whether it takes **kwargs. An ``__init__`` that passes **kwargs on also
+    accepts its parents' parameters (``start_min`` of every pattern method,
+    ``voronoi`` of the per-cell methods), so those are followed up the MRO
+    until an ``__init__`` without **kwargs.
+    """
     named = {}
     var_kw = False
-    for name, param in sig.parameters.items():
-        if name in supplied:
+    seen = set()
+    for klass in cls.__mro__:
+        init = vars(klass).get("__init__")
+        if init is None or init in seen or klass is object:
             continue
-        if param.kind is inspect.Parameter.VAR_KEYWORD:
-            var_kw = True
-        elif param.kind in (
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        ):
-            named[name] = param
+        seen.add(init)
+        try:
+            sig = inspect.signature(init)
+        except (TypeError, ValueError):
+            return named, True
+        var_kw = False
+        for name, param in sig.parameters.items():
+            if name in supplied or name == "args":
+                continue
+            if param.kind is inspect.Parameter.VAR_KEYWORD:
+                var_kw = True
+            elif param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            ):
+                named.setdefault(name, param)
+        if not var_kw:
+            break
     return named, var_kw
+
+
+def migrate_pattern_kwargs(cls: type, kwargs: dict) -> tuple[dict, list[str], str]:
+    """
+    A pattern method's TOML arguments in their current names
+    (:meth:`PatternMethod.migrate_kwargs`): ``(kwargs, notes, error)``.
+    The notes become warnings; an error (old and new name both given)
+    leaves the kwargs as they were.
+    """
+    migrate = getattr(cls, "migrate_kwargs", None)
+    if migrate is None:
+        return dict(kwargs), [], ""
+    try:
+        new, notes = migrate(kwargs)
+    except (TypeError, ValueError) as e:
+        return dict(kwargs), [], str(e)
+    return new, notes, ""
 
 
 def _all_subclasses(cls: type) -> list[type]:
@@ -381,7 +413,7 @@ def check_kwargs(
     label = method_name or getattr(cls, "name", cls.__name__)
     named, var_kw = _named_parameters(cls, supplied)
     dispatching = False
-    if not named and "__new__" in vars(cls):
+    if "__new__" in vars(cls):
         # a base that picks a subclass in __new__ (bar, rings): accept what any subclass accepts
         dispatching = True
         for sub in _all_subclasses(cls):
@@ -417,6 +449,19 @@ def _warn_deprecated(report, file, where, cls: type, method_name: str) -> None:
         report.warning(
             file, where, f"method '{method_name}' is deprecated: {cls.deprecated}"
         )
+
+
+def _check_pattern_table(report, file, where, cls, kwargs, method_name) -> dict:
+    """Warn on old names, report argument problems; the kwargs in current names."""
+    _warn_deprecated(report, file, where, cls, method_name)
+    new, notes, error = migrate_pattern_kwargs(cls, kwargs)
+    if error:
+        report.error(file, where, error)
+    for note in notes:
+        report.warning(file, where, f"{note} (pyclm check --fix updates the TOML)")
+    for problem in check_kwargs(cls, new, "pattern", method_name):
+        report.error(file, where, problem)
+    return new
 
 
 def _load_positions(directory: Path):
@@ -601,11 +646,14 @@ def check_directory(
                 f"(known: {', '.join(sorted(patterns))}){CUSTOM_HINT}",
             )
         else:
-            _warn_deprecated(report, file, "[pattern]", pattern_cls, cfg.pattern.method)
-            for problem in check_kwargs(
-                pattern_cls, cfg.pattern.kwargs, "pattern", cfg.pattern.method
-            ):
-                report.error(file, "[pattern]", problem)
+            _check_pattern_table(
+                report,
+                file,
+                "[pattern]",
+                pattern_cls,
+                cfg.pattern.kwargs,
+                cfg.pattern.method,
+            )
             # a method built from other methods (split): check each of them
             for label, sub_name, sub_kwargs in pattern_cls.nested_methods(
                 cfg.pattern.kwargs
@@ -619,9 +667,9 @@ def check_directory(
                         f"(known: {', '.join(sorted(patterns))}){CUSTOM_HINT}",
                     )
                     continue
-                _warn_deprecated(report, file, f"[pattern.{label}]", sub_cls, sub_name)
-                for problem in check_kwargs(sub_cls, sub_kwargs, "pattern", sub_name):
-                    report.error(file, f"[pattern.{label}]", problem)
+                _check_pattern_table(
+                    report, file, f"[pattern.{label}]", sub_cls, sub_kwargs, sub_name
+                )
 
         for name, table in (
             [("segmentation", cfg.segmentation)] if cfg.segmentation else []

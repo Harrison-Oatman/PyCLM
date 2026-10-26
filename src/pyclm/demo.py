@@ -186,8 +186,8 @@ def create_demo(directory: Path) -> list[Path]:
     )
     bar = _swap(
         bar,
-        "bar_speed = 1.0               # um per minute",
-        "bar_speed = 600.0             # um per minute: fast, for a 30 s demo",
+        "speed_um_per_min = 1.0",
+        "speed_um_per_min = 600.0      # fast, for a 30 s demo",
     )
     cells = _swap(CLOSED_LOOP.format(name="cells"), *binned)
     cells = _swap(

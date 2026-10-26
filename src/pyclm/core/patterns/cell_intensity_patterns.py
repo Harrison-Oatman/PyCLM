@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import numpy as np
 import tifffile
 from skimage.measure import regionprops
@@ -8,6 +10,8 @@ from .zoo import ZooMeta
 
 class NucleusControlMethod(PatternMethod):
     name = "nucleus_control_base"
+    # early TOMLs named the channel nuc_channel (silently ignored until 2.0)
+    renamed_kwargs: ClassVar[dict[str, str]] = {"nuc_channel": "channel"}
 
     def __init__(self, channel=None, tracks=False, **kwargs):
         super().__init__(**kwargs)
@@ -15,7 +19,7 @@ class NucleusControlMethod(PatternMethod):
         if channel is None:
             raise AttributeError(
                 "NucleusControlMethod must be provided a "
-                'segmentation channel in the .toml: e.g. nuc_channel = "545"'
+                'segmentation channel in the .toml: e.g. channel = "545"'
             )
 
         self.channel = channel
@@ -56,56 +60,76 @@ class NucleusControlMethod(PatternMethod):
 
 
 class BinaryNucleusClampModel(NucleusControlMethod):
-    name = "binary_nucleus_clamp"
+    name = "nucleus_clamp"
+    renamed_kwargs: ClassVar[dict[str, str]] = {"clamp_target": "target"}
 
-    def __init__(self, channel="545", clamp_target=10000, **kwargs):
+    def __init__(self, channel=None, target=10000, **kwargs):
+        """
+        :param channel: the channel whose nuclei are measured and lit
+        :param target: mean nuclear intensity (camera counts) to hold each
+            nucleus at: a nucleus dimmer than this is lit
+        """
         super().__init__(channel=channel, **kwargs)
 
-        self.clamp_target = clamp_target
+        self.target = target
 
     zoo_meta = ZooMeta(
         source="mcf10a",
         title="Bang-Bang Controller",
-        kwargs={"channel": "545", "clamp_target": 65},
-        description="Lights each nucleus whose mean intensity is below clamp_target.",
+        kwargs={"channel": "545", "target": 65},
+        description="Lights each nucleus whose mean intensity is below target.",
         group="per_nucleus",
     )
 
     def process_prop(self, prop):
-        if prop.intensity_mean > self.clamp_target:
+        if prop.intensity_mean > self.target:
             return prop.image * 0
 
         return prop.image
 
 
 class CenteredImageModel(NucleusControlMethod):
-    name = "centered_image"
+    name = "target_image"
+    renamed_kwargs: ClassVar[dict[str, str]] = {
+        "tif_path": "path",
+        "min_intensity": "target_min",
+        "max_intensity": "target_max",
+    }
     zoo_meta = ZooMeta(
         source="mcf10a",
         title="Target Image",
         kwargs={
             "channel": "545",
-            "tif_path": "target_shield.tif",
-            "min_intensity": 0,
-            "max_intensity": 100,
+            "path": "target_shield.tif",
+            "target_min": 0,
+            "target_max": 100,
         },
-        description="Bang-bang control towards a target image centred on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to min_intensity..max_intensity.",
+        description="Bang-bang control towards a target image centered on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to target_min..target_max.",
         group="per_nucleus",
     )
 
     def __init__(
         self,
-        channel="545",
-        tif_path=None,
-        min_intensity=2000,
-        max_intensity=5000,
+        channel=None,
+        path=None,
+        target_min=2000,
+        target_max=5000,
         **kwargs,
     ):
+        """
+        :param channel: the channel whose nuclei are measured and lit
+        :param path: the target image (a TIF), centered on the field
+        :param target_min: the target intensity (camera counts) of the
+            image's darkest pixel
+        :param target_max: the target intensity of its brightest pixel
+        """
         super().__init__(channel=channel, **kwargs)
 
-        self.img = tifffile.imread(tif_path)
-        self.min_intensity = min_intensity
-        self.max_intensity = max_intensity
+        if path is None:
+            raise ValueError(f"{self.name}: path (the target TIF) is required")
+        self.img = tifffile.imread(path)
+        self.target_min = target_min
+        self.target_max = target_max
 
         self.target_image = None
 
@@ -134,8 +158,8 @@ class CenteredImageModel(NucleusControlMethod):
         padded_img = np.clip(padded_img, 0, 1)
 
         padded_img = (
-            padded_img * (self.max_intensity - self.min_intensity)
-        ) + self.min_intensity
+            padded_img * (self.target_max - self.target_min)
+        ) + self.target_min
 
         self.target_image = padded_img
 

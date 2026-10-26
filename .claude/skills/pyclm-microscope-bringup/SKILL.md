@@ -145,7 +145,7 @@ mover it resolved to.
    stimulation frame must be lit edge to edge inside the ROI. If the
    light is shifted, rotated or mirrored, the affine is wrong.
    Recalibrate; do not compensate in a pattern method.
-3. A `bar` experiment. The bar must move in +y for positive `bar_speed`
+3. A `bar` experiment. The bar must move in +y for positive `speed_um_per_min`
    in the viewer (`pyclm run <dir> --gui`).
 
 ## 5. Focus

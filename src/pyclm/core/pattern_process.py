@@ -158,7 +158,7 @@ class PatternProcess(PipelineProcess):
             state, model._experiment_ref, position=self.positions.get(experiment_name)
         )
 
-        pattern = model.generate(context)
+        pattern = model.render(context)
         out = CameraPattern(experiment_name, pattern, binning=model.binning)
         state.record_pattern(out.pattern_id, pattern)
         self.slm.put(out)

@@ -111,7 +111,11 @@ def test_open_loop_template_needs_no_segmentation(tmp_path):
     cfg = ExperimentConfig.from_file(tmp_path / "bar.toml")
     assert cfg.segmentation is None
     assert cfg.pattern.method == "bar"
-    assert cfg.pattern.kwargs == {"duty_cycle": 0.2, "bar_speed": 1.0, "period": 100}
+    assert cfg.pattern.kwargs == {
+        "width_um": 20,
+        "spacing_um": 100,
+        "speed_um_per_min": 1.0,
+    }
 
 
 def test_export_on_an_empty_directory(tmp_path, capsys):

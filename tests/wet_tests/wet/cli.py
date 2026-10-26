@@ -250,7 +250,7 @@ def send_commands(directory: Path, experiment: str | None) -> None:
         {
             "command": "set_pattern",
             "experiment": experiment,
-            "parameters": {"bar_speed": 2.0},
+            "parameters": {"speed_um_per_min": 2.0},
         },
         2 * interval,
     )

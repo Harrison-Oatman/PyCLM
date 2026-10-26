@@ -157,7 +157,7 @@ run_pyclm(
 ### Leader cells with directed stimulation
 
 A fraction of the cells is chosen when the first pattern is generated and
-keeps the counter-clockwise half-cell stimulus of `rotate_ccw` for the rest of the
+keeps the counter-clockwise half-cell stimulus of `move_rotate` for the rest of the
 movie. Nothing else is lit.
 
 ```{literalinclude} examples/tracking_patterns.py
@@ -181,7 +181,7 @@ seed = 0
 ```
 
 How it works. The per-cell base classes (`PerCellPatternMethod`, which
-`rotate_ccw` and the other movement methods build on, and
+`move_rotate` and the other movement methods build on, and
 `NucleusControlMethod`) accept `tracks = true`. With it, their per-cell
 loop runs on the tracked labels instead of the segmentation, so the region
 label each method sees is a track id that persists across timepoints, and
@@ -244,7 +244,7 @@ The controller is proportional with a deliberately simple scale: a cell at
 its target gets a 50 % duty pattern, one that has fallen a full
 calibration span below it gets full light, one that has risen that far
 above it gets none. Raising `gain` sharpens this towards the bang-bang
-behaviour of `binary_nucleus_clamp`. Cells first seen after the light phase
+behaviour of `nucleus_clamp`. Cells first seen after the light phase
 have no calibration of their own and are held at the population medians.
 
 Both examples keep their state on the method instance, as `fb_bounce` and
