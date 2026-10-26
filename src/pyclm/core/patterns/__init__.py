@@ -1,3 +1,9 @@
+from .adaptive import (
+    AutoExposurePattern,
+    DriftCorrectPattern,
+    RecenterPattern,
+    SettingsSchedulePattern,
+)
 from .bar_patterns import (
     BarPatternBase,
     BouncingBarPattern,
@@ -8,8 +14,12 @@ from .cell_intensity_patterns import (
     BinaryNucleusClampModel,
     CenteredImageModel,
     GlobalCycleModel,
+    PopulationClampPattern,
+    RelativeClampPattern,
 )
-from .composite import SplitPattern
+from .cell_selection import AllCellsPattern, RandomCellsPattern, SelectCellsPattern
+from .composite import SplitPattern, WrappingPattern
+from .diagnostic import GameOfLifePattern
 from .embryo_patterns import InnerPatternMethod, OuterPatternMethod
 from .fbc_cell_movement import (
     BounceModel,
@@ -31,10 +41,18 @@ from .pattern import (
 )
 from .pulse_patterns import (
     BlinkingBarPattern,
+    ChirpPattern,
     GlobalPulsePattern,
+    PulsedPattern,
     PulseSchedulePattern,
 )
-from .static_patterns import CirclePattern, FullOnPattern
+from .static_patterns import (
+    CirclePattern,
+    DoseGridPattern,
+    FullOnPattern,
+    ImageMaskPattern,
+    RectanglePattern,
+)
 from .wave_patterns import WavePatternBase
 
 known_models = {
@@ -57,6 +75,22 @@ known_models = {
     "embryo_inner": InnerPatternMethod,
     "embryo_outer": OuterPatternMethod,
     "rings": WavePatternBase,
+    # added in 2.0
+    "rectangle": RectanglePattern,
+    "dose_grid": DoseGridPattern,
+    "image_mask": ImageMaskPattern,
+    "pulsed": PulsedPattern,
+    "chirp": ChirpPattern,
+    "all_cells": AllCellsPattern,
+    "random_cells": RandomCellsPattern,
+    "select_cells": SelectCellsPattern,
+    "population_clamp": PopulationClampPattern,
+    "relative_clamp": RelativeClampPattern,
+    "recenter": RecenterPattern,
+    "drift_correct": DriftCorrectPattern,
+    "auto_exposure": AutoExposurePattern,
+    "settings_schedule": SettingsSchedulePattern,
+    "game_of_life": GameOfLifePattern,
     # renamed in 2.0: the old names still run, with a warning from pyclm check
     "rotate_ccw": renamed_method(RotateCcwModel, "rotate_ccw"),
     "direction": renamed_method(PeriodDirectedPattern, "direction", channel="545"),
