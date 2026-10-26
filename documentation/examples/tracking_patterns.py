@@ -24,7 +24,7 @@ class LeaderCells(RotateCcwModel):
     """
     On the first pattern of the run, a ``fraction`` of the cells are chosen
     as leaders. Leaders receive the counter-clockwise half-cell stimulus of
-    ``rotate_ccw`` for the rest of the movie; every other cell receives
+    ``move_rotate`` for the rest of the movie; every other cell receives
     nothing.
     """
 
@@ -49,7 +49,7 @@ class LeaderCells(RotateCcwModel):
             chosen = self.rng.choice(tracks.ids, size=n, replace=False)
             self.leaders = {int(i) for i in chosen}
 
-        # keep only the leaders; rotate_ccw's per-cell loop does the rest
+        # keep only the leaders; move_rotate's per-cell loop does the rest
         return tracks.select(self.leaders or ()).labels
 
 

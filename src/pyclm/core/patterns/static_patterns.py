@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import numpy as np
 
 from .pattern import PatternMethod
@@ -6,22 +8,30 @@ from .zoo import ZooMeta
 
 class CirclePattern(PatternMethod):
     """
-    Projects a circle of radius rad in the center of the camera
+    Projects a filled circle of radius ``radius_um`` in the center of the camera
     """
 
     name = "circle"
+    renamed_kwargs: ClassVar[dict[str, str]] = {"rad": "radius_um"}
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"rad": 60},
+        kwargs={"radius_um": 60},
         title="Circle",
         description="Filled circle centred on the camera field of view.",
         group="static",
     )
 
-    def __init__(self, rad=1, **kwargs):
+    def __init__(self, radius_um=1.0, **kwargs):
+        """
+        :param radius_um: radius of the circle, in um
+        """
         super().__init__(**kwargs)
 
-        self.rad = rad
+        if radius_um <= 0:
+            raise ValueError(
+                f"{self.name}: radius_um must be positive, got {radius_um}"
+            )
+        self.radius_um = radius_um
 
     def generate(self, context):
         h, w = self.pattern_shape
@@ -31,9 +41,9 @@ class CirclePattern(PatternMethod):
 
         xx, yy = self.get_um_meshgrid()
 
-        return (((xx - center_x) ** 2 + (yy - center_y) ** 2) < (self.rad**2)).astype(
-            np.float16
-        )
+        return (
+            ((xx - center_x) ** 2 + (yy - center_y) ** 2) < (self.radius_um**2)
+        ).astype(np.float16)
 
 
 class FullOnPattern(PatternMethod):

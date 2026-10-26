@@ -31,6 +31,6 @@ save = true
 
 [pattern]
 method = "bar"
-duty_cycle = 0.2
-bar_speed = 1.0
-period = 100
+width_um = 20.0
+spacing_um = 100
+speed_um_per_min = 1.0

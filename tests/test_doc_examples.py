@@ -207,7 +207,7 @@ def test_per_cell_bases_accept_tracks_switch():
     assert 0 < (pattern[labels == 11] > 0).mean() < 1
 
     clamp, reqs = setup(
-        BinaryNucleusClampModel, exp, channel="545", tracks=True, clamp_target=200
+        BinaryNucleusClampModel, exp, channel="545", tracks=True, target=200
     )
     assert [(r.needs_raw, r.needs_seg, r.needs_tracks) for r in reqs] == [
         (True, False, True)

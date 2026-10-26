@@ -65,12 +65,17 @@ def test_a_correct_directory_has_no_errors(good_dir):
 # --------------------------------------------------------------- mistakes
 def test_misspelled_method_argument_is_an_error_with_a_hint(good_dir):
     toml = good_dir / "bar10.toml"
-    toml.write_text(toml.read_text().replace("bar_speed = 1.0", "bar_sped = 1.0"))
+    toml.write_text(
+        toml.read_text().replace("speed_um_per_min = 1.0", "speed_um_per_mn = 1.0")
+    )
     report = check_directory(good_dir)
     [error] = messages(report, "error")
-    assert "bar10.toml [pattern]: unknown argument 'bar_sped' for method 'bar'" in error
-    assert "did you mean 'bar_speed'" in error
-    assert "accepted: bar_speed, duty_cycle, period" in error
+    assert (
+        "bar10.toml [pattern]: unknown argument 'speed_um_per_mn' for method 'bar'"
+        in error
+    )
+    assert "did you mean 'speed_um_per_min'" in error
+    assert "spacing_um, speed_um_per_min, start_min, stop_min, width_um" in error
 
 
 def test_unknown_key_in_a_table_is_an_error(good_dir):
@@ -226,10 +231,13 @@ def test_presets_and_devices_are_checked_against_the_cfg(good_dir):
 
 # -------------------------------------------------------------- signatures
 def test_check_kwargs_against_signatures():
-    assert check_kwargs(BarPattern, {"duty_cycle": 0.1, "period": 5}) == []
-    [problem] = check_kwargs(BarPattern, {"perio": 5})
+    assert check_kwargs(BarPattern, {"width_um": 1, "spacing_um": 5}) == []
+    # a parameter of the base class, passed on through **kwargs
+    assert check_kwargs(BarPattern, {"start_min": 10}) == []
+    [problem] = check_kwargs(BarPattern, {"spacing": 5})
     assert (
-        "unknown argument 'perio' for method 'bar' (did you mean 'period'?)" in problem
+        "unknown argument 'spacing' for method 'bar' (did you mean 'spacing_um'?)"
+        in problem
     )
     assert "extra keys are silently ignored" in problem
     assert (
@@ -256,7 +264,9 @@ def test_run_refuses_to_start_on_errors_unless_forced(good_dir):
     from pyclm.run_pyclm import run_pyclm
 
     toml = good_dir / "bar10.toml"
-    toml.write_text(toml.read_text().replace("bar_speed = 1.0", "bar_sped = 1.0"))
+    toml.write_text(
+        toml.read_text().replace("speed_um_per_min = 1.0", "speed_um_per_mn = 1.0")
+    )
     with pytest.raises(CheckFailed, match="1 error"):
         run_pyclm(good_dir, dry=True)
     assert not list(good_dir.glob("*.hdf5"))

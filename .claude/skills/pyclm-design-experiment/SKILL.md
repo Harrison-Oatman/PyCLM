@@ -79,16 +79,25 @@ arguments. The common ones:
 | Want | `method` |
 |---|---|
 | A fixed shape | `circle`, `full_on` |
-| Field of moving stripes (negative speed reverses) | `bar`, `sawtooth`, `bar_bounce`, `rotate_bar`, `rings` |
+| Field of moving stripes (negative speed reverses) | `bar`, `sawtooth`, `bar_bounce`, `spokes`, `rings` |
 | Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar` |
-| Light one side of each cell (cells move towards the light) | `move_out`, `move_in`, `rotate_ccw`, `direction` (a sequence of `u`, `d`, `l`, `r`, `s`) |
-| Light each nucleus by its own intensity | `binary_nucleus_clamp`, `centered_image` (towards a target image) |
+| Light one side of each cell (cells move towards the light) | `move_out`, `move_in`, `move_rotate`, `move_sequence` (a sequence of `u`, `d`, `l`, `r`, `s`) |
+| Light each nucleus by its own intensity | `nucleus_clamp`, `target_image` (towards a target image) |
 | Light the middle or the poles of an embryo | `embryo_inner`, `embryo_outer` |
 | Different methods on two halves of the field | `split` with `[pattern.left]`/`[pattern.right]` or `top`/`bottom` |
 
 `global_cycle`, `move_down` and `fb_bounce` are deprecated fixed cases of
-`global_pulse` and `direction`; `pyclm check` warns and gives the
+`global_pulse` and `move_sequence`; `pyclm check` warns and gives the
 equivalent arguments. Use the general method.
+
+Arguments follow one convention: a quantity with a unit names it
+(`radius_um`, `speed_um_per_min`, `step_min`; time is always in
+minutes), fractions are 0–1, closed-loop methods need `channel`, and
+every method takes `start_min` / `stop_min` (dark outside that window).
+Methods and arguments renamed in 2.0 (`direction`, `rotate_ccw`,
+`rotate_bar`, `binary_nucleus_clamp`, `centered_image`, `rad`,
+`bar_speed`, `duty_cycle` + `period`, ...) still run with a warning;
+`pyclm check --fix <dir>` rewrites the TOMLs.
 
 The authoritative list is `known_models` in
 `src/pyclm/core/patterns/__init__.py`. Read the class's `__init__` for

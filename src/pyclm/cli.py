@@ -4,7 +4,7 @@ The ``pyclm`` command.
 ::
 
     pyclm run <dir> [--config FILE] [--dry] [--gui] [--no-check | --force]
-    pyclm check <dir> [--config FILE] [--mm-config FILE] [--dry]
+    pyclm check <dir> [--config FILE] [--mm-config FILE] [--dry] [--fix]
     pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N | --t A:B[:STEP]]
     pyclm export <dir> [channels ...] [--config FILE]
     pyclm gui <dir>
@@ -44,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("check", help="report problems in an experiment directory")
     p.add_argument("directory")
+    p.add_argument(
+        "--fix",
+        action="store_true",
+        help="first rewrite old pattern-method names and arguments in the "
+        "experiment TOMLs (originals kept as .toml.bak)",
+    )
     p.add_argument("--config", default=None, help="path to pyclm_config.toml")
     p.add_argument(
         "--mm-config", default=None, help="MicroManager .cfg to check presets against"
@@ -152,6 +158,20 @@ def cmd_run(args) -> int:
 
 def cmd_check(args) -> int:
     from .check import check_directory
+
+    if getattr(args, "fix", False):
+        from .fix import fix_directory
+
+        for result in fix_directory(Path(args.directory)):
+            for change in result.changes:
+                print(f"fixed   {result.path.name} {change}")
+            for problem in result.problems:
+                print(f"skipped {result.path.name} {problem}")
+            if result.written:
+                print(
+                    f"wrote   {result.path.name} (was saved as {result.path.name}.bak)"
+                )
+        print()
 
     report = check_directory(
         Path(args.directory),

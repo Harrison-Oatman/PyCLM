@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- **Pattern-method names and arguments follow one convention (2.0, first
+  part of the method expansion; design note
+  `docs/pattern-methods-expansion-design.md`).** A quantity with a unit
+  names it (`radius_um`, `speed_um_per_min`, `width_um`, `spacing_um`,
+  `speed_deg_per_min`), time is always in minutes, closed-loop methods
+  need `channel` (no scope-specific default), and stripes are given as
+  `width_um` + `spacing_um` instead of `duty_cycle` + `period`. Renamed
+  methods: `direction` → `move_sequence` (`period_h` → `step_min`),
+  `rotate_ccw` → `move_rotate` (+ `reverse`), `rotate_bar` → `spokes`
+  (`speed_deg_per_min`, positive counterclockwise), `binary_nucleus_clamp`
+  → `nucleus_clamp` (`clamp_target` → `target`), `centered_image` →
+  `target_image` (`path`, `target_min`, `target_max`). Renamed arguments:
+  `circle` `rad` → `radius_um`; the bar family and `rings` `bar_speed` /
+  `wave_speed` → `speed_um_per_min`, `t_loop` → `loop_min`, `inverse` →
+  `reverse`, `rings` `direction = -1` → a negative speed; `blinking_bar`
+  `duty_cycle` → `width_um`; `global_pulse` `reference_bar_speed` →
+  `reference_speed_um_per_min`; embryo `fraction_length` → `fraction`;
+  `nuc_channel` → `channel` (it used to be silently ignored). The unused
+  integer `direction` of the per-cell methods is gone.
+- Old names and arguments keep working: the method translates them
+  (`PatternMethod.migrate_kwargs`, `renamed_kwargs`, `legacy_defaults`;
+  `renamed_method` makes an alias) wherever it is built, with one warning
+  per run, and `pyclm check` warns with the replacement. `pyclm check
+  --fix <dir>` rewrites the experiment TOMLs (comments kept, originals
+  saved as `.toml.bak`). All 22 old-style configurations compared give
+  pixel-identical patterns to before.
+- Every pattern method takes `start_min` / `stop_min` and is dark outside
+  that window (`PatternMethod.render`, which the pattern process,
+  `preview`, `split` and the zoo call; methods still implement
+  `generate`).
+- `pyclm check` accepts the arguments a method passes on to its parents
+  (`start_min`, the per-cell `voronoi` / `gradient` / `tracks`), which it
+  used to report as unknown.
+- Fixed: `embryo_inner` and `embryo_outer` raised a broadcasting error on a
+  non-square field (`np.meshgrid` without `indexing="ij"`).
 - The method zoo opens with a grid of thumbnail cards, one per built-in
   pattern method, grouped by family, animated for methods that change over
   time, tagged with what each needs (open loop, segmentation, tracks), and

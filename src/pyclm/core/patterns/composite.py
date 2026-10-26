@@ -216,7 +216,7 @@ class SplitPattern(PatternMethod):
         masks = self.masks()
         out = np.zeros(self.pattern_shape, np.float32)
         for region, child in self.children.items():
-            pattern = np.asarray(child.generate(context), dtype=np.float32)
+            pattern = np.asarray(child.render(context), dtype=np.float32)
             if pattern.shape != out.shape:
                 pattern = _fit(pattern, out.shape)
             out += masks[region] * np.clip(pattern, 0.0, 1.0)

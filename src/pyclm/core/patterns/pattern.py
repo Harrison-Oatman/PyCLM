@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import NamedTuple
+from typing import ClassVar, NamedTuple
 from uuid import UUID
 
 import numpy as np
@@ -404,17 +404,107 @@ class PatternContext:
                 self._requests.append(_position_change(key, value))
 
 
-class PatternMethod:
+# (class, notes) pairs already logged, so a renamed keyword warns once per run
+_MIGRATION_WARNED: set = set()
+
+
+class _MigratingType(type):
+    """
+    Metaclass of :class:`PatternMethod`: before a method is constructed, its
+    keyword arguments go through :meth:`PatternMethod.migrate_kwargs`, so a
+    TOML written with an old keyword name keeps working (with a warning)
+    wherever the method is built: the run, ``pyclm check``, ``preview``, the
+    zoo, inside ``split``.
+    """
+
+    def __call__(cls, *args, **kwargs):
+        kwargs, notes = cls.migrate_kwargs(kwargs)
+        if notes:
+            key = (cls, tuple(notes))
+            if key not in _MIGRATION_WARNED:
+                _MIGRATION_WARNED.add(key)
+                logger.warning(
+                    f"pattern method '{cls.name}': old arguments, "
+                    f"run pyclm check --fix to update the TOML: {'; '.join(notes)}"
+                )
+        return super().__call__(*args, **kwargs)
+
+
+def _merged_class_dicts(cls: type, attribute: str) -> dict:
+    """``attribute`` (a dict) merged down the MRO, the most derived class winning."""
+    out: dict = {}
+    for klass in reversed(cls.__mro__):
+        out.update(vars(klass).get(attribute, {}))
+    return out
+
+
+class PatternMethod(metaclass=_MigratingType):
     name = "base"
     # set on a method kept only as a fixed case of another: what to use
     # instead (pyclm check warns with it)
     deprecated = ""
     # how many of this method's previous patterns the context keeps
     pattern_history = 2
+    # old keyword -> new keyword, for TOMLs written before a rename; merged
+    # down the class hierarchy. Renames that convert a value override
+    # migrate_kwargs instead.
+    renamed_kwargs: ClassVar[dict[str, str]] = {}
+    # defaults a keyword had before it became required, kept so that old
+    # TOMLs still run (pyclm check warns and says what to add)
+    legacy_defaults: ClassVar[dict[str, object]] = {}
+    # on an alias made by renamed_method: the current name
+    renamed_to = ""
+
+    @classmethod
+    def migrate_kwargs(cls, kwargs: dict) -> tuple[dict, list[str]]:
+        """
+        Translate old keyword arguments into the current ones. Returns the
+        new kwargs and one note per change for the warning; ``pyclm check``
+        validates the result and ``pyclm check --fix`` writes it back to
+        the TOML. Override (calling ``super()``) for a rename that converts
+        a value, such as hours to minutes.
+        """
+        out = dict(kwargs)
+        notes = []
+        for old, new in _merged_class_dicts(cls, "renamed_kwargs").items():
+            if old not in out:
+                continue
+            if new in out:
+                raise ValueError(
+                    f"{cls.name}: give {new!r} or the old name {old!r}, not both"
+                )
+            out[new] = out.pop(old)
+            notes.append(f"{old} is now {new}")
+        for key, value in _merged_class_dicts(cls, "legacy_defaults").items():
+            if key not in out:
+                out[key] = value
+                notes.append(
+                    f"{key} has no default any more; add {key} = {value!r} "
+                    "(the old default)"
+                )
+        return out, notes
 
     def __init__(
-        self, experiment_name=None, camera_properties: CameraProperties = None, **kwargs
+        self,
+        experiment_name=None,
+        camera_properties: CameraProperties = None,
+        start_min: float = 0.0,
+        stop_min: float | None = None,
+        **kwargs,
     ):
+        """
+        :param start_min: experiment minute the method starts; before it
+            the field is dark
+        :param stop_min: experiment minute the method stops (None: never);
+            from it on the field is dark
+        """
+        if stop_min is not None and stop_min <= start_min:
+            raise ValueError(
+                f"{self.name}: stop_min ({stop_min}) must be after "
+                f"start_min ({start_min})"
+            )
+        self.start_min = float(start_min)
+        self.stop_min = None if stop_min is None else float(stop_min)
         # Support legacy init where these are passed
         self.experiment_name = experiment_name
         self.camera_properties = camera_properties
@@ -562,6 +652,8 @@ class PatternMethod:
         reason.
         """
         applied, refused = {}, {}
+        renamed = _merged_class_dicts(type(self), "renamed_kwargs")
+        parameters = {renamed.get(k, k): v for k, v in parameters.items()}
         for name, value in parameters.items():
             if (
                 name.startswith("_")
@@ -588,6 +680,25 @@ class PatternMethod:
         h, w = self.pattern_shape
         return (w * self.pixel_size_um / 2.0, h * self.pixel_size_um / 2.0)
 
+    def active(self, t_minutes: float) -> bool:
+        """Whether ``t_minutes`` lies in ``[start_min, stop_min)``."""
+        if t_minutes < self.start_min:
+            return False
+        return self.stop_min is None or t_minutes < self.stop_min
+
+    def render(self, context) -> np.ndarray:
+        """
+        The pattern PyCLM projects: :meth:`generate` while the method is
+        :meth:`active`, a dark field outside ``[start_min, stop_min)``.
+        Callers (the pattern process, ``preview``, ``split``, the zoo) use
+        this; methods implement ``generate``.
+        """
+        time = getattr(context, "time", None)
+        if time is not None and not self.active(time / 60):
+            h, w = self.pattern_shape
+            return np.zeros((int(h), int(w)), dtype=np.float16)
+        return self.generate(context)
+
     def generate(self, data_dock: DataDock | PatternContext) -> np.ndarray:
         # If passed PatternContext, user is using new API.
         # But if user implemented old generate(self, data_dock: DataDock), we need to support that.
@@ -611,3 +722,27 @@ class PatternMethod:
         logger.info(f"model {self.name} updated pattern_shape to {self.pattern_shape}")
 
         self.binning = binning
+
+
+def renamed_method(cls: type, old_name: str, **legacy_defaults) -> type:
+    """
+    A registered alias for a renamed pattern method: the same method under
+    its old name, marked ``deprecated`` (``pyclm check`` warns and
+    ``pyclm check --fix`` rewrites the TOML) and listed on the new name's
+    zoo card. ``legacy_defaults`` are keyword defaults the old method had
+    and the new one requires.
+    """
+    from .zoo import ZooMeta
+
+    return type(
+        f"{cls.__name__}_{old_name}",
+        (cls,),
+        {
+            "name": old_name,
+            "renamed_to": cls.name,
+            "deprecated": f'renamed: use method = "{cls.name}"',
+            "zoo_meta": ZooMeta(same_as=cls.name, equivalent="the old name"),
+            "legacy_defaults": dict(legacy_defaults),
+            "__module__": cls.__module__,
+        },
+    )

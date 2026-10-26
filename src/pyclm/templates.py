@@ -65,9 +65,9 @@ save = false                  # keep the camera frame taken during stimulation?
 
 [pattern]
 method = "bar"                # see the method zoo in the documentation
-duty_cycle = 0.2
-bar_speed = 1.0               # um per minute
-period = 100                  # um
+width_um = 20                 # width of each stripe
+spacing_um = 100              # from one stripe to the next
+speed_um_per_min = 1.0
 """
 
 CLOSED_LOOP = """# {name}.toml: a closed-loop experiment (segment cells, light the half of each cell facing out)

@@ -57,7 +57,7 @@ def test_open_loop_preview_writes_pattern_and_overlay(exp_dir, tif):
     assert tifffile.imread(result.paths["pattern (DMD)"]).shape == (1140, 912)
     info = json.loads(result.paths["summary"].read_text())
     assert info["method"] == "bar"
-    assert info["kwargs"]["bar_speed"] == 1.0
+    assert info["kwargs"]["speed_um_per_min"] == 1.0
     assert info["t"] == 2
     assert info["time_s"] == 2.0
     assert info["pixel_size_um"] == 0.5

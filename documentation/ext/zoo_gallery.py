@@ -202,7 +202,7 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
 
     def pattern_at(t):
         context = ZooContext(raw_image=raw, seg_image=seg, time_seconds=t)
-        out = np.asarray(method.generate(context), dtype=float)
+        out = np.asarray(method.render(context), dtype=float)
         return np.clip(out, 0, 1)
 
     pattern = pattern_at(meta.time_seconds)

@@ -92,10 +92,10 @@ def test_global_cycle_is_global_pulse_with_the_listed_arguments():
     [
         ("move_down", {}, {"sequence": "d"}),
         # fb_bounce reverses every half-loop: down, then up, then down again
-        ("fb_bounce", {"t_loop": 60}, {"sequence": "du", "period_h": 0.5}),
+        ("fb_bounce", {"t_loop": 60}, {"sequence": "du", "step_min": 30}),
     ],
 )
-def test_per_cell_aliases_match_direction(name, kwargs, direction_kwargs):
+def test_per_cell_aliases_match_move_sequence(name, kwargs, direction_kwargs):
     from pyclm.core.patterns.zoo import ZooContext
 
     seg = np.zeros((40, 40), np.int32)
@@ -108,7 +108,7 @@ def test_per_cell_aliases_match_direction(name, kwargs, direction_kwargs):
         return method
 
     alias = make(name, **kwargs)
-    general = make("direction", voronoi=False, gradient=False, **direction_kwargs)
+    general = make("move_sequence", voronoi=False, gradient=False, **direction_kwargs)
     for minutes in (1, 29, 31, 59, 61, 89, 91, 121):
         context = ZooContext(seg.astype(float), seg, time_seconds=minutes * 60)
         assert np.array_equal(
@@ -120,13 +120,13 @@ def test_per_cell_aliases_match_direction(name, kwargs, direction_kwargs):
 @pytest.mark.parametrize(
     ("letter", "lit_rows"), [("u", slice(0, 5)), ("d", slice(5, 10))]
 )
-def test_direction_lights_the_side_cells_should_move_to(letter, lit_rows):
+def test_move_sequence_lights_the_side_cells_should_move_to(letter, lit_rows):
     """Cells move towards the light; rows grow down the image."""
     from pyclm.core.patterns.zoo import ZooContext
 
     seg = np.zeros((10, 10), np.int32)
     seg[:, 2:8] = 1
-    method = known_models["direction"](
+    method = known_models["move_sequence"](
         sequence=letter, channel="638", voronoi=False, gradient=False
     )
     method.pattern_shape = seg.shape
