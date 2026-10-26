@@ -479,12 +479,19 @@ class Manager:
     def _apply_change(self, name: str, cfg, channel: str | None, change: SettingChange):
         if change.kind == "position":
             pos = self.positions[name]
+            tiles = getattr(pos, "tiles", None) or []
             if change.key == "pfs_offset":
                 old = pos.extras.get("PFSOffset")
-                pos.extras["PFSOffset"] = float(change.value)
+                for target in (pos, *tiles):
+                    target.extras["PFSOffset"] = float(change.value)
             else:
                 old = getattr(pos, change.key)
                 setattr(pos, change.key, float(change.value))
+                # a grid is visited tile by tile: move every tile by the
+                # same offset, so the grid keeps its layout
+                delta = float(change.value) - float(old)
+                for tile in tiles:
+                    setattr(tile, change.key, float(getattr(tile, change.key)) + delta)
             return old
         if change.kind == "exposure":
             old = cfg.exposure

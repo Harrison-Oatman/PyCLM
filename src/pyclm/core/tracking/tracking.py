@@ -122,3 +122,12 @@ class TrackingMethod:
         this timepoint.
         """
         raise NotImplementedError(f"{self.name} does not implement track()")
+
+    def shift(self, dy_px: float, dx_px: float) -> None:
+        """
+        The stage moved since the last frame, carrying every object by
+        ``(dy_px, dx_px)`` in the image (rows, columns); called before the
+        next :meth:`track`. A tracker that links by position moves what it
+        remembers by the same amount, so ids survive the move. The default
+        does nothing.
+        """
