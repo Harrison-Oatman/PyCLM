@@ -146,6 +146,7 @@ class RecenterPattern(StageMoverPattern):
     def __init__(self, channel=None, deadband_um=50.0, max_step_um=200.0, **kwargs):
         """
         :param channel: the channel whose segmentation is kept centered
+        :param inner: the wrapped method, a ``[pattern.inner]`` table (optional)
         :param deadband_um: distance from the center tolerated without a move, in um
         :param max_step_um: the largest move per timepoint, in um
         """
@@ -198,6 +199,7 @@ class DriftCorrectPattern(StageMoverPattern):
     ):
         """
         :param channel: the channel whose frames are registered
+        :param inner: the wrapped method, a ``[pattern.inner]`` table (optional)
         :param deadband_um: drift tolerated without a move, in um
         :param max_step_um: the largest move per timepoint, in um
         :param reference: "first" or "previous" frame
@@ -290,6 +292,7 @@ class AutoExposurePattern(WrappingPattern):
     ):
         """
         :param channel: the channel whose exposure is adjusted
+        :param inner: the wrapped method, a ``[pattern.inner]`` table (optional)
         :param percentile: the percentile of the frame held at the target
         :param target: that percentile as a fraction of full_scale (0-1)
         :param min_ms: the shortest exposure, in ms
@@ -388,6 +391,7 @@ class SettingsSchedulePattern(WrappingPattern):
     ):
         """
         :param channel: the channel changed ("stimulation" or an imaging channel)
+        :param inner: the wrapped method, a ``[pattern.inner]`` table (optional)
         :param setting: "exposure", "config" or "property"
         :param steps: list of [start_min, value]
         :param group: the config group ("config")

@@ -324,6 +324,7 @@ class PulsedPattern(WrappingPattern):
         :param period_min: minutes between successive on-edges
         :param on_min: minutes the inner pattern is shown at each on-edge
         :param phase_min: minutes from ``start_min`` to the first on-edge
+        :param inner: the gated method, a ``[pattern.inner]`` table
         """
         super().__init__(**kwargs)
         _check_gate(period_min, on_min, self.name)
