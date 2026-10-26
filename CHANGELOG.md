@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- The method zoo opens with a grid of thumbnail cards, one per built-in
+  pattern method, grouped by family, animated for methods that change over
+  time, tagged with what each needs (open loop, segmentation, tracks), and
+  filterable by family or loop. Each links to an entry with a `[pattern]`
+  table to paste, the sample image, the pattern the DMD receives, and a
+  filmstrip or a timeline. Every registered method is now covered (9 were
+  missing). A test fails for a built-in without `zoo_meta`. Design note:
+  `docs/method-zoo-design.md`.
+- `method = "rings"` (concentric rings moving out or in; `wave_speed = 0`
+  holds them still) is registered. It had a zoo card as "wave", but no
+  TOML name.
+- **Behaviour change:** `direction`'s `"u"` and `"d"` were swapped: `"u"`
+  lit the lower side of each cell. Cells move towards the light, so `"u"`
+  now lights the upper side (towards row 0) and `"d"` the lower. An
+  experiment written against the old letters should swap them.
+- `global_cycle`, `move_down` and `fb_bounce` are deprecated: they are
+  fixed cases of `global_pulse` and `direction`, and `pyclm check` warns
+  with the equivalent arguments. They still run.
+- The per-cell methods with `gradient = true` no longer put NaN in the
+  pattern for a one-pixel-wide cell (known issue 37). The zoo examples of
+  `move_in`, `move_out`, `rotate_ccw` and `split` use `gradient = true`.
+- `fb_bounce` reverses every half-loop; it reversed once and then kept
+  one direction for the rest of the run (known issue 36).
 - `pyclm preview --t START:STOP[:STEP]` previews a stretch of the schedule
   in seconds: the method runs at each timepoint with its state kept, and
   the preview adds pattern stacks, a captioned montage and an animation.

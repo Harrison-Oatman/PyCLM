@@ -1,21 +1,26 @@
 # Method Zoo
 
-Visual gallery of all built-in pattern methods.  Each card shows an example
-raw image alongside the illumination pattern the method would generate with
-the parameters listed.  Gallery images are rendered automatically at docs
-build time from sample images in `documentation/zoo_sources/`.
+Every built-in pattern method, run on a sample image. The cards below show
+the pattern (cyan) over the image, animated for methods that change over
+time; the buttons above them filter by family or by open / closed loop.
+Each card links to the method's entry: a `[pattern]` table that reproduces
+it, the image, the pattern the DMD receives, and how it changes over time.
+The images are rendered at docs build time from the samples in
+`documentation/zoo_sources/`, scaled to 0–255 before the method sees them,
+so intensity thresholds in the examples are in those units.
 
-## Stimulation / Pattern Methods
-
-Two of these can share one field, each on its own half, with `method =
-"split"` and `[pattern.left]` / `[pattern.right]` (or `top` / `bottom`)
-sub-tables; see the "Combining methods" section of [Writing custom pattern methods](custom_pattern_methods.md).
+Two methods can share one field, each on its own half, with `method =
+"split"` (under Combining methods below); see the "Combining methods"
+section of [Writing custom pattern methods](custom_pattern_methods.md).
 
 ```{include} _zoo_gallery.md
 ```
 
-> **Adding a new method to the gallery** — attach a `zoo_meta` class variable
+> **Adding a method to the gallery** — attach a `zoo_meta` class variable
 > to your `PatternMethod` subclass (see `src/pyclm/core/patterns/zoo.py` for
-> the `ZooMeta` dataclass) and add the corresponding source image to
-> `documentation/zoo_sources/<source>.tif`.  A `<source>_seg.tif` label image
-> is optional; synthetic blobs are used when absent.
+> the `ZooMeta` dataclass): a sample image (`source`), the example's
+> arguments, a family (`group`), and `times` or `timeline` if the pattern
+> changes over time. A built-in that is another method with fixed
+> arguments names that method with `same_as` and is listed on its card.
+> `tests/test_zoo_gallery.py` fails for a registered built-in without
+> `zoo_meta`.

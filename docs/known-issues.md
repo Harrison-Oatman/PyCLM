@@ -323,3 +323,21 @@ experiments at `binning = 4`, `dry_run.yml` with the unbinned
 patterns then agree. Fix to decide: make the dry `binning` set the
 simulated camera's reported binning (so the pattern shape follows), or
 retire the key in favour of the TOML binning.
+
+### 36. `fb_bounce` reversed only once
+
+**Fixed 2026-10-26** (method zoo PR, `docs/method-zoo-design.md`).
+`BounceModel.generate` (`src/pyclm/core/patterns/fbc_cell_movement.py`)
+set `self.down = False` after the first half-loop and never back, so after
+`t_loop / 2` minutes it lit the same side of every cell for the rest of
+the run. It now follows the half of the loop it is in, like `bar_bounce`;
+`tests/test_zoo_gallery.py` checks it against `direction` with
+`sequence = "ud"`.
+
+### 37. Per-cell `gradient = true` turned a one-pixel-wide cell into NaN
+
+**Fixed 2026-10-26** (method zoo PR). `PerCellPatternMethod.prop_vector`
+(`src/pyclm/core/patterns/fbc_cell_movement.py`) divided by the largest
+projection in the cell; a cell with no pixel ahead of its centroid (a
+one-pixel label) divided 0 by 0, and the NaN reached the pattern. Such a
+cell now stays dark; `tests/test_zoo_gallery.py` checks it.

@@ -21,6 +21,7 @@ log.txt
 documentation/_build/
 documentation/_static/*
 !documentation/_static/pyclm.css
+!documentation/_static/zoo.js
 documentation/_generated/
 documentation/_zoo_gallery.md
 

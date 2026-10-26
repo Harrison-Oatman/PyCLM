@@ -14,7 +14,8 @@ class CirclePattern(PatternMethod):
         source="mdck",
         kwargs={"rad": 60},
         title="Circle",
-        description="Filled circle centerd on the camera field of view.",
+        description="Filled circle centred on the camera field of view.",
+        group="static",
     )
 
     def __init__(self, rad=1, **kwargs):
@@ -46,6 +47,7 @@ class FullOnPattern(PatternMethod):
         kwargs={},
         title="Full On",
         description="Illuminates the entire camera field of view.",
+        group="static",
     )
 
     def __init__(self, **kwargs):

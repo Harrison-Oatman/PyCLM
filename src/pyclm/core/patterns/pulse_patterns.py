@@ -54,6 +54,15 @@ class GlobalPulsePattern(PatternMethod):
     """
 
     name = "global_pulse"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"period_min": 100, "on_min": 20, "start_min": 60},
+        time_seconds=3900,
+        title="Global Pulse",
+        description="The whole field on for on_min out of every period_min, between start_min and stop_min.",
+        group="timed",
+        timeline=(0, 30000),
+    )
 
     def __init__(
         self,
@@ -143,6 +152,15 @@ class PulseSchedulePattern(PatternMethod):
     """
 
     name = "pulse_schedule"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"pulses": [[60, 20], [180, 5], [240, 60]]},
+        time_seconds=3900,
+        title="Pulse Schedule",
+        description="The whole field on during an explicit list of [start_min, duration_min] pulses.",
+        group="timed",
+        timeline=(0, 21600),
+    )
 
     def __init__(self, pulses=(), start_min=0.0, **kwargs):
         """
@@ -197,6 +215,8 @@ class BlinkingBarPattern(PatternMethod):
         kwargs={"spacing_um": 100, "duty_cycle": 0.2, "period_min": 100, "on_min": 20},
         title="Blinking Bar",
         description="Stationary stripes gated on and off by a periodic pulse train.",
+        group="timed",
+        timeline=(0, 30000),
     )
 
     def __init__(

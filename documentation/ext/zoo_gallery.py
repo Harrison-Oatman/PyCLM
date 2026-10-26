@@ -3,32 +3,38 @@ Sphinx extension: pattern-method documentation zoo.
 
 On ``builder-inited`` this extension:
 
-1. Imports every pattern module and collects all :class:`PatternMethod`
-   subclasses that carry a ``zoo_meta`` class variable.
-2. For each such class it:
-   a. Loads the declared source image (raw TIF + optional label TIF) from
+1. Walks ``known_models`` and finds the ``zoo_meta`` of every registered
+   pattern method (on the class, or on the subclass a dispatching base such
+   as ``bar`` builds). A method whose ``zoo_meta`` names ``same_as`` gets no
+   card; it is listed on that method's card.
+2. For each card it:
+   a. Loads the declared source image (raw TIF + label TIF) from
       ``documentation/zoo_sources/``.
-   b. Creates a *zoo subclass* that pre-binds ``get_um_meshgrid`` /
-      ``center_um`` to the sample image geometry.
-   c. Instantiates the class with the kwargs in ``zoo_meta``, builds a
-      :class:`ZooContext`, and calls ``generate()``.
-   d. Saves a side-by-side overlay PNG to
-      ``documentation/_generated/zoo/<ClassName>.png``.
-3. Writes ``documentation/_generated/zoo/gallery.md`` — a MyST markdown
-   fragment that ``method_zoo.md`` includes.
+   b. Instantiates the method with the kwargs in ``zoo_meta`` (a string
+      argument that names a file in ``zoo_sources/`` becomes its path), sets
+      the sample geometry on it and, for a composite, on its parts.
+   c. Calls ``generate()`` with a :class:`ZooContext` that holds the image in
+      camera counts, at ``time_seconds`` and at each of ``times``.
+   d. Saves a thumbnail and a detail figure (raw | pattern | overlay, plus a
+      filmstrip or a timeline) to ``_generated/static/zoo/``, which is added
+      to ``html_static_path`` so the pages find them under ``_static/zoo/``.
+3. Writes ``_zoo_gallery.md``, a MyST fragment that ``method_zoo.md``
+   includes: a thumbnail grid per family, then one entry per card.
+
+:func:`build_gallery` does all of it without Sphinx; the tests call it.
 
 Configuration (``conf.py``)
 ---------------------------
 ``zoo_sources_dir``  (default: ``<docs_dir>/zoo_sources``)
     Directory that contains the raw / label TIFs and ``metadata.toml``.
-``zoo_output_dir``   (default: ``<docs_dir>/_generated/zoo``)
-    Directory where PNGs and ``gallery.md`` are written.
+``zoo_output_dir``   (default: ``<docs_dir>/_generated/static/zoo``)
+    Directory where the PNGs are written; its parent is added to
+    ``html_static_path``.
 """
 
 from __future__ import annotations
 
-import importlib
-import inspect
+import html
 import logging
 import sys
 from pathlib import Path
@@ -41,6 +47,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# the overlay: the pattern in cyan over the grey image
+_CYAN = np.array([0.0, 0.85, 0.85])
+_ALPHA = 0.5
+
 
 # ---------------------------------------------------------------------------
 # Sphinx entry point
@@ -50,252 +60,233 @@ logger = logging.getLogger(__name__)
 def setup(app: Sphinx) -> dict:
     app.add_config_value("zoo_sources_dir", None, "env")
     app.add_config_value("zoo_output_dir", None, "env")
-    app.connect("builder-inited", _build_gallery)
-    return {"version": "0.1", "parallel_read_safe": True}
+    app.connect("builder-inited", _on_builder_inited)
+    app.add_js_file("zoo.js")
+    return {"version": "0.2", "parallel_read_safe": True}
 
 
-# ---------------------------------------------------------------------------
-# Main build function
-# ---------------------------------------------------------------------------
-
-
-def _build_gallery(app: Sphinx) -> None:
+def _on_builder_inited(app: Sphinx) -> None:
     docs_dir = Path(app.srcdir)
-
-    sources_dir = (
-        Path(app.config.zoo_sources_dir)
-        if app.config.zoo_sources_dir
-        else docs_dir / "zoo_sources"
+    sources_dir = Path(app.config.zoo_sources_dir or docs_dir / "zoo_sources")
+    output_dir = Path(
+        app.config.zoo_output_dir or docs_dir / "_generated" / "static" / "zoo"
     )
-    # PNGs land in _static/zoo/ so Sphinx copies them verbatim to the HTML
-    # output _static/zoo/ directory.
-    output_dir = (
-        Path(app.config.zoo_output_dir)
-        if app.config.zoo_output_dir
-        else docs_dir / "_generated" / "zoo"
-    )
-    # The gallery fragment is written to the docs root so that image paths
-    # inside it resolve correctly when included by method_zoo.md.
-    fragment_dir = docs_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    # served as _static/<output_dir.name>/
+    static_root = str(output_dir.parent)
+    if static_root not in app.config.html_static_path:
+        app.config.html_static_path.append(static_root)
 
-    if not sources_dir.exists():
-        logger.warning(
-            "zoo_gallery: sources directory %s not found; skipping zoo build.",
-            sources_dir,
-        )
-        _write_placeholder(fragment_dir)
-        return
-
+    fragment = docs_dir / "_zoo_gallery.md"
     try:
-        import matplotlib
-        import tifffile
-    except ImportError as exc:
-        logger.warning("zoo_gallery: missing dependency (%s); skipping zoo build.", exc)
-        _write_placeholder(fragment_dir)
+        entries = build_gallery(sources_dir, output_dir, fragment, docs_dir)
+    except Exception as exc:
+        logger.warning(
+            "zoo_gallery: skipping zoo build - %s: %s", type(exc).__name__, exc
+        )
+        fragment.write_text(
+            "<!-- Zoo gallery could not be built (missing sources or dependencies). -->\n",
+            encoding="utf-8",
+        )
         return
-
-    metadata = _load_metadata(sources_dir)
-    classes = _discover_zoo_classes()
-
-    if not classes:
-        logger.warning("zoo_gallery: no PatternMethod subclasses with zoo_meta found.")
-        _write_placeholder(fragment_dir)
-        return
-
-    known_models = _load_known_models()
-
-    entries: list[dict] = []
-    for cls in classes:
-        try:
-            entry = _build_entry(cls, sources_dir, output_dir, metadata, known_models)
-            if entry:
-                entries.append(entry)
-        except Exception as exc:
-            logger.warning(
-                "zoo_gallery: skipping %s - %s: %s",
-                cls.__name__,
-                type(exc).__name__,
-                exc,
-            )
-
-    _write_gallery_md(fragment_dir, output_dir, entries)
     logger.info(
         "zoo_gallery: wrote %d gallery entries to %s.", len(entries), output_dir
     )
 
 
 # ---------------------------------------------------------------------------
-# Discovery
+# Build
 # ---------------------------------------------------------------------------
-_PATTERN_MODULES = [
-    "pyclm.core.patterns.embryo_patterns",
-    "pyclm.core.patterns.bar_patterns",
-    "pyclm.core.patterns.pulse_patterns",
-    "pyclm.core.patterns.cell_intensity_patterns",
-    "pyclm.core.patterns.fbc_cell_movement",
-    "pyclm.core.patterns.wave_patterns",
-    "pyclm.core.patterns.static_patterns",
-]
 
 
-def _load_known_models() -> dict:
-    """Return the inverted known_models map: {cls: toml_key}."""
-    try:
-        from pyclm.core.patterns import known_models
+def build_gallery(
+    sources_dir: Path, output_dir: Path, fragment: Path, docs_dir: Path
+) -> list[dict]:
+    """Render every card into *output_dir* and write the MyST *fragment*.
 
-        return {cls: key for key, cls in known_models.items()}
-    except ImportError:
-        return {}
-
-
-def _get_toml_name(cls: type, known_models_inv: dict) -> str | None:
-    """Look up the TOML registration key for *cls*.
-
-    Matches first by direct class identity, then by the ``name`` class
-    attribute (handles cases like ``BarPattern`` → ``BarPatternBase`` → ``"bar"``).
+    Image paths in the fragment are relative to *docs_dir* (the page that
+    includes it lives there). Returns the card entries.
     """
-    if cls in known_models_inv:
-        return known_models_inv[cls]
-    name_attr = getattr(cls, "name", None)
-    if name_attr:
-        # name_attr is the TOML key when the class is registered directly
-        for klass, key in known_models_inv.items():
-            if getattr(klass, "name", None) == name_attr:
-                return key
-    return None
+    import tomllib
 
+    import matplotlib
 
-def _discover_zoo_classes() -> list[type]:
-    """Import pattern modules in _PATTERN_MODULES order and return classes that
-    have ``zoo_meta``, preserving that order."""
-    # Make pyclm importable from the Sphinx source tree.
+    matplotlib.use("Agg")
+
     src_dir = str(Path(__file__).parents[2] / "src")
     if src_dir not in sys.path:
         sys.path.insert(0, src_dir)
+    from pyclm.core.patterns import known_models
 
-    zoo_classes: list[type] = []
-    seen: set[type] = set()
+    with open(sources_dir / "metadata.toml", "rb") as f:
+        metadata = tomllib.load(f)
 
-    for mod_name in _PATTERN_MODULES:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cards, aliases = collect(known_models)
+
+    entries = []
+    for key, meta in cards:
         try:
-            mod = importlib.import_module(mod_name)
-        except ImportError as exc:
-            logger.warning("zoo_gallery: could not import %s - %s", mod_name, exc)
+            entry = _build_entry(
+                key, meta, known_models, sources_dir, output_dir, metadata
+            )
+        except Exception as exc:
+            logger.warning(
+                "zoo_gallery: skipping %s - %s: %s", key, type(exc).__name__, exc
+            )
             continue
+        entry["aliases"] = aliases.get(key, [])
+        entries.append(entry)
 
-        for obj in vars(mod).values():
-            if (
-                isinstance(obj, type)
-                and "zoo_meta" in obj.__dict__
-                and obj.__dict__["zoo_meta"] is not None
-                and obj not in seen
-            ):
-                zoo_classes.append(obj)
-                seen.add(obj)
-
-    return zoo_classes
+    _write_fragment(fragment, output_dir, docs_dir, entries)
+    return entries
 
 
-# ---------------------------------------------------------------------------
-# Per-entry build
-# ---------------------------------------------------------------------------
+def zoo_meta_for(key: str, cls: type):
+    """The ``zoo_meta`` declared for registered name *key*, or None.
+
+    Looks on *cls* itself, then on its subclasses whose ``name`` is *key*
+    (``bar`` registers ``BarPatternBase``, which builds a ``BarPattern``).
+    """
+    if cls.__dict__.get("zoo_meta") is not None:
+        return cls.__dict__["zoo_meta"]
+    pending = list(cls.__subclasses__())
+    while pending:
+        sub = pending.pop()
+        if (
+            getattr(sub, "name", None) == key
+            and sub.__dict__.get("zoo_meta") is not None
+        ):
+            return sub.__dict__["zoo_meta"]
+        pending.extend(sub.__subclasses__())
+    return None
 
 
-def _build_entry(
-    cls: type,
-    sources_dir: Path,
-    output_dir: Path,
-    metadata: dict,
-    known_models_inv: dict,
-) -> dict | None:
-    from pyclm.core.patterns.zoo import ZooContext, make_zoo_subclass
+def collect(registry: dict[str, type]):
+    """Split the registered names into cards and aliases.
 
-    zoo_meta = cls.zoo_meta
-    source = zoo_meta.source
-    pixel_size_um = metadata.get(source, {}).get("pixel_size_um", 1.0)
-    vmin, vmax = (
-        metadata.get(source, {}).get("vmin"),
-        metadata.get(source, {}).get("vmax"),
-    )
+    Returns ``([(key, zoo_meta), ...] in family order, {card key: [(alias,
+    equivalent), ...]})``. Names without ``zoo_meta`` are left out (the tests
+    fail on them).
+    """
+    from pyclm.core.patterns.zoo import ZOO_GROUPS
 
-    # load and normalize raw image and segmentation
-    raw, seg = _load_source(sources_dir, source)
-    raw = np.clip(raw, vmin, vmax) if (vmin is not None and vmax is not None) else raw
-    raw = (raw - raw.min()) / (raw.max() - raw.min()) * 255
+    order = {g[0]: i for i, g in enumerate(ZOO_GROUPS)}
+    cards, aliases = [], {}
+    for key, cls in registry.items():
+        meta = zoo_meta_for(key, cls)
+        if meta is None:
+            continue
+        if meta.same_as:
+            aliases.setdefault(meta.same_as, []).append((key, meta.equivalent))
+        else:
+            cards.append((key, meta))
+    cards.sort(key=lambda c: order.get(c[1].group, len(order)))
+    return cards, aliases
 
-    # Build zoo subclass with geometry bound to the sample image
-    ZooCls = make_zoo_subclass(cls, raw.shape, pixel_size_um)
 
-    # use all kwargs
-    kwargs = zoo_meta.kwargs
-    real_kwargs = {}
-    public_kwargs = {}
-    for item, kwarg in kwargs.items():
-        real_kwargs[item.lstrip("_")] = kwarg
-        if item[0] != "_":
-            public_kwargs[item] = kwarg
+def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict:
+    from pyclm.core.patterns.zoo import ZooContext
 
-    # Instantiate
-    instance = ZooCls(**real_kwargs)
-    instance.pixel_size_um = pixel_size_um
-    instance.pattern_shape = raw.shape
+    info = metadata.get(meta.source, {})
+    pixel_size_um = info.get("pixel_size_um", 1.0)
+    raw, seg = _load_source(sources_dir, meta.source)
+    display = _display_image(raw, info.get("vmin"), info.get("vmax"))
+    # methods see the display-scaled image, 0-255, not camera counts
+    raw = display * 255
 
-    # Build context
-    context = ZooContext(
-        raw_image=raw, seg_image=seg, time_seconds=zoo_meta.time_seconds
-    )
+    kwargs = {k.lstrip("_"): _resolve(v, sources_dir) for k, v in meta.kwargs.items()}
+    method = registry[key](**kwargs)
+    method.bind_registry(registry)
+    _set_geometry(method, raw.shape, pixel_size_um)
 
-    # Generate pattern
-    pattern = np.asarray(instance.generate(context), dtype=float)
-    pattern = (np.clip(pattern, 0, 1) * 255).astype(np.uint8)
+    def pattern_at(t):
+        context = ZooContext(raw_image=raw, seg_image=seg, time_seconds=t)
+        out = np.asarray(method.generate(context), dtype=float)
+        return np.clip(out, 0, 1)
 
-    # Render overlay PNG
-    png_name = f"{cls.__name__}.png"
-    png_path = output_dir / png_name
-    _render_overlay(raw, pattern, png_path)
+    pattern = pattern_at(meta.time_seconds)
+    # a method that changes over time gets an animated thumbnail
+    span = (meta.times[0], meta.times[-1]) if meta.times else meta.timeline
+    if span:
+        thumb = f"{key}.webp"
+        frames = [_overlay(display, pattern_at(t)) for t in _frame_times(span)]
+        _save_animation(output_dir / thumb, frames)
+    else:
+        thumb = f"{key}.png"
+        _save_rgb(output_dir / thumb, _overlay(display, pattern))
 
-    title = zoo_meta.title or getattr(cls, "name", cls.__name__)
-    description = zoo_meta.description or (inspect.getdoc(cls) or "").split("\n")[0]
+    strip = [(t, _overlay(display, pattern_at(t))) for t in meta.times]
+    timeline = None
+    if meta.timeline:
+        ts = np.linspace(meta.timeline[0], meta.timeline[1], 400)
+        timeline = (ts, [float(pattern_at(t).mean()) for t in ts])
 
+    # a method built around an image (centered_image) shows it
+    extra = []
+    target = getattr(method, "target_image", None)
+    if target is not None:
+        lo, hi = float(np.min(target)), float(np.max(target))
+        extra.append(((np.asarray(target, float) - lo) / max(hi - lo, 1e-9), "target"))
+
+    detail = f"{key}_detail.png"
+    _render_detail(output_dir / detail, display, pattern, strip, timeline, extra)
+
+    cls = type(method)
     return {
+        "key": key,
+        "title": meta.title or key,
+        "group": meta.group,
+        "description": meta.description,
+        "thumb": thumb,
+        "detail": detail,
+        "kwargs": {k: v for k, v in meta.kwargs.items() if not k.startswith("_")},
+        "needs": _needs(method),
+        "varies": bool(meta.times or meta.timeline),
+        "api": f"{cls.__module__}.{cls.__name__}",
         "cls_name": cls.__name__,
-        "module": cls.__module__,
-        "png_name": png_name,
-        "title": title,
-        "description": description,
-        "kwargs": public_kwargs,
-        "toml_name": _get_toml_name(cls, known_models_inv),
     }
+
+
+def _resolve(value, sources_dir: Path):
+    """A string naming a file in the sources folder becomes its path."""
+    if isinstance(value, str) and value and (sources_dir / value).is_file():
+        return str(sources_dir / value)
+    return value
+
+
+def _set_geometry(method, shape, pixel_size_um) -> None:
+    method.pixel_size_um = pixel_size_um
+    method.pattern_shape = shape
+    for child in getattr(method, "children", {}).values():
+        _set_geometry(child, shape, pixel_size_um)
+
+
+def _needs(method) -> list[str]:
+    """What the method asks the pipeline for, in words."""
+    needs = []
+    for _channel, raw, seg_names, tracks, _history in method._requirements_list:
+        if seg_names and "segmentation" not in needs:
+            needs.append("segmentation")
+        if tracks and "tracks" not in needs:
+            needs.append("tracks")
+        if raw and "raw image" not in needs:
+            needs.append("raw image")
+    if method._stim_requested:
+        needs.append("stimulation image")
+    return needs
 
 
 def _load_source(sources_dir: Path, source: str) -> tuple[np.ndarray, np.ndarray]:
     import tifffile
 
-    raw_path = sources_dir / f"{source}.tif"
-    if not raw_path.exists():
-        raise FileNotFoundError(f"Source image not found: {raw_path}")
-
-    raw = tifffile.imread(str(raw_path))
+    raw = tifffile.imread(str(sources_dir / f"{source}.tif"))
+    seg = tifffile.imread(str(sources_dir / f"{source}_seg.tif"))
     if raw.ndim == 3:
         raw = raw[0]
-    raw = raw.astype(np.float32)
-
-    seg_path = sources_dir / f"{source}_seg.tif"
-    seg = tifffile.imread(str(seg_path))
     if seg.ndim == 3:
         seg = seg[0]
-    seg = seg.astype(np.int32)
-
-    return raw, seg
-
-
-def _load_metadata(sources_dir: Path) -> dict:
-    meta_path = sources_dir / "metadata.toml"
-    import tomllib  # Python ≥ 3.11
-
-    with open(meta_path, "rb") as f:
-        return tomllib.load(f)
+    return raw.astype(np.float32), seg.astype(np.int32)
 
 
 # ---------------------------------------------------------------------------
@@ -303,24 +294,115 @@ def _load_metadata(sources_dir: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _render_overlay(raw: np.ndarray, pattern: np.ndarray, output_path: Path) -> None:
-    import cv2
+def _display_image(raw, vmin=None, vmax=None) -> np.ndarray:
+    """The raw image scaled to 0-1 for display (the method sees counts)."""
+    lo = raw.min() if vmin is None else vmin
+    hi = raw.max() if vmax is None else vmax
+    return np.clip((raw - lo) / max(hi - lo, 1e-9), 0, 1)
 
-    alpha = 0.4
 
-    base_bgr = cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
+def _overlay(display: np.ndarray, pattern: np.ndarray) -> np.ndarray:
+    grey = np.repeat(display[..., np.newaxis], 3, axis=-1)
+    weight = _ALPHA * pattern[..., np.newaxis]
+    return np.clip(grey * (1 - weight) + _CYAN * weight, 0, 1)
 
-    cyan_pattern = np.zeros_like(base_bgr)
-    cyan_pattern[:, :, 0] = pattern
-    cyan_pattern[:, :, 1] = pattern
-    cyan_pattern[:, :, 2] = 0
 
-    # Blend the base image with the cyan pattern
-    blended = cv2.addWeighted(base_bgr, 1 - alpha, cyan_pattern, alpha, 0)
+# animated thumbnails (WebP: a tenth of a GIF's size on these textured
+# images): frames, ms per frame, longest side in pixels
+ANIM_FRAMES = 24
+ANIM_MS = 150
+ANIM_SIZE = 200
 
-    print(blended.shape)
 
-    cv2.imwrite(str(output_path), blended)
+def _frame_times(span) -> np.ndarray:
+    """Evenly spaced times over *span*, the last one included."""
+    return np.linspace(span[0], span[1], ANIM_FRAMES)
+
+
+def _save_animation(path: Path, frames: list[np.ndarray]) -> None:
+    from PIL import Image
+
+    images = []
+    for rgb in frames:
+        image = Image.fromarray((np.clip(rgb, 0, 1) * 255).astype(np.uint8))
+        image.thumbnail((ANIM_SIZE, ANIM_SIZE))
+        images.append(image)
+    images[0].save(
+        path,
+        save_all=True,
+        append_images=images[1:],
+        duration=ANIM_MS,
+        loop=0,
+        quality=75,
+    )
+
+
+def _save_rgb(path: Path, rgb: np.ndarray) -> None:
+    import matplotlib.pyplot as plt
+
+    plt.imsave(path, rgb)
+
+
+def _minutes(t_seconds: float) -> str:
+    minutes = t_seconds / 60
+    if minutes >= 120 and minutes % 60 == 0:
+        return f"t = {minutes / 60:g} h"
+    return f"t = {minutes:g} min"
+
+
+def _frame(ax) -> None:
+    """No ticks, a thin grey frame (so an all-white pattern still shows)."""
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_color("#b0b0b0")
+        spine.set_linewidth(0.8)
+
+
+def _render_detail(path, display, pattern, strip, timeline, extra=()) -> None:
+    """sample | pattern | overlay (| extra panels), then the filmstrip or the timeline."""
+    import matplotlib.pyplot as plt
+
+    panels = [
+        (display, "gray", "sample image"),
+        (pattern, "gray", "pattern (DMD)"),
+        (_overlay(display, pattern), None, "overlay"),
+    ] + [(img, "gray", label) for img, label in extra]
+    below = bool(strip or timeline)
+    ncols = max(len(panels), len(strip))
+    fig = plt.figure(figsize=(2.4 * ncols, 2.6 * (1 + below)), dpi=110)
+    rows = fig.add_gridspec(1 + below, 1)
+
+    top = rows[0].subgridspec(1, len(panels))
+    for i, (img, cmap, label) in enumerate(panels):
+        ax = fig.add_subplot(top[0, i])
+        ax.imshow(img, cmap=cmap, vmin=0, vmax=1, interpolation="nearest")
+        ax.set_title(label, fontsize=10)
+        _frame(ax)
+
+    if strip:
+        film = rows[1].subgridspec(1, ncols)
+        for i, (t, rgb) in enumerate(strip):
+            ax = fig.add_subplot(film[0, i])
+            ax.imshow(rgb, interpolation="nearest")
+            ax.set_title(_minutes(t), fontsize=10)
+            _frame(ax)
+    elif timeline:
+        ts, lit = timeline
+        ax = fig.add_subplot(rows[1])
+        ax.fill_between(ts / 60, lit, step="post", color=_CYAN, alpha=0.6, lw=0)
+        ax.plot(ts / 60, lit, drawstyle="steps-post", color="#007a7a", lw=1)
+        ax.set_xlabel("experiment time (min)", fontsize=9)
+        ax.set_ylabel("field lit", fontsize=9)
+        ax.set_ylim(0, 1.05)
+        ax.set_xlim(ts[0] / 60, ts[-1] / 60)
+        ax.tick_params(labelsize=8)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -328,70 +410,139 @@ def _render_overlay(raw: np.ndarray, pattern: np.ndarray, output_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
-def _write_gallery_md(
-    fragment_dir: Path, output_dir: Path, entries: list[dict]
-) -> None:
-    """Write _zoo_gallery.md to *fragment_dir* (docs root).
+def _anchor(key: str) -> str:
+    return "zoo-" + key.replace("_", "-")
 
-    Image paths are written as ``_generated/zoo/<name>.png`` - relative to
-    *fragment_dir* - so they resolve correctly when Sphinx processes the
-    gallery fragment as part of ``method_zoo.md``.
-    """
-    # Compute the relative path prefix from fragment_dir to output_dir.
+
+def toml_block(key: str, kwargs: dict) -> str:
+    """The ``[pattern]`` table that reproduces the example."""
+    lines = ["[pattern]", f'method = "{key}"']
+    tables = []
+    for name, value in kwargs.items():
+        if value is None:
+            continue
+        if isinstance(value, dict):
+            tables.append((name, value))
+        else:
+            lines.append(f"{name} = {_toml_value(value)}")
+    for name, table in tables:
+        lines += ["", f"[pattern.{name}]"]
+        lines += [f"{k} = {_toml_value(v)}" for k, v in table.items() if v is not None]
+    return "\n".join(lines)
+
+
+def _toml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    return repr(value)
+
+
+def _write_fragment(fragment: Path, output_dir: Path, docs_dir: Path, entries) -> None:
+    from pyclm.core.patterns.zoo import ZOO_GROUPS
+
+    # thumbnails are raw HTML, so they use the served path (_static/<name>/);
+    # detail figures are Markdown images, which Sphinx copies itself
+    static_prefix = f"_static/{output_dir.name}"
     try:
-        rel_prefix = output_dir.relative_to(fragment_dir).as_posix()
+        rel_prefix = output_dir.relative_to(docs_dir).as_posix()
     except ValueError:
-        rel_prefix = str(output_dir)
+        rel_prefix = output_dir.as_posix()
+
+    groups = [
+        (g, title, blurb, [e for e in entries if e["group"] == g])
+        for g, title, blurb in ZOO_GROUPS
+    ]
+    known = {g[0] for g in ZOO_GROUPS}
+    other = [e for e in entries if e["group"] not in known]
+    if other:
+        groups.append(("other", "Other", "", other))
+    groups = [g for g in groups if g[3]]
 
     lines = [
-        "<!-- Auto-generated by zoo_gallery extension - do not edit manually -->",
+        "<!-- Auto-generated by the zoo_gallery extension - do not edit manually -->",
+        "",
+        "## At a glance",
+        "",
+        "Grouped by family; click a card for the example's parameters and its pattern over time.",
         "",
     ]
+    # one grid, in family order, each card labelled with its family;
+    # _static/zoo.js adds filter buttons from the cards' data attributes
+    lines.append('<div class="zoo-grid">')
+    for g, title, _blurb, members in groups:
+        for e in members:
+            lines.append(_card_html(e, g, title, static_prefix))
+    lines += ["</div>", ""]
 
-    for entry in entries:
-        img_path = f"{rel_prefix}/{entry['png_name']}"
-        fqn = f"{entry['module']}.{entry['cls_name']}"
-        api_ref = f"{{py:class}}`{entry['cls_name']} <{fqn}>`"
+    lines += ["## Methods", ""]
+    for _g, title, blurb, members in groups:
+        lines += [f"### {title}", ""]
+        if blurb:
+            lines += [blurb, ""]
+        for e in members:
+            lines += _entry_md(e, rel_prefix)
 
+    fragment.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _card_html(e: dict, group: str, family: str, static_prefix: str) -> str:
+    title = html.escape(e["title"])
+    tags = [_needs_label(e["needs"])]
+    if e["varies"]:
+        tags.append("changes over time")
+    tag_html = "".join(f'<span class="zoo-tag">{html.escape(t)}</span>' for t in tags)
+    also = ""
+    if e["aliases"]:
+        names = ", ".join(a for a, _ in e["aliases"])
+        also = f'<span class="zoo-also">also {html.escape(names)}</span>'
+    loop = "closed" if e["needs"] else "open"
+    data = (
+        f'data-family="{html.escape(group)}" data-family-title="{html.escape(family)}" '
+        f'data-loop="{loop}" data-varies="{"yes" if e["varies"] else "no"}"'
+    )
+    return (
+        f'<a class="zoo-card" href="#{_anchor(e["key"])}" {data}>'
+        f'<span class="zoo-family">{html.escape(family)}</span>'
+        f'<img src="{static_prefix}/{e["thumb"]}" alt="{title}" loading="lazy">'
+        f'<span class="zoo-title">{title}</span>'
+        f'<code class="zoo-key">{html.escape(e["key"])}</code>'
+        f'<span class="zoo-tags">{tag_html}</span>{also}</a>'
+    )
+
+
+def _needs_label(needs: list[str]) -> str:
+    if not needs:
+        return "open loop"
+    return " + ".join(needs)
+
+
+def _entry_md(e: dict, rel_prefix: str) -> list[str]:
+    api = f"{{py:class}}`{e['cls_name']} <{e['api']}>`"
+    lines = [
+        f"({_anchor(e['key'])})=",
+        f"#### {e['title']}",
+        "",
+    ]
+    if e["description"]:
+        lines += [e["description"], ""]
+    lines += [
+        f'**TOML key:** `"{e["key"]}"` · **Needs:** {_needs_label(e["needs"])} · **API:** {api}',
+        "",
+        "```toml",
+        toml_block(e["key"], e["kwargs"]),
+        "```",
+        "",
+        f"![{e['title']}]({rel_prefix}/{e['detail']})",
+        "",
+    ]
+    for alias, equivalent in e["aliases"]:
         lines += [
-            f"### {entry['title']}",
-            "",
-            f"![{entry['title']}]({img_path})",
+            f'**Deprecated alias:** `"{alias}"` is this method with `{equivalent}`; '
+            "`pyclm check` warns when it is used.",
             "",
         ]
-        if entry["description"]:
-            lines += [entry["description"], ""]
-
-        # TOML key + API cross-reference line
-        meta_parts = []
-        if entry["toml_name"]:
-            meta_parts.append(f'**TOML key:** `"{entry["toml_name"]}"`')
-        meta_parts.append(f"**API:** {api_ref}")
-        lines += [" · ".join(meta_parts), ""]
-
-        if entry["kwargs"]:
-            lines += [
-                "**Parameters used in this example:**",
-                "",
-                "| Parameter | Value |",
-                "|-----------|-------|",
-            ]
-            for k, v in entry["kwargs"].items():
-                lines.append(f"| `{k}` | `{v!r}` |")
-            lines.append("")
-
-        if entry is not entries[-1]:
-            lines.append("---")
-            lines.append("")
-        else:
-            lines.append("")
-
-    (fragment_dir / "_zoo_gallery.md").write_text("\n".join(lines), encoding="utf-8")
-
-
-def _write_placeholder(fragment_dir: Path) -> None:
-    fragment_dir.mkdir(parents=True, exist_ok=True)
-    (fragment_dir / "_zoo_gallery.md").write_text(
-        "<!-- Zoo gallery could not be built (missing sources or dependencies). -->\n",
-        encoding="utf-8",
-    )
+    return lines

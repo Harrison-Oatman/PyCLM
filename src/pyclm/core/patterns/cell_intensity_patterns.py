@@ -8,12 +8,6 @@ from .zoo import ZooMeta
 
 class NucleusControlMethod(PatternMethod):
     name = "nucleus_control_base"
-    zoo_meta = ZooMeta(
-        source="mcf10a",
-        title="Generic Nucleus Control",
-        kwargs={"_channel": ""},
-        description="Subclass this method to apply per-cell intensity",
-    )
 
     def __init__(self, channel=None, tracks=False, **kwargs):
         super().__init__(**kwargs)
@@ -72,8 +66,9 @@ class BinaryNucleusClampModel(NucleusControlMethod):
     zoo_meta = ZooMeta(
         source="mcf10a",
         title="Bang-Bang Controller",
-        kwargs={"_channel": "", "clamp_target": 75},
-        description="Applies light if nucleus is below target intensity",
+        kwargs={"channel": "545", "clamp_target": 65},
+        description="Lights each nucleus whose mean intensity is below clamp_target.",
+        group="per_nucleus",
     )
 
     def process_prop(self, prop):
@@ -85,6 +80,18 @@ class BinaryNucleusClampModel(NucleusControlMethod):
 
 class CenteredImageModel(NucleusControlMethod):
     name = "centered_image"
+    zoo_meta = ZooMeta(
+        source="mcf10a",
+        title="Target Image",
+        kwargs={
+            "channel": "545",
+            "tif_path": "target_shield.tif",
+            "min_intensity": 0,
+            "max_intensity": 100,
+        },
+        description="Bang-bang control towards a target image centred on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to min_intensity..max_intensity.",
+        group="per_nucleus",
+    )
 
     def __init__(
         self,
@@ -158,12 +165,12 @@ class CenteredImageModel(NucleusControlMethod):
 class GlobalCycleModel(NucleusControlMethod):
     name = "global_cycle"
 
+    deprecated = (
+        'use method = "global_pulse" with period_min = 2 * period_m, on_min = period_m'
+    )
     zoo_meta = ZooMeta(
-        source="mcf10a",
-        title="Open loop intensity cycle",
-        kwargs={"_channel": "gfp"},
-        time_seconds=5,
-        description="Applies light for a given period with a 50% duty cycle",
+        same_as="global_pulse",
+        equivalent="period_min = 2 * period_m, on_min = period_m",
     )
 
     def __init__(self, channel="545", period_m=10, **kwargs):
