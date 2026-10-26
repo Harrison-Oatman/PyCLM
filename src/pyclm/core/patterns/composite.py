@@ -23,6 +23,24 @@ custom) with its own arguments; it sees the whole field and the composite
 keeps its pattern on its side of the boundary. Requirements are the union
 of the halves', so the frames and segmentations each half asks for arrive
 once and are shared.
+
+:class:`WrappingPattern` is the base of the methods that wrap one inner
+method given as a ``[pattern.inner]`` table (``pulsed``, ``recenter``,
+``drift_correct``, ``auto_exposure``, ``settings_schedule``)::
+
+    [pattern]
+    method = "pulsed"
+    period_min = 30
+    on_min = 10
+
+    [pattern.inner]
+    method = "circle"
+    radius_um = 100
+
+The wrapper changes the inner method's pattern (``pulsed`` gates it) or
+leaves it as it is and acts on the run (``recenter`` moves the stage,
+``auto_exposure`` changes an exposure). Wrappers nest: the inner method may
+itself be a wrapper or a ``split``.
 """
 
 from __future__ import annotations
@@ -32,7 +50,12 @@ import logging
 import numpy as np
 
 from ..experiments import Experiment
-from .pattern import AcquiredImageRequest, CameraProperties, PatternMethod
+from .pattern import (
+    AcquiredImageRequest,
+    CameraProperties,
+    PatternMethod,
+    merge_requests,
+)
 from .zoo import ZooMeta
 
 logger = logging.getLogger(__name__)
@@ -147,22 +170,11 @@ class SplitPattern(PatternMethod):
     # ------------------------------------------------------------ lifecycle
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
         self._require_children()
-        merged: dict = {}
-        for child in self.children.values():
-            for req in child.initialize(experiment):
-                have = merged.get(req.id)
-                if have is None:
-                    merged[req.id] = req
-                    continue
-                merged[req.id] = AcquiredImageRequest(
-                    req.id,
-                    have.needs_raw or req.needs_raw,
-                    have.needs_seg or req.needs_seg,
-                    have.needs_tracks or req.needs_tracks,
-                    max(have.history, req.history),
-                    tuple(dict.fromkeys((*have.segmentations, *req.segmentations))),
-                )
-        return list(merged.values())
+        return merge_requests(
+            req
+            for child in self.children.values()
+            for req in child.initialize(experiment)
+        )
 
     def configure_system(
         self,
@@ -230,3 +242,143 @@ def _fit(pattern: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
     w = min(shape[1], pattern.shape[1])
     out[:h, :w] = pattern[:h, :w]
     return out
+
+
+class WrappingPattern(PatternMethod):
+    """
+    Base of the methods that wrap one inner method (``[pattern.inner]``);
+    see the module docstring. A subclass implements :meth:`generate` with
+    :meth:`inner_pattern`, and declares its own needs with
+    ``add_requirement`` as any method does; the requests are the union of
+    its own and the inner method's.
+    """
+
+    name = "wrapping_base"
+    # whether [pattern.inner] must be given; without it the inner pattern is dark
+    inner_required = True
+
+    def __init__(self, inner=None, **kwargs):
+        super().__init__(**kwargs)
+        if inner is None:
+            if self.inner_required:
+                raise ValueError(
+                    f"{self.name} wraps another method: add a [pattern.inner] "
+                    'table with its method, e.g. method = "circle"'
+                )
+            self.spec = None
+        elif not isinstance(inner, dict) or "method" not in inner:
+            raise ValueError("[pattern.inner] must be a table with a 'method' key")
+        else:
+            self.spec = dict(inner)
+        # built by bind_registry, which the pattern process calls before initialize
+        self.children: dict[str, PatternMethod] = {}
+        self._bound = False
+
+    # ------------------------------------------------------------ construction
+    @classmethod
+    def nested_methods(cls, kwargs: dict) -> list[tuple[str, str, dict]]:
+        spec = kwargs.get("inner")
+        if isinstance(spec, dict) and "method" in spec:
+            rest = {k: v for k, v in spec.items() if k != "method"}
+            return [("inner", str(spec["method"]), rest)]
+        return []
+
+    def bind_registry(self, registry: dict[str, type]) -> None:
+        if self._bound:
+            return
+        self._own_requirements = list(self._requirements_list)
+        self._own_stim = self._stim_request()
+        if self.spec is not None:
+            method = self.spec["method"]
+            cls = registry.get(method)
+            if cls is None:
+                raise ValueError(
+                    f"[pattern.inner]: unknown pattern method {method!r} "
+                    f"(registered: {', '.join(sorted(registry))})"
+                )
+            child = cls(**{k: v for k, v in self.spec.items() if k != "method"})
+            child.bind_registry(registry)
+            self.children["inner"] = child
+            # mirror the inner method's needs, so tools that read them off the
+            # method (pyclm check, the zoo) see the union
+            self._requirements_list = self._own_requirements + list(
+                child._requirements_list
+            )
+            if child._stim_requested:
+                own = self._own_stim or (False, False, 1)
+                self._stim_requested = True
+                self._stim_request_raw = own[0] or child._stim_request_raw
+                self._stim_request_seg = own[1] or child._stim_request_seg
+                self._stim_request_history = max(own[2], child._stim_request_history)
+        self._bound = True
+
+    @property
+    def inner(self) -> PatternMethod | None:
+        return self.children.get("inner")
+
+    def _require_inner(self) -> None:
+        if self.spec is not None and self.inner is None:
+            raise RuntimeError(
+                f"{self.name}'s inner method is not built: the pattern process "
+                "binds the method registry before initialize (bind_registry)"
+            )
+
+    # ------------------------------------------------------------ lifecycle
+    def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
+        self._require_inner()
+        own_reqs = getattr(self, "_own_requirements", self._requirements_list)
+        own_stim = getattr(self, "_own_stim", self._stim_request())
+        reqs = self._build_requests(experiment, own_reqs, own_stim)
+        if self.inner is not None:
+            reqs += self.inner.initialize(experiment)
+        return merge_requests(reqs)
+
+    def configure_system(
+        self,
+        experiment_name: str,
+        camera_properties: CameraProperties,
+        experiment: Experiment,
+    ):
+        super().configure_system(experiment_name, camera_properties, experiment)
+        if self.inner is not None:
+            self.inner.configure_system(experiment_name, camera_properties, experiment)
+
+    def update_binning(self, binning: int):
+        super().update_binning(binning)
+        inner = self.inner
+        if inner is not None and inner.binning != int(binning):
+            inner.update_binning(binning)
+
+    def update(self, **parameters) -> tuple[dict, dict]:
+        """Own parameters here; ``inner.<name>`` goes to the inner method."""
+        own, forwarded = {}, {}
+        for key, value in parameters.items():
+            head, dot, rest = key.partition(".")
+            if dot and head == "inner" and self.inner is not None:
+                forwarded[rest] = value
+            elif key == "inner":
+                continue
+            else:
+                own[key] = value
+        applied, refused = super().update(**own)
+        if "inner" in parameters:
+            refused["inner"] = "the inner method cannot be replaced during a run"
+        if forwarded:
+            a, r = self.inner.update(**forwarded)
+            applied.update({f"inner.{k}": v for k, v in a.items()})
+            refused.update({f"inner.{k}": v for k, v in r.items()})
+        return applied, refused
+
+    # ------------------------------------------------------------ the pattern
+    def inner_pattern(self, context) -> np.ndarray:
+        """The inner method's pattern (a dark field without one), as float32 in 0-1."""
+        self._require_inner()
+        if self.inner is None:
+            return np.zeros(self.pattern_shape, np.float32)
+        pattern = np.asarray(self.inner.render(context), dtype=np.float32)
+        if pattern.shape != tuple(self.pattern_shape):
+            pattern = _fit(pattern, tuple(int(v) for v in self.pattern_shape))
+        return np.clip(pattern, 0.0, 1.0)
+
+    def generate(self, context) -> np.ndarray:
+        return self.inner_pattern(context)

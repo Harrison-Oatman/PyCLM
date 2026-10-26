@@ -42,7 +42,8 @@ def test_the_gallery_builds_one_card_per_method(tmp_path):
     cards, aliases = zoo_gallery.collect(known_models)
     assert [e["key"] for e in entries] == [key for key, _ in cards]
     listed = {alias for pairs in aliases.values() for alias, _ in pairs}
-    assert listed | {e["key"] for e in entries} == set(known_models)
+    pending = {key for key, _ in zoo_gallery.pending_cards(known_models)}
+    assert listed | pending | {e["key"] for e in entries} == set(known_models)
 
     text = fragment.read_text()
     for e in entries:
@@ -51,6 +52,8 @@ def test_the_gallery_builds_one_card_per_method(tmp_path):
         assert f'href="#zoo-{e["key"].replace("_", "-")}"' in text
     for alias in listed:
         assert f'`"{alias}"`' in text
+    for key in pending:
+        assert f'`"{key}"`' in text
 
 
 @pytest.mark.parametrize("key", sorted(known_models))
