@@ -78,7 +78,10 @@ class PerCellPatternMethod(PatternMethod):
 
         if self.gradient:
             framed = dot_prod * bin_img * (dot_prod > 0)
-            out = framed / np.max(framed)
+            peak = np.max(framed)
+            # a cell with no pixel ahead of its centroid (one pixel wide)
+            # stays dark rather than turning the pattern into NaN
+            out = framed / peak if peak > 0 else framed
 
         else:
             out = (dot_prod > 0) * bin_img
@@ -137,7 +140,7 @@ class RotateCcwModel(PerCellPatternMethod):
     name = "rotate_ccw"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"channel": "638"},
+        kwargs={"channel": "638", "gradient": True},
         title="Rotate CCW",
         group="per_cell",
         description="Illuminates the half of each cell pointing counter-clockwise around the field center.",
@@ -159,7 +162,7 @@ class MoveOutModel(PerCellPatternMethod):
     name = "move_out"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"channel": "638"},
+        kwargs={"channel": "638", "gradient": True},
         title="Move Out",
         group="per_cell",
         description="Illuminates the outward-facing half of each cell.",
@@ -181,7 +184,7 @@ class MoveInModel(PerCellPatternMethod):
     name = "move_in"
     zoo_meta = ZooMeta(
         source="mdck",
-        kwargs={"channel": "638"},
+        kwargs={"channel": "638", "gradient": True},
         title="Move In",
         group="per_cell",
         description="Illuminates the inward-facing half of each cell.",

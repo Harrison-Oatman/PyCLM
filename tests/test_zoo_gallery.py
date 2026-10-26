@@ -134,3 +134,17 @@ def test_direction_lights_the_side_cells_should_move_to(letter, lit_rows):
     lit = np.zeros_like(pattern, bool)
     lit[lit_rows, 2:8] = True  # the centroid is at row 4.5
     assert np.array_equal(pattern > 0, lit)
+
+
+def test_gradient_mode_keeps_a_one_pixel_cell_dark():
+    from pyclm.core.patterns.zoo import ZooContext
+
+    seg = np.zeros((20, 20), np.int32)
+    seg[3, 3] = 1  # no pixel ahead of its centroid
+    seg[10:16, 10:16] = 2
+    method = known_models["move_out"](channel="638", gradient=True)
+    method.pattern_shape = seg.shape
+    pattern = np.asarray(method.generate(ZooContext(seg.astype(float), seg)), float)
+    assert not np.isnan(pattern).any()
+    assert pattern[3, 3] == 0
+    assert pattern.max() == 1

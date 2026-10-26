@@ -50,8 +50,8 @@ class SplitPattern(PatternMethod):
         source="mdck",
         kwargs={
             "boundary": 0.5,
-            "left": {"method": "move_in", "channel": "638"},
-            "right": {"method": "move_out", "channel": "638"},
+            "left": {"method": "move_in", "channel": "638", "gradient": True},
+            "right": {"method": "move_out", "channel": "638", "gradient": True},
         },
         title="Split Field",
         description="Two methods side by side (left / right) or one above the other (top / bottom), each in its own sub-table.",

@@ -20,6 +20,9 @@
 - `global_cycle`, `move_down` and `fb_bounce` are deprecated: they are
   fixed cases of `global_pulse` and `direction`, and `pyclm check` warns
   with the equivalent arguments. They still run.
+- The per-cell methods with `gradient = true` no longer put NaN in the
+  pattern for a one-pixel-wide cell (known issue 37). The zoo examples of
+  `move_in`, `move_out`, `rotate_ccw` and `split` use `gradient = true`.
 - `fb_bounce` reverses every half-loop; it reversed once and then kept
   one direction for the rest of the run (known issue 36).
 - `pyclm preview --t START:STOP[:STEP]` previews a stretch of the schedule
