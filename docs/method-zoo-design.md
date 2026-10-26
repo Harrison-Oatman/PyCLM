@@ -97,6 +97,16 @@ Not done:
     from the segmentation (every object is its own track), so a method
     that depends on history or track identity has no meaningful still.
 
+**Added 2026-10-26 (after PR #43): keyword tables.** Each entry ends
+with every keyword the method takes, its default and what it does; the
+Methods section opens with the keywords every method takes. The rows come
+from `pyclm.check._named_parameters` (the same keywords `pyclm check`
+accepts, followed up the MRO; a dispatching base such as `bar` takes the
+union of its subclasses') and the descriptions from the `:param name:`
+lines of the `__init__` and class docstrings, most derived first.
+`tests/test_zoo_gallery.py` fails for a keyword without one, so a new
+method documents its keywords in its docstring, once.
+
 ## 3. Decisions (answered 2026-10-26)
 
 1. **Grid layout: plain HTML and CSS, no new dependency.** Thumbnails go
