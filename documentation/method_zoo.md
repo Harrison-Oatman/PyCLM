@@ -22,5 +22,7 @@ section of [Writing custom pattern methods](custom_pattern_methods.md).
 > arguments, a family (`group`), and `times` or `timeline` if the pattern
 > changes over time. A built-in that is another method with fixed
 > arguments names that method with `same_as` and is listed on its card.
+> The keyword table is built from the `__init__` signature and its
+> `:param name:` lines; every keyword needs one.
 > `tests/test_zoo_gallery.py` fails for a registered built-in without
 > `zoo_meta`.

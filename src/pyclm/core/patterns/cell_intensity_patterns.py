@@ -44,6 +44,11 @@ class NucleusControlMethod(PatternMethod):
     renamed_kwargs: ClassVar[dict[str, str]] = {"nuc_channel": "channel"}
 
     def __init__(self, channel=None, tracks=False, **kwargs):
+        """
+        :param channel: preset of the nuclear channel to segment and measure
+        :param tracks: run on the tracked labels (needs a ``[tracking]``
+            table), so each nucleus keeps its id across timepoints
+        """
         super().__init__(**kwargs)
 
         if channel is None:
