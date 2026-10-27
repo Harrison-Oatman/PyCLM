@@ -34,6 +34,11 @@ class ROI(NamedTuple):
 class CameraProperties(NamedTuple):
     roi: ROI
     pixel_size_um: float
+    # unbinned camera pixels -> stage microns as ((a, b), (c, d)), the linear
+    # part of MicroManager's pixel-size affine: stage x = a * columns + b * rows,
+    # stage y = c * columns + d * rows. None: pixel size x identity (camera
+    # columns along stage x, rows along stage y)
+    camera_to_stage: tuple | None = None
 
 
 class AcquiredImageRequest(NamedTuple):
@@ -60,6 +65,25 @@ class AcquiredImageRequest(NamedTuple):
         if self.needs_tracks:
             kinds.append("tracks")
         return tuple(kinds)
+
+
+def merge_requests(requests) -> list[AcquiredImageRequest]:
+    """One request per channel: the union of what several requests of it ask for."""
+    merged: dict = {}
+    for req in requests:
+        have = merged.get(req.id)
+        if have is None:
+            merged[req.id] = req
+            continue
+        merged[req.id] = AcquiredImageRequest(
+            req.id,
+            have.needs_raw or req.needs_raw,
+            have.needs_seg or req.needs_seg,
+            have.needs_tracks or req.needs_tracks,
+            max(have.history, req.history),
+            tuple(dict.fromkeys((*have.segmentations, *req.segmentations))),
+        )
+    return list(merged.values())
 
 
 def _seg_names(seg) -> tuple[str, ...]:
@@ -581,7 +605,24 @@ class PatternMethod(metaclass=_MigratingType):
 
     # initialize happens shortly after init
     def initialize(self, experiment: Experiment) -> list[AcquiredImageRequest]:
-        # If user used add_requirement, process them
+        return self._build_requests(
+            experiment, self._requirements_list, self._stim_request()
+        )
+
+    def _stim_request(self) -> tuple[bool, bool, int] | None:
+        """``(raw, seg, history)`` of the stimulation-frame request, or None."""
+        if not self._stim_requested:
+            return None
+        return (
+            self._stim_request_raw,
+            self._stim_request_seg,
+            self._stim_request_history,
+        )
+
+    def _build_requests(
+        self, experiment: Experiment, requirements: list, stim
+    ) -> list[AcquiredImageRequest]:
+        """The requests for ``add_requirement`` entries and a stimulation request."""
         reqs = []
         for (
             name,
@@ -589,7 +630,7 @@ class PatternMethod(metaclass=_MigratingType):
             seg_names,
             needs_tracks,
             history,
-        ) in self._requirements_list:
+        ) in requirements:
             ch = experiment.channels.get(name)
             if ch:
                 named = tuple(n for n in seg_names if n != DEFAULT_SEGMENTATION)
@@ -612,18 +653,15 @@ class PatternMethod(metaclass=_MigratingType):
             else:
                 logger.warning(f"Pattern {self.name} requested unknown channel {name}")
 
-        if self._stim_requested:
+        if stim is not None:
+            raw, seg, history = stim
             reqs.append(
                 AcquiredImageRequest(
-                    experiment.stimulation.channel_id,
-                    self._stim_request_raw,
-                    self._stim_request_seg,
-                    False,
-                    self._stim_request_history,
+                    experiment.stimulation.channel_id, raw, seg, False, history
                 )
             )
 
-        return reqs
+        return merge_requests(reqs)
 
     # configure system is run after all pattern methods are initialized
     def configure_system(
@@ -679,6 +717,24 @@ class PatternMethod(metaclass=_MigratingType):
     def center_um(self) -> tuple[float, float]:
         h, w = self.pattern_shape
         return (w * self.pixel_size_um / 2.0, h * self.pixel_size_um / 2.0)
+
+    def camera_to_stage(self, dy_px: float, dx_px: float) -> tuple[float, float]:
+        """
+        A displacement in this method's pattern pixels (rows down, columns
+        right) as a stage displacement ``(dx_um, dy_um)``: moving the stage
+        by it brings the point that offset from the field center to the
+        center. From MicroManager's pixel-size affine (pixel size x identity
+        when it has none, as in a dry run), at the current binning.
+        """
+        matrix = getattr(self.camera_properties, "camera_to_stage", None)
+        if matrix is None:
+            return (
+                float(dx_px) * self.pixel_size_um,
+                float(dy_px) * self.pixel_size_um,
+            )
+        m = np.asarray(matrix, dtype=float) * self.binning
+        sx, sy = m @ np.array([float(dx_px), float(dy_px)])
+        return (float(sx), float(sy))
 
     def active(self, t_minutes: float) -> bool:
         """Whether ``t_minutes`` lies in ``[start_min, stop_min)``."""

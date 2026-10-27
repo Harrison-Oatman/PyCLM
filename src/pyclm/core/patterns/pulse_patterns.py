@@ -3,7 +3,9 @@ Open-loop pulse trains: stimulation that varies in time but never moves.
 
 ``global_pulse`` gates the whole field on a period; ``pulse_schedule`` gates
 it on an explicit list of intervals; ``blinking_bar`` gates the stationary
-bar's stripes with the same temporal gate as ``global_pulse``.
+bar's stripes with the same temporal gate as ``global_pulse``; ``pulsed``
+gates any other method with it; ``chirp`` pulses the whole field with a
+period that changes over the run.
 """
 
 from typing import ClassVar
@@ -11,6 +13,7 @@ from typing import ClassVar
 import numpy as np
 
 from .bar_patterns import _check_stripes, _stripe_is_on
+from .composite import WrappingPattern
 from .pattern import PatternMethod
 from .zoo import ZooMeta
 
@@ -290,3 +293,157 @@ class BlinkingBarPattern(PatternMethod):
             return np.zeros((int(h), int(w)), dtype=np.float16)
 
         return self.spatial_mask().astype(np.float16)
+
+
+class PulsedPattern(WrappingPattern):
+    """
+    Any method gated by a pulse train: the inner method's pattern for
+    ``on_min`` out of every ``period_min``, dark in between, the first
+    on-edge ``phase_min`` after ``start_min``. The inner method runs at
+    every timepoint either way, so a closed loop inside keeps up with the
+    cells while the light is off. ``global_pulse`` is ``pulsed`` around
+    ``full_on``.
+    """
+
+    name = "pulsed"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={
+            "period_min": 60,
+            "on_min": 20,
+            "inner": {"method": "circle", "radius_um": 120},
+        },
+        title="Pulsed",
+        description="Gates any method (the [pattern.inner] table) on for on_min out of every period_min.",
+        group="timed",
+        timeline=(0, 18000),
+    )
+
+    def __init__(self, period_min=60.0, on_min=20.0, phase_min=0.0, **kwargs):
+        """
+        :param period_min: minutes between successive on-edges
+        :param on_min: minutes the inner pattern is shown at each on-edge
+        :param phase_min: minutes from ``start_min`` to the first on-edge
+        :param inner: the gated method, a ``[pattern.inner]`` table
+        """
+        super().__init__(**kwargs)
+        _check_gate(period_min, on_min, self.name)
+        self.period_min = float(period_min)
+        self.on_min = float(on_min)
+        self.phase_min = float(phase_min)
+
+    def is_on(self, t_minutes) -> bool:
+        return _gate_is_on(
+            t_minutes,
+            self.period_min,
+            self.on_min,
+            self.phase_min,
+            self.start_min,
+            self.stop_min,
+        )
+
+    def generate(self, context):
+        pattern = self.inner_pattern(context)
+        if not self.is_on(context.time / 60):
+            return np.zeros_like(pattern)
+        return pattern
+
+
+class ChirpPattern(PatternMethod):
+    """
+    The whole field pulsed with a period that sweeps from
+    ``period_start_min`` to ``period_end_min`` over ``sweep_min`` (measured
+    from ``start_min``) and then stays at ``period_end_min``. Each period is
+    on for its first ``duty_cycle`` fraction. ``sweep = "log"`` changes the
+    period by the same factor every minute (equal time per octave);
+    ``"linear"`` by the same number of minutes every minute.
+    """
+
+    name = "chirp"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={
+            "period_start_min": 60,
+            "period_end_min": 10,
+            "duty_cycle": 0.5,
+            "sweep_min": 300,
+        },
+        title="Chirp",
+        description="Whole-field pulses whose period sweeps from period_start_min to period_end_min: a frequency response in one run.",
+        group="timed",
+        timeline=(0, 21600),
+    )
+
+    SWEEPS = ("log", "linear")
+
+    def __init__(
+        self,
+        period_start_min=None,
+        period_end_min=None,
+        duty_cycle=0.5,
+        sweep_min=None,
+        sweep="log",
+        **kwargs,
+    ):
+        """
+        :param period_start_min: the period at the start of the sweep, in minutes
+        :param period_end_min: the period at its end (and after), in minutes
+        :param duty_cycle: fraction of each period the field is on (0-1)
+        :param sweep_min: duration of the sweep, in minutes
+        :param sweep: "log" or "linear"
+        """
+        super().__init__(**kwargs)
+        for key, value in (
+            ("period_start_min", period_start_min),
+            ("period_end_min", period_end_min),
+            ("sweep_min", sweep_min),
+        ):
+            if value is None or value <= 0:
+                raise ValueError(f"{self.name}: {key} must be positive, got {value}")
+        if not 0.0 <= duty_cycle <= 1.0:
+            raise ValueError(
+                f"{self.name}: duty_cycle must be in 0-1, got {duty_cycle}"
+            )
+        if sweep not in self.SWEEPS:
+            raise ValueError(
+                f"{self.name}: sweep must be 'log' or 'linear', got {sweep!r}"
+            )
+        self.period_start_min = float(period_start_min)
+        self.period_end_min = float(period_end_min)
+        self.duty_cycle = float(duty_cycle)
+        self.sweep_min = float(sweep_min)
+        self.sweep = sweep
+
+    def period_at(self, t_rel_min: float) -> float:
+        """The instantaneous period ``t_rel_min`` after the sweep starts."""
+        p0, p1, s = self.period_start_min, self.period_end_min, self.sweep_min
+        f = min(max(t_rel_min, 0.0), s) / s
+        if self.sweep == "log":
+            return p0 * (p1 / p0) ** f
+        return p0 + (p1 - p0) * f
+
+    def cycles(self, t_rel_min: float) -> float:
+        """Periods completed ``t_rel_min`` after the start: the integral of 1 / period."""
+        p0, p1, s = self.period_start_min, self.period_end_min, self.sweep_min
+        t = max(t_rel_min, 0.0)
+        in_sweep = min(t, s)
+        if p0 == p1:
+            n = in_sweep / p0
+        elif self.sweep == "log":
+            r = p1 / p0
+            n = s / (p0 * np.log(r)) * (1.0 - r ** (-in_sweep / s))
+        else:
+            k = (p1 - p0) / s
+            n = np.log((p0 + k * in_sweep) / p0) / k
+        return float(n + max(t - s, 0.0) / p1)
+
+    def is_on(self, t_minutes) -> bool:
+        if t_minutes < self.start_min:
+            return False
+        return (self.cycles(t_minutes - self.start_min) % 1.0) < self.duty_cycle
+
+    def generate(self, context):
+        h, w = self.pattern_shape
+        return np.full(
+            (int(h), int(w)), self.is_on(context.time / 60), dtype=np.float16
+        )

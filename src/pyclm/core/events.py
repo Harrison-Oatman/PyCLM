@@ -97,6 +97,15 @@ class AcquisitionEvent:
 
         # position
         self.position = position
+        # the stage x / y when the event was made: the position object is
+        # shared and a pattern method may move it later (the tracker uses
+        # the difference between frames to follow the move)
+        self.stage_xy = (
+            (float(position.x), float(position.y))
+            if getattr(position, "x", None) is not None
+            and getattr(position, "y", None) is not None
+            else None
+        )
 
         self.scheduled_time = scheduled_time
         self.time_since_start = scheduled_time_since_start

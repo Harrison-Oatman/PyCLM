@@ -367,6 +367,51 @@ and the like; a `set_pattern` command reaches a half as `left.<argument>`
 halves as soon as they are registered; a `split` can even hold another
 `split`.
 
+## Wrapping a method: `pulsed` and the adaptive methods
+
+Some built-in methods wrap one other method, given as a `[pattern.inner]`
+table, instead of drawing a pattern of their own. `pulsed` gates the inner
+pattern with a pulse train; the adaptive methods pass it through and
+change the run:
+
+```toml
+[pattern]
+method = "recenter"     # keep the cells centered by moving the stage
+channel = "638"
+deadband_um = 50
+max_step_um = 200
+
+[pattern.inner]
+method = "move_in"
+channel = "638"
+```
+
+| `method` | What it does around the inner method |
+|---|---|
+| `pulsed` | shows the inner pattern for `on_min` of every `period_min` (the inner method keeps running while the light is off) |
+| `recenter` | moves the stage to keep the segmented cells of `channel` centered |
+| `drift_correct` | registers each frame of `channel` against the first (or the previous) and moves the stage back |
+| `auto_exposure` | scales the exposure of `channel` so its bright pixels sit at `target` of the camera's range |
+| `settings_schedule` | changes an exposure, a preset or a device property on `[start_min, value]` steps |
+
+The adaptive methods work without an inner method (the field stays dark).
+Wrappers nest, and the inner method may be a `split` or a custom method.
+`pyclm check` validates `[pattern.inner]`, and a `set_pattern` command
+reaches it as `inner.<argument>`. To write a wrapper of your own,
+subclass `WrappingPattern` (`pyclm.core.patterns.composite`) and build
+`generate` on `self.inner_pattern(context)`.
+
+**Stage moves.** `recenter` and `drift_correct` turn an offset in the
+image into a stage move with `self.camera_to_stage(dy_px, dx_px)`, which
+any method can use. It reads MicroManager's pixel-size affine, so a
+camera that is rotated or flipped relative to the stage moves the right
+way (without an affine, as in a dry run, it is the pixel size times the
+identity). A move made at one timepoint applies from the next, like the
+pattern; the wrappers shift the pattern they return by the same amount so
+it still lands on the cells. On a grid, every tile moves by the same
+offset. The tracker is told about every move (see
+[Tracking](tracking.md)), so track ids survive it.
+
 ## Grids and blank patterns
 
 **Grids.** When the position is a grid of tiles (MicroManager's Create

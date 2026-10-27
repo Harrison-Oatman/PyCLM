@@ -125,6 +125,7 @@ def build_gallery(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     cards, aliases = collect(known_models)
+    pending = pending_cards(known_models)
 
     entries = []
     for key, meta in cards:
@@ -140,7 +141,7 @@ def build_gallery(
         entry["aliases"] = aliases.get(key, [])
         entries.append(entry)
 
-    _write_fragment(fragment, output_dir, docs_dir, entries)
+    _write_fragment(fragment, output_dir, docs_dir, entries, pending)
     return entries
 
 
@@ -181,10 +182,20 @@ def collect(registry: dict[str, type]):
             continue
         if meta.same_as:
             aliases.setdefault(meta.same_as, []).append((key, meta.equivalent))
-        else:
+        elif not meta.pending:
             cards.append((key, meta))
     cards.sort(key=lambda c: order.get(c[1].group, len(order)))
     return cards, aliases
+
+
+def pending_cards(registry: dict[str, type]) -> list[tuple[str, object]]:
+    """``(key, zoo_meta)`` of the methods whose card waits for sample data (``pending``)."""
+    out = []
+    for key, cls in registry.items():
+        meta = zoo_meta_for(key, cls)
+        if meta is not None and not meta.same_as and meta.pending:
+            out.append((key, meta))
+    return out
 
 
 def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict:
@@ -202,12 +213,17 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
     method.bind_registry(registry)
     _set_geometry(method, raw.shape, pixel_size_um)
 
+    contexts = []
+
     def pattern_at(t):
         context = ZooContext(raw_image=raw, seg_image=seg, time_seconds=t)
+        contexts.append(context)
         out = np.asarray(method.render(context), dtype=float)
         return np.clip(out, 0, 1)
 
     pattern = pattern_at(meta.time_seconds)
+    # setting changes the method asks for (adaptive methods), shown in words
+    requests = [_describe_request(r) for r in contexts[0].requests]
     # a method that changes over time gets an animated thumbnail
     span = (meta.times[0], meta.times[-1]) if meta.times else meta.timeline
     if span:
@@ -248,6 +264,8 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
         "keywords": keywords(registry[key]),
         "api": f"{cls.__module__}.{cls.__name__}",
         "cls_name": cls.__name__,
+        "requests": requests,
+        "time_seconds": meta.time_seconds,
     }
 
 
@@ -332,6 +350,17 @@ def keyword_table(rows: list[dict]) -> list[str]:
         doc = row["doc"].replace("|", "\\|") or "(undocumented)"
         lines.append(f"| `{row['name']}` | {shown} | {doc} |")
     return lines
+
+
+def _describe_request(request) -> str:
+    kind, channel, key, value = request
+    if kind == "position":
+        return f"moves the stage {key} to {value:g} um"
+    if kind == "exposure":
+        return f"sets the {channel} exposure to {value:g} ms"
+    if kind == "config":
+        return f"selects preset {value!r} of group {key!r} for {channel}"
+    return f"sets {key} of {channel} to {value!r}"
 
 
 def _resolve(value, sources_dir: Path):
@@ -527,7 +556,9 @@ def _toml_value(value) -> str:
     return repr(value)
 
 
-def _write_fragment(fragment: Path, output_dir: Path, docs_dir: Path, entries) -> None:
+def _write_fragment(
+    fragment: Path, output_dir: Path, docs_dir: Path, entries, pending=()
+) -> None:
     from pyclm.core.patterns.zoo import ZOO_GROUPS
 
     # thumbnails are raw HTML, so they use the served path (_static/<name>/);
@@ -582,6 +613,37 @@ def _write_fragment(fragment: Path, output_dir: Path, docs_dir: Path, entries) -
         for e in members:
             lines += _entry_md(e, rel_prefix)
 
+    if pending:
+        from pyclm.core.patterns import known_models
+
+        lines += [
+            "### Cards still to come",
+            "",
+            "These methods are built in and documented in the API reference; "
+            "their cards wait for sample data the zoo does not have yet.",
+            "",
+        ]
+        for key, meta in pending:
+            lines += [
+                f"({_anchor(key)})=",
+                f"#### {meta.title or key}",
+                "",
+            ]
+            if meta.description:
+                lines += [meta.description, ""]
+            shown = {k: v for k, v in meta.kwargs.items() if not k.startswith("_")}
+            lines += [
+                f'**TOML key:** `"{key}"` · **Card waits for:** {meta.pending}',
+                "",
+                "```toml",
+                toml_block(key, shown),
+                "```",
+                "",
+            ]
+            rows = keywords(known_models[key])
+            if rows:
+                lines += ["**Keywords:**", "", *keyword_table(rows), ""]
+
     fragment.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -635,6 +697,12 @@ def _entry_md(e: dict, rel_prefix: str) -> list[str]:
         f"![{e['title']}]({rel_prefix}/{e['detail']})",
         "",
     ]
+    if e.get("requests"):
+        at = _minutes(e["time_seconds"])
+        lines += [
+            f"**At {at} the example** " + "; ".join(e["requests"]) + ".",
+            "",
+        ]
     if e["keywords"]:
         lines += ["**Keywords:**", "", *keyword_table(e["keywords"]), ""]
     for alias, equivalent in e["aliases"]:

@@ -78,13 +78,19 @@ arguments. The common ones:
 
 | Want | `method` |
 |---|---|
-| A fixed shape | `circle`, `full_on` |
+| A fixed shape or image | `circle`, `rectangle`, `full_on`, `image_mask` (a TIF) |
+| Several doses in one field (quadrants, a spot array) | `dose_grid` |
 | Field of moving stripes (negative speed reverses) | `bar`, `sawtooth`, `bar_bounce`, `spokes`, `rings` |
-| Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar` |
+| Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar`, `chirp` (a period that sweeps) |
+| Any method pulsed on and off | `pulsed` with `[pattern.inner]` |
+| Light whole cells: all, a random fraction, or chosen by area / intensity / position; a band at the colony edge | `all_cells` (`invert` for the background), `random_cells` (needs tracks), `select_cells` |
 | Light one side of each cell (cells move towards the light) | `move_out`, `move_in`, `move_rotate`, `move_sequence` (a sequence of `u`, `d`, `l`, `r`, `s`) |
-| Light each nucleus by its own intensity | `nucleus_clamp`, `target_image` (towards a target image) |
+| Hold each nucleus at a target | `nucleus_clamp` (`controller = "bang_bang"`, `"p"`, `"pi"`), `target_image` (towards a target image), `relative_clamp` (a fraction of each cell's own range) |
+| Hold the field's mean nuclear intensity with one input | `population_clamp` (a whole-field dose, the exposure, or a laser power) |
 | Light the middle or the poles of an embryo | `embryo_inner`, `embryo_outer` |
 | Different methods on two halves of the field | `split` with `[pattern.left]`/`[pattern.right]` or `top`/`bottom` |
+| Keep the cells centered, undo drift, adjust an exposure, or step a setting during the run | `recenter`, `drift_correct`, `auto_exposure`, `settings_schedule`, each around an optional `[pattern.inner]` |
+| Check the DMD calibration on a fluorescent slide | `game_of_life` |
 
 `global_cycle`, `move_down` and `fb_bounce` are deprecated fixed cases of
 `global_pulse` and `move_sequence`; `pyclm check` warns and gives the

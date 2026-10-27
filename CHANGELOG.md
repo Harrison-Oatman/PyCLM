@@ -8,6 +8,54 @@
   tables are generated from the constructor signatures and their
   `:param:` lines, so they follow renames; a test fails for a keyword
   with no `:param:` line.
+- **New pattern methods (2.0, second part of the method expansion; design
+  note `docs/pattern-methods-expansion-design.md`).** Released as an
+  experimental 2.0 pre-release.
+  - Static: `rectangle` (`width_um`, `height_um`, offset `x_um` / `y_um`,
+    `angle_deg`), `dose_grid` (rows × cols blocks or spots, one dose each),
+    `image_mask` (a TIF projected centered or stretched, graded or
+    thresholded).
+  - Timed: `pulsed` (any method, the `[pattern.inner]` table, gated by a
+    pulse train) and `chirp` (whole-field pulses whose period sweeps, log
+    or linear).
+  - Per cell: `all_cells` (`invert` lights the background, `dilate_um`),
+    `random_cells` (a seeded fraction, fixed per track), `select_cells`
+    (by area, intensity, distance from the center or the colony edge,
+    `min` / `max` / `top_n`; `band_um` lights a band at the colony edge).
+  - Per nucleus: `nucleus_clamp` gains `controller = "p"` / `"pi"` (`kp`,
+    `ki`, `dose_mode`); `bang_bang` stays the default and unchanged.
+    `population_clamp` holds the field's mean nuclear intensity with one
+    input (a whole-field dose, the stimulation exposure, or a device
+    property). `relative_clamp` calibrates each tracked cell's own dark
+    and lit levels and holds it at a fraction of that range.
+  - Adaptive (new zoo family): `recenter` and `drift_correct` move the
+    stage; `auto_exposure` adjusts a channel's exposure; `settings_schedule`
+    steps an exposure, preset or device property. Each wraps an optional
+    `[pattern.inner]` method.
+  - Diagnostic (new zoo family): `game_of_life`, a check of the DMD
+    calibration on a fluorescent slide.
+- Graded doses share one helper (`pyclm.core.patterns.dose`): `dose_mode =
+  "gray"` (default; the DMD shows gray levels), `"dither"` (ordered dither)
+  or `"duty"` (a fraction of every `period_min`).
+- `WrappingPattern` (`pyclm.core.patterns.composite`) is the base of the
+  methods that wrap one inner method; `pyclm check` validates
+  `[pattern.inner]`, and `set_pattern` reaches it as `inner.<argument>`.
+- Stage moves requested by a pattern method: `PatternMethod.camera_to_stage`
+  converts an image offset to a stage move through MicroManager's
+  pixel-size affine (`CameraProperties.camera_to_stage`; pixel size ×
+  identity without one). On a grid, an x / y / z change moves every tile
+  by the same offset (it used to change only the grid center, which the
+  microscope ignores), and `pfs_offset` reaches every tile. Each
+  acquisition event records the stage x / y it was made at
+  (`stage_xy`), and the tracking process tells the tracker how far the
+  objects jumped (`TrackingMethod.shift`; `centroid` shifts its
+  centroids), so track ids survive a move.
+- A method's requests for the same channel are merged into one
+  (`merge_requests`), as `split` already did for its halves.
+- The method zoo lists methods whose card waits for sample data
+  (`ZooMeta.pending`) with their TOML, and shows the setting changes an
+  adaptive example requests.
+
 - **Pattern-method names and arguments follow one convention (2.0, first
   part of the method expansion; design note
   `docs/pattern-methods-expansion-design.md`).** A quantity with a unit
