@@ -132,7 +132,8 @@ segmentation of that channel runs on every acquired frame. See
 **`[pattern]`**. `method` is a built-in name (see the [method zoo](method_zoo.md))
 or one registered with `run_pyclm(pattern_methods=...)`; `every_t` (default
 1) is how often the pattern is regenerated, in timepoints; every other key
-is passed to the method's constructor. The pattern is actually regenerated
+is passed to the method's constructor. Each built-in method's card in the
+method zoo has a table of its keywords, their defaults and what they do. The pattern is actually regenerated
 every least common multiple of `every_t` and the `every_t` of the channels
 the method requires, so a method needing a channel imaged every 5
 timepoints runs every 5.
