@@ -75,6 +75,18 @@ ZOO_GROUPS: tuple[tuple[str, str, str], ...] = (
         "Closed loop: light a fraction of the largest object's long axis.",
     ),
     ("composite", "Combining methods", "One method per half of the field."),
+    (
+        "adaptive",
+        "Adaptive acquisition",
+        "Wrap any method and change the run: move the stage, adjust an "
+        "exposure or a device property.",
+    ),
+    (
+        "diagnostic",
+        "Diagnostics",
+        "Checks of the setup itself (DMD calibration on a fluorescent slide), "
+        "not experiments on cells.",
+    ),
 )
 
 
@@ -110,6 +122,10 @@ class ZooMeta:
         own, it is listed on that method's card.
     equivalent:
         The arguments of ``same_as`` that give this method's pattern.
+    pending:
+        Set while the card waits for sample data the zoo does not have yet
+        (a time series, say): what is needed. The gallery lists the method
+        with this note instead of a card.
     """
 
     source: str = ""
@@ -122,6 +138,7 @@ class ZooMeta:
     timeline: tuple[float, float] | None = None
     same_as: str = ""
     equivalent: str = ""
+    pending: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +199,9 @@ class ZooContext:
         }
 
     def position(self):
+        return None
+
+    def grid(self):
         return None
 
     def _remember(self, change):

@@ -212,7 +212,11 @@ class Controller:
                 "pattern methods and tracking will be wrong (see pyclm check)"
             )
 
-        self.camera_properties = CameraProperties(camera_roi, camera_resolution)
+        camera_to_stage = camera_to_stage_matrix(self.core)
+        self.camera_properties = CameraProperties(
+            camera_roi, camera_resolution, camera_to_stage
+        )
+        self.tracking.camera_to_stage = camera_to_stage
 
         logger.info(f"camera properties: {self.camera_properties}")
 
@@ -445,3 +449,25 @@ class Controller:
                 self.all_queues.close()
 
                 logger.info("Controller run finished.")
+
+
+def camera_to_stage_matrix(core) -> tuple | None:
+    """
+    The linear part of MicroManager's pixel-size affine (unbinned camera
+    pixels to stage microns), or None when the core has none or it is
+    degenerate (then pattern methods and the tracker use pixel size x
+    identity, which is what a dry run's simulated stage does).
+    """
+    get = getattr(core, "getPixelSizeAffine", None)
+    if get is None:
+        return None
+    try:
+        a = [float(v) for v in get()]
+    except Exception:
+        return None
+    if len(a) < 6:
+        return None
+    matrix = ((a[0], a[1]), (a[3], a[4]))
+    if abs(a[0] * a[4] - a[1] * a[3]) < 1e-12:
+        return None
+    return matrix
