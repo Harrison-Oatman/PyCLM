@@ -1,7 +1,7 @@
 Tracking (``pyclm.core.tracking``)
 ==================================
 
-Stable identities for labelled regions across timepoints. See
+Stable identities for labeled regions across timepoints. See
 :doc:`../tracking` for how to turn tracking on and what a pattern method
 receives.
 

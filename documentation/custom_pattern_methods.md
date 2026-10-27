@@ -39,7 +39,7 @@ class MyCustomPattern(PatternMethod):
     def generate(self, context: PatternContext):
         # unpack data declared in __init__ via add_requirement()
         raw = context.raw("RFP")           # np.ndarray — most recent RFP image
-        seg = context.segmentation("GFP")  # np.ndarray — labelled segmentation mask
+        seg = context.segmentation("GFP")  # np.ndarray — labeled segmentation mask
 
         # x/y coordinates of every pixel in microns (same shape as the camera output)
         xx, yy = self.get_um_meshgrid()
@@ -213,7 +213,7 @@ The `generate` method receives a `PatternContext` and must return a `float` arra
 
 ```python
 context.raw(channel_name)           # np.ndarray – raw fluorescence image
-context.segmentation(channel_name)  # np.ndarray – labelled segmentation mask
+context.segmentation(channel_name)  # np.ndarray – labeled segmentation mask
 context.segmentation(channel_name, "nuclei")   # the labels of a named [segmentation.nuclei] table
 context.regions(channel_name, name="segmentation")  # Regions: measure(), paint(), ... (toolbox below)
 context.tracks(channel_name)        # Tracks – tracked labels + per-object rows (see Tracking)
@@ -429,7 +429,7 @@ stimulation frame is due at a position (the imaging channels have a longer
 cadence) and the method does not need that frame, a pattern of all zeros
 makes the microscope skip the stage move and the exposure altogether. The
 frame is recorded as `kind = "skipped"` in the frames table and the event
-in `events.parquet`. A programme-style method (see the red / far-red
+in `events.parquet`. A program-style method (see the red / far-red
 example) therefore costs no microscope time on its "off" steps.
 
 ## Changing settings from a pattern method
@@ -477,12 +477,12 @@ columns), so each frame remains self-describing. See
 ### Example 4 — a red / far-red switch
 
 Red / far-red optogenetic tools work like a switch: red light turns them
-on, far-red turns them off. This method reads a programme string, one
+on, far-red turns them off. This method reads a program string, one
 character per timepoint (`1` = red on, `0` = far-red on; the last
 character holds), and turns the two lasers on and off through a device
 property. Red goes through the DMD as the stimulation channel; far-red is
 an ordinary channel of the experiment. The pattern is the whole field, so
-the programme alone decides what the cells receive:
+the program alone decides what the cells receive:
 
 ```toml
 [channels]
@@ -510,7 +510,7 @@ off = 0
 ```
 
 One principle is at work: a setting requested at timepoint `t` applies
-from `t + 1`, so the method reads the programme one step ahead. The frames
+from `t + 1`, so the method reads the program one step ahead. The frames
 table then carries `LaserRed-Intensity` on every stimulation frame and
 `LaserFarRed-Intensity` on every `farred` frame from the first change on,
 and `events.parquet` lists each change with the timepoints involved. The

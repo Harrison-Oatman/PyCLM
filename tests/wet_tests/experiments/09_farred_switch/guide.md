@@ -20,5 +20,5 @@ uv run wet run 09
 
 - laser properties switched at least six times (`events.parquet`,
   kind `property`), the whole field lit in the camera-space pattern;
-- by eye: the `1100` programme repeats its last character, so after
+- by eye: the `1100` program repeats its last character, so after
   t = 3 the far-red laser stays on.

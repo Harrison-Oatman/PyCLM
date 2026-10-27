@@ -3,7 +3,7 @@
 Tracking gives the objects your segmentation finds a stable identity across
 timepoints, so a pattern method can follow a cell, an organoid or a tissue
 region from one frame to the next, and so the output carries a per-object
-table you can analyse afterwards. It is a stage of the closed loop like
+table you can analyze afterward. It is a stage of the closed loop like
 segmentation: it runs live, on every acquired frame of a channel, and only
 when a pattern method asks for it.
 
@@ -133,7 +133,7 @@ With the OME-Zarr format, the tracked labels are stored as a second label
 image next to the segmentation (`imaging/labels/tracks/0`), and the rows go
 to `tracks.parquet` (with `tracks.csv` at the end of the run) in the
 experiment directory, one row per object and timepoint with the centroid in
-pixels and micrometres. The ImageJ export adds the tracked labels as a
+pixels and micrometers. The ImageJ export adds the tracked labels as a
 magenta channel after the segmentation. See [Data format](data_format.md).
 
 The HDF5 format does not store tracks (it warns once and drops them);
@@ -197,7 +197,7 @@ label each method sees is a track id that persists across timepoints, and
 the whole existing zoo of per-cell methods works on tracked cells with one
 TOML key. `LeaderCells` only overrides `cell_labels`, the hook that
 supplies that label image: on the first frame with cells it draws the
-leaders with a seeded generator, and afterwards it blanks every region
+leaders with a seeded generator, and afterward it blanks every region
 whose id is not a leader before handing the image to the parent's loop.
 
 Two consequences of tracking to keep in mind. A leader that the tracker
@@ -208,7 +208,7 @@ motion you expect or use a tracker that does. And cells born after the
 first frame are never leaders, which is the intended reading of "chosen at
 the start of the movie".
 
-### A three-phase intensity programme with per-cell feedback
+### A three-phase intensity program with per-cell feedback
 
 Every cell receives no light for the first `dark_min` minutes and full
 light for the next `light_min` minutes. From then on each cell is held at
@@ -252,8 +252,8 @@ measurement toolbox in [custom pattern methods](custom_pattern_methods.md).
 The controller is proportional with a deliberately simple scale: a cell at
 its target gets a 50 % duty pattern, one that has fallen a full
 calibration span below it gets full light, one that has risen that far
-above it gets none. Raising `gain` sharpens this towards the bang-bang
-behaviour of `nucleus_clamp`. Cells first seen after the light phase
+above it gets none. Raising `gain` sharpens this toward the bang-bang
+behavior of `nucleus_clamp`. Cells first seen after the light phase
 have no calibration of their own and are held at the population medians.
 
 Both examples keep their state on the method instance, as `fb_bounce` and

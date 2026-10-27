@@ -801,7 +801,7 @@ def check_directory(
             requirements_by_stem[stem] = method.initialize(experiment)
         except Exception as e:
             report.error(
-                file, "[pattern]", f"initialising '{cfg.pattern.method}' failed: {e!r}"
+                file, "[pattern]", f"initializing '{cfg.pattern.method}' failed: {e!r}"
             )
 
     # 7. MicroManager configuration

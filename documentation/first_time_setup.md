@@ -237,12 +237,12 @@ tile creator) and need nothing in the experiment TOML:
    lit from two tiles.
 3. In Create Grid, set the **prefix** to the experiment's TOML stem
    (`tissue` for `tissue.toml`), mark the corners, and create. MicroManager
-   writes one entry per tile, labelled `tissue-1-000_000`,
+   writes one entry per tile, labeled `tissue-1-000_000`,
    `tissue-1-001_000`, … with `GridRow` / `GridCol`, each with its own z
    and, on a Nikon, PFS offset interpolated between the corners.
 4. Save the list as `PositionList.pos` in the experiment directory.
 
-PyCLM folds those entries into one position, `tissue.1`, at the centre of
+PyCLM folds those entries into one position, `tissue.1`, at the center of
 the tiles. `pyclm check` reports each grid (rows × columns, spacing, and,
 given `camera_roi` and `--pixel-size-um`, the overlap in pixels). At each
 timepoint every channel visits all the tiles (the stimulation frame with

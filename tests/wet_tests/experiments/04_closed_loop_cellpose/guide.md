@@ -18,7 +18,7 @@ uv run wet run 04
 
 Six timepoints at 60 s. `pyclm check` will estimate the segmentation
 time; if it warns that timepoints exceed the interval, note it and
-compare with the `late` events afterwards.
+compare with the `late` events afterward.
 
 ## Pass means
 

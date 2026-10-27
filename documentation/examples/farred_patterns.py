@@ -16,7 +16,7 @@ from pyclm import PatternMethod
 
 class RedFarRedSwitch(PatternMethod):
     """
-    A red / far-red optogenetic switch driven by a programme string: one
+    A red / far-red optogenetic switch driven by a program string: one
     character per timepoint, ``1`` = red light on (the tool switches on),
     ``0`` = far-red light on (the tool switches off). The last character
     holds for the rest of the run.
@@ -24,7 +24,7 @@ class RedFarRedSwitch(PatternMethod):
     Red light goes through the DMD (the stimulation channel) and far-red
     through an ordinary channel of the experiment; both lasers are turned
     on and off with a device property. The pattern itself is the whole
-    field, so the programme alone decides what the cells receive.
+    field, so the program alone decides what the cells receive.
     """
 
     name = "red_farred_switch"
@@ -50,10 +50,10 @@ class RedFarRedSwitch(PatternMethod):
         self.property = property
         self.on = on
         self.off = off
-        # no image data needed: this is an open-loop programme
+        # no image data needed: this is an open-loop program
 
     def generate(self, context) -> np.ndarray:
-        # settings take effect from the next timepoint, so read the programme there
+        # settings take effect from the next timepoint, so read the program there
         t_next = context.t + 1
         red_on = self.program[min(t_next, len(self.program) - 1)] == "1"
 
@@ -70,5 +70,5 @@ class RedFarRedSwitch(PatternMethod):
             self.off if red_on else self.on,
         )
 
-        # the whole field; the lasers decide which colour the cells get
+        # the whole field; the lasers decide which color the cells get
         return np.ones(self.pattern_shape, np.float32)

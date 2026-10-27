@@ -1,10 +1,10 @@
 """
-Tracking: stable identities for labelled regions across timepoints.
+Tracking: stable identities for labeled regions across timepoints.
 
 A :class:`TrackingMethod` receives one label image per acquired frame of a
 channel (cells, organoids, tissue regions: whatever the segmentation method
 labels) and returns the same image relabelled with track ids plus one
-:class:`TrackRow` per object. The interface is "labelled regions in,
+:class:`TrackRow` per object. The interface is "labeled regions in,
 relabelled regions and a table out"; the method decides what a region is
 and keeps whatever state it needs between calls, the way segmentation
 methods do.

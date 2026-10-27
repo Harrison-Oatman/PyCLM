@@ -257,7 +257,7 @@ class AutoExposurePattern(WrappingPattern):
     """
     Keeps the bright pixels of ``channel`` at a set fraction of the camera's
     range: each timepoint the ``percentile`` of the frame is compared with
-    ``target`` x ``full_scale`` and the channel's exposure is scaled towards
+    ``target`` x ``full_scale`` and the channel's exposure is scaled toward
     it, by at most ``max_change`` (a fraction) per timepoint and within
     ``min_ms`` .. ``max_ms``. ``full_scale`` is the camera's largest count
     (default: the largest value of the image type, 65535 for 16 bits).

@@ -87,7 +87,7 @@ def merge_requests(requests) -> list[AcquiredImageRequest]:
 
 
 def _seg_names(seg) -> tuple[str, ...]:
-    """Normalise the ``seg`` argument of add_requirement to segmentation names."""
+    """Normalize the ``seg`` argument of add_requirement to segmentation names."""
     if seg is True:
         return (DEFAULT_SEGMENTATION,)
     if not seg:

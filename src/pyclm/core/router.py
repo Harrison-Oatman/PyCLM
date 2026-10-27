@@ -148,7 +148,7 @@ class Router:
            subscribing that producer to its input kinds at the widest cadence
            any downstream consumer asks for (``"always"`` if the producer is
            ``continuous``);
-        2. ``demand=False`` subscriptions are honoured only for data that is
+        2. ``demand=False`` subscriptions are honored only for data that is
            produced anyway;
         3. a demanded kind with no producer, or one whose producer cannot
            serve that experiment, is a :class:`RoutingError`;

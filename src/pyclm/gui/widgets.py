@@ -13,7 +13,7 @@ from pathlib import Path
 
 from qtpy import QtCore, QtGui, QtWidgets
 
-# a fixed palette, one colour per experiment (stem), cycled
+# a fixed palette, one color per experiment (stem), cycled
 PALETTE = (
     "#4e79a7",
     "#f28e2b",
@@ -138,7 +138,7 @@ def positions_from_directory(directory: Path) -> list[MapPosition]:
 
 class Minimap(QtWidgets.QGraphicsView):
     """
-    The positions of a run drawn in stage coordinates (µm), coloured by
+    The positions of a run drawn in stage coordinates (µm), colored by
     experiment, with the field of view drawn when its size is known and the
     position the microscope is at highlighted. Read-only.
     """

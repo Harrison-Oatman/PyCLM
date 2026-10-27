@@ -175,9 +175,9 @@ however many positions there are, and contrast limits are one setting per
 channel that applies to every position. Switch position with the slider,
 the positions list in the dock on the right, a click on the minimap, or the
 `[` and `]` keys; **Follow the run** keeps the viewer on the position the
-microscope is acquiring. Contrast is normalised as frames arrive until you
+microscope is acquiring. Contrast is normalized as frames arrive until you
 move a slider, then it stays where you put it (**Auto-contrast** turns that
-back on; **Normalise now** resets every channel once). The dock also shows
+back on; **Normalize now** resets every channel once). The dock also shows
 the status line and the minimap, refreshed from `status.json` every second.
 Experiments with the same group name at different cadences get separate
 layers (`imaging@5/545`).

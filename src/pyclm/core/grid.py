@@ -2,7 +2,7 @@
 Grid acquisition: a position made of tiles, laid out by MicroManager's tile
 creator, imaged as one stitched frame.
 
-MicroManager's Create Grid writes one position per tile, labelled
+MicroManager's Create Grid writes one position per tile, labeled
 ``<prefix>-<n>-<col>_<row>`` with ``GridRow`` / ``GridCol`` set, spaced by
 the camera field (through the pixel-size affine, so tiles placed by row and
 column abut). :func:`group_tiles` folds those entries into one
@@ -32,7 +32,7 @@ class GridGeometry:
     How a grid's tiles sit in the stitched frame, in unbinned camera pixels.
 
     ``pitch_x_px`` / ``pitch_y_px`` are the distances between column / row
-    neighbours; ``tile_w`` / ``tile_h`` the camera ROI; ``tiles`` the
+    neighbors; ``tile_w`` / ``tile_h`` the camera ROI; ``tiles`` the
     ``(row, col)`` of each tile in acquisition order.
     """
 
@@ -61,7 +61,7 @@ class GridGeometry:
         return ((self.rows - 1) * py + h, (self.columns - 1) * px + w)
 
     def overlap(self, binning: int = 1) -> tuple[int, int]:
-        """(rows, columns) overlap in pixels between neighbours; negative is a gap."""
+        """(rows, columns) overlap in pixels between neighbors; negative is a gap."""
         h, w = self.tile_shape(binning)
         py, px = self.pitch(binning)
         return (h - py, w - px)
@@ -94,8 +94,8 @@ def group_tiles(
     ``raw_labels`` are the labels as written by MicroManager (before ``-``
     became ``.``); ``grid_rc`` the ``(GridRow, GridCol)`` of each entry, or
     None. A grid is every entry whose label matches :data:`TILE_LABEL` with
-    the same prefix; the grid position is labelled by the prefix (``-`` →
-    ``.``), sits at the centre of its tiles, and carries them in
+    the same prefix; the grid position is labeled by the prefix (``-`` →
+    ``.``), sits at the center of its tiles, and carries them in
     ``tiles`` (each with ``grid_rc``) with the pitch in µm in ``grid``.
     Entries that are not tiles pass through unchanged, in order.
     """

@@ -61,7 +61,7 @@ names the commit of the PyCLM checkout it ran against.
 | 06_ktr | two segmentations of one channel | KTR cells, a one-position list |
 | 07_settings_ramp | a method changing its own settings | the list of 02 |
 | 08_commands | commands from outside during a run | the list of 02 |
-| 09_farred_switch | the red / far-red programme | a red + far-red channel pair, one position |
+| 09_farred_switch | the red / far-red program | a red + far-red channel pair, one position |
 | 10_skipping | blank patterns skip the position | the list of 02 |
 | 11_camera_roi | the DMD footprint as the ROI | one position, a fluorescent slide |
 | 12_grid | a 2 x 2 grid | Create Grid on a structured slide |
