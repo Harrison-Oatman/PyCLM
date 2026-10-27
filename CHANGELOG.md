@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Every method zoo entry ends with a table of all the keywords the method
+  takes (default, what it does), and the page opens its Methods section
+  with the keywords every method takes (`start_min`, `stop_min`). The
+  tables are generated from the constructor signatures and their
+  `:param:` lines, so they follow renames; a test fails for a keyword
+  with no `:param:` line.
 - **New pattern methods (2.0, second part of the method expansion; design
   note `docs/pattern-methods-expansion-design.md`).** Released as an
   experimental 2.0 pre-release.

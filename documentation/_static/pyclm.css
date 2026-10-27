@@ -128,3 +128,14 @@
     border-color: #2980b9;
     color: #fff;
 }
+
+/* method zoo keyword tables: wrap the descriptions (the theme keeps table
+   cells on one line) */
+#method-zoo table.docutils td,
+#method-zoo table.docutils th {
+    white-space: normal;
+}
+#method-zoo table.docutils td:first-child,
+#method-zoo table.docutils td:nth-child(2) {
+    white-space: nowrap;
+}

@@ -91,6 +91,18 @@ class SplitPattern(PatternMethod):
         feather: int = 0,
         **kwargs,
     ):
+        """
+        :param left: the ``[pattern.left]`` table: ``method`` and that
+            method's keywords, for the left half; give ``right`` with it
+        :param right: the ``[pattern.right]`` table, for the right half
+        :param top: the ``[pattern.top]`` table, for the top half; give
+            ``bottom`` with it, instead of ``left`` and ``right``
+        :param bottom: the ``[pattern.bottom]`` table, for the bottom half
+        :param boundary: where the halves meet, as a fraction (0-1) of the
+            width (left / right) or the height (top / bottom)
+        :param feather: pixels over which the two halves blend linearly
+            across the boundary (0: a sharp edge)
+        """
         super().__init__(**kwargs)
         specs = {
             "left": left,

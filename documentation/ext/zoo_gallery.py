@@ -35,7 +35,9 @@ Configuration (``conf.py``)
 from __future__ import annotations
 
 import html
+import inspect
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -259,11 +261,95 @@ def _build_entry(key, meta, registry, sources_dir, output_dir, metadata) -> dict
         "kwargs": {k: v for k, v in meta.kwargs.items() if not k.startswith("_")},
         "needs": _needs(method),
         "varies": bool(meta.times or meta.timeline),
+        "keywords": keywords(registry[key]),
         "api": f"{cls.__module__}.{cls.__name__}",
         "cls_name": cls.__name__,
         "requests": requests,
         "time_seconds": meta.time_seconds,
     }
+
+
+# ---------------------------------------------------------------------------
+# Keyword tables
+# ---------------------------------------------------------------------------
+
+_PARAM = re.compile(r":param (\w+):((?:.|\n(?![ \t]*:))*)")
+
+
+def param_docs(cls: type) -> dict[str, str]:
+    """``:param name: text`` lines from the ``__init__`` and class docstrings
+    up the MRO, the most derived first."""
+    docs: dict[str, str] = {}
+    for klass in cls.__mro__:
+        for source in (vars(klass).get("__init__"), klass):
+            text = inspect.getdoc(source) if source is not None else None
+            for match in _PARAM.finditer(text or ""):
+                docs.setdefault(match.group(1), " ".join(match.group(2).split()))
+    return docs
+
+
+def _parameters(cls: type) -> tuple[dict, dict[str, str]]:
+    """The TOML keywords of *cls* (as ``pyclm check`` accepts them) and their docs.
+
+    A base that picks a subclass in ``__new__`` (``bar``, ``rings``)
+    accepts what any of its subclasses accepts.
+    """
+    from pyclm.check import SUPPLIED, _all_subclasses, _named_parameters
+
+    supplied = SUPPLIED["pattern"]
+    named, _ = _named_parameters(cls, supplied)
+    docs = param_docs(cls)
+    if "__new__" in vars(cls):
+        for sub in _all_subclasses(cls):
+            for name, param in _named_parameters(sub, supplied)[0].items():
+                named.setdefault(name, param)
+            for name, text in param_docs(sub).items():
+                docs.setdefault(name, text)
+    return named, docs
+
+
+def generic_keywords() -> list[dict]:
+    """The keywords every pattern method takes (from ``PatternMethod``)."""
+    from pyclm.core.patterns import PatternMethod
+
+    return _rows(PatternMethod, set())
+
+
+def keywords(cls: type) -> list[dict]:
+    """The keywords of *cls* beyond the ones every method takes."""
+    from pyclm.core.patterns import PatternMethod
+
+    generic = {row["name"] for row in _rows(PatternMethod, set())}
+    return _rows(cls, generic)
+
+
+def _rows(cls: type, skip: set) -> list[dict]:
+    named, docs = _parameters(cls)
+    return [
+        {
+            "name": name,
+            "default": param.default,
+            "doc": docs.get(name, ""),
+        }
+        for name, param in named.items()
+        if name not in skip
+    ]
+
+
+def keyword_table(rows: list[dict]) -> list[str]:
+    """A Markdown table: keyword, default, what it does."""
+    lines = ["| Keyword | Default | What it does |", "|---|---|---|"]
+    for row in rows:
+        default = row["default"]
+        if default is inspect.Parameter.empty:
+            shown = "required"
+        elif default is None:
+            shown = "none"
+        else:
+            shown = f"`{_toml_value(default)}`"
+        doc = row["doc"].replace("|", "\\|") or "(undocumented)"
+        lines.append(f"| `{row['name']}` | {shown} | {doc} |")
+    return lines
 
 
 def _describe_request(request) -> str:
@@ -509,7 +595,17 @@ def _write_fragment(
             lines.append(_card_html(e, g, title, static_prefix))
     lines += ["</div>", ""]
 
-    lines += ["## Methods", ""]
+    lines += [
+        "## Methods",
+        "",
+        "Each entry lists the method's own keywords. Every method also takes:",
+        "",
+        *keyword_table(generic_keywords()),
+        "",
+        "and `every_t` (how often the pattern is regenerated; see "
+        "[Experiment TOMLs](experiment_tomls.md)).",
+        "",
+    ]
     for _g, title, blurb, members in groups:
         lines += [f"### {title}", ""]
         if blurb:
@@ -518,6 +614,8 @@ def _write_fragment(
             lines += _entry_md(e, rel_prefix)
 
     if pending:
+        from pyclm.core.patterns import known_models
+
         lines += [
             "### Cards still to come",
             "",
@@ -542,6 +640,9 @@ def _write_fragment(
                 "```",
                 "",
             ]
+            rows = keywords(known_models[key])
+            if rows:
+                lines += ["**Keywords:**", "", *keyword_table(rows), ""]
 
     fragment.write_text("\n".join(lines), encoding="utf-8")
 
@@ -602,7 +703,16 @@ def _entry_md(e: dict, rel_prefix: str) -> list[str]:
             f"**At {at} the example** " + "; ".join(e["requests"]) + ".",
             "",
         ]
+    if e["keywords"]:
+        lines += ["**Keywords:**", "", *keyword_table(e["keywords"]), ""]
     for alias, equivalent in e["aliases"]:
+        if equivalent == "the old name":  # renamed_method
+            lines += [
+                f'**Old name:** `"{alias}"` still runs; `pyclm check` warns and '
+                "`pyclm check --fix` renames it.",
+                "",
+            ]
+            continue
         lines += [
             f'**Deprecated alias:** `"{alias}"` is this method with `{equivalent}`; '
             "`pyclm check` warns when it is used.",

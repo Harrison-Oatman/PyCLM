@@ -151,3 +151,24 @@ def test_gradient_mode_keeps_a_one_pixel_cell_dark():
     assert not np.isnan(pattern).any()
     assert pattern[3, 3] == 0
     assert pattern.max() == 1
+
+
+@pytest.mark.parametrize("key", sorted(known_models))
+def test_every_keyword_of_a_card_is_documented(key):
+    """The zoo's keyword tables come from ``:param:`` lines; none may be blank."""
+    meta = zoo_gallery.zoo_meta_for(key, known_models[key])
+    if meta is None or meta.same_as:
+        pytest.skip("no card")
+    rows = zoo_gallery.keywords(known_models[key])
+    undocumented = [row["name"] for row in rows if not row["doc"]]
+    assert not undocumented, f"{key}: add :param lines for {undocumented}"
+    generic = {row["name"] for row in zoo_gallery.generic_keywords()}
+    assert {row["name"] for row in rows} | generic >= {
+        k for k in meta.kwargs if not k.startswith("_")
+    }
+
+
+def test_generic_keywords_are_the_base_class_ones():
+    names = [row["name"] for row in zoo_gallery.generic_keywords()]
+    assert names == ["start_min", "stop_min"]
+    assert all(row["doc"] for row in zoo_gallery.generic_keywords())
