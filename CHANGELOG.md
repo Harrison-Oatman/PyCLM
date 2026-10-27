@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The README and the documentation home page open with a short overview and
+  a "Start here" list that leads with the method zoo, then the demo, setup,
+  experiment files, custom methods and data. The documentation contents are
+  grouped into Getting started, Pattern methods and Reference. The README
+  uses absolute links so they also work on PyPI. The Usage page no longer
+  says to run `main.py`, and it and the data format page use `pyclm export`
+  instead of `uv run convert_hdf5s` (still an alias). `imgs/Figure 1.png`
+  is now `imgs/pyclm-overview.png`.
 - **Pattern-method names and arguments follow one convention (2.0, first
   part of the method expansion; design note
   `docs/pattern-methods-expansion-design.md`).** A quantity with a unit

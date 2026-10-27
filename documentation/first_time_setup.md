@@ -332,7 +332,7 @@ method = "cellpose"
 
 # ── Pattern generation ───────────────────────────────────────────────────────
 # "method" must match a registered PatternMethod name 
-# either built into pyclm (see documentation/method_zoo.md),
+# either built into pyclm (see the Method zoo page),
 # or custom (see Section 10 below).
 # All other keys are forwarded as constructor kwargs to the pattern method.
 [pattern]

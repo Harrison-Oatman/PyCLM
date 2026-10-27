@@ -307,13 +307,13 @@ written into the experiment directory when the run ends.
 **From the command line**, for a finished directory in either format:
 
 ```bash
-uv run convert_hdf5s path/to/experiment_dir
+pyclm export path/to/experiment_dir
 ```
 
 Restrict the export to particular channels or groups by naming them:
 
 ```bash
-uv run convert_hdf5s path/to/experiment_dir 545 stim
+pyclm export path/to/experiment_dir 545 stim
 ```
 
 Older HDF5 files that predate the embedded affine transform take it from
