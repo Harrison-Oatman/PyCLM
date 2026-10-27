@@ -3,6 +3,16 @@
 PyCLM is published on PyPI as `closed-loop-microscopy`; the import name and
 the command are `pyclm`.
 
+```{hint}
+**Prefer to be walked through it?** The
+[`pyclm-microscope-bringup`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-microscope-bringup/SKILL.md)
+agent skill takes you through installing and setting up PyCLM on your
+microscope; it runs the checks itself and asks you only about your hardware.
+Start [Claude Code](https://claude.com/claude-code) (or another agent that
+reads skills) in a clone of the PyCLM repository and describe what you want,
+for example "help me set up PyCLM on our Nikon Ti2 with a Mightex Polygon".
+```
+
 ```bash
 pip install "closed-loop-microscopy[gui]"      # the microscope PC: runs and the live viewer
 pip install closed-loop-microscopy             # headless: check, preview, dry runs, reading data

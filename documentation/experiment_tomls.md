@@ -5,6 +5,16 @@ the experiment directory. The file's stem is the experiment name that
 position labels refer to: position `bar10.pos1` uses `bar10.toml`. The
 timing shared by every experiment lives in `schedule.toml`.
 
+```{hint}
+**Prefer to be walked through it?** The
+[`pyclm-design-experiment`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-design-experiment/SKILL.md)
+agent skill turns an experiment idea into a checked experiment folder and a
+dry run on the virtual microscope. Start [Claude
+Code](https://claude.com/claude-code) (or another agent that reads skills)
+in a clone of the PyCLM repository and describe what you want, for example
+"a bar of light moving at 1 µm/min over half my wells".
+```
+
 A complete example:
 
 ```toml

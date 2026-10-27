@@ -33,6 +33,11 @@ Start here
 - **Write your own light rule:** :doc:`custom_pattern_methods` and
   :doc:`tracking`.
 - **Open the data:** :doc:`data_format`.
+- **Get walked through it:** three `agent skills
+  <https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills>`_ let a
+  coding agent such as Claude Code guide you through microscope setup,
+  designing an experiment, and writing a pattern method. The hint boxes on
+  those pages say which one to use.
 
 .. toctree::
    :maxdepth: 2
