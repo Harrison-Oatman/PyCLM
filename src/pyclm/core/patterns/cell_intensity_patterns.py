@@ -205,7 +205,7 @@ class CenteredImageModel(NucleusControlMethod):
             "target_min": 0,
             "target_max": 100,
         },
-        description="Bang-bang control towards a target image centered on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to target_min..target_max.",
+        description="Bang-bang control toward a target image centered on the field: each nucleus is lit while it is dimmer than the target at its centroid, rescaled to target_min..target_max.",
         group="per_nucleus",
     )
 
