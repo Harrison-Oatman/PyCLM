@@ -6,7 +6,7 @@ The custom pattern API is set up to minimize the amount of boilerplate code the 
 
 ```{hint}
 Prefer to be walked through it? A coding agent can do it with the
-`pyclm-write-pattern-method` skill: see [Setting up with an AI agent](agent_skills.md).
+`pyclm-write-pattern-method` skill: see [Using PyCLM skills with Claude Code](agent_skills.md).
 ```
 
 The first step in writing a custom pattern method is to implement a subclass of the `PatternMethod` base class.

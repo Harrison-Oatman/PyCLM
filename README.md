@@ -61,7 +61,7 @@ number of simultaneous experiments is limited mainly by the hardware. Data is
 written as the run goes (OME-Zarr by default), and ImageJ hyperstacks are
 exported at the end.
 
-## Setting up with an AI coding agent
+## Using PyCLM skills with Claude Code
 
 The repository includes three [agent skills](https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills)
 that let a coding agent such as [Claude Code](https://claude.com/claude-code)
@@ -72,7 +72,7 @@ designing an experiment
 and writing a pattern method
 ([`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md)).
 Start Claude Code in a clone of this repository and describe what you want;
-[Setting up with an AI agent](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
+[Using PyCLM skills with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
 has the details.
 
 ## Citation

@@ -1,4 +1,4 @@
-# Setting up with an AI agent
+# Using PyCLM skills with Claude Code
 
 PyCLM comes with three *agent skills*: step-by-step guides that a coding
 agent such as [Claude Code](https://claude.com/claude-code) follows to walk
@@ -14,7 +14,7 @@ you only about your microscope and your experiment.
 - [`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md):
   turning a light rule described in words into a tested pattern method.
 
-## Using them with Claude Code
+## Getting started
 
 1. Install Claude Code ([instructions](https://code.claude.com/docs/en/quickstart)).
 2. Clone PyCLM and start Claude Code in it:

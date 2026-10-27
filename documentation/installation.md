@@ -5,7 +5,7 @@ the command are `pyclm`.
 
 ```{hint}
 Prefer to be walked through it? A coding agent can do it with the
-`pyclm-microscope-bringup` skill: see [Setting up with an AI agent](agent_skills.md).
+`pyclm-microscope-bringup` skill: see [Using PyCLM skills with Claude Code](agent_skills.md).
 ```
 
 ```bash

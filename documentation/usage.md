@@ -6,7 +6,7 @@ the [First-Time Setup Guide](first_time_setup.md).
 
 ```{hint}
 Prefer to be walked through it? A coding agent can do it with the
-`pyclm-design-experiment` skill: see [Setting up with an AI agent](agent_skills.md).
+`pyclm-design-experiment` skill: see [Using PyCLM skills with Claude Code](agent_skills.md).
 ```
 
 ## 1. Design the experiments
