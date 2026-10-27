@@ -5,12 +5,8 @@ Custom patterns provide a way to extend PyCLM and enable a wide range of new exp
 The custom pattern API is set up to minimize the amount of boilerplate code the user has to write.
 
 ```{hint}
-**Prefer to be walked through it?** The
-[`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md)
-agent skill turns a light rule described in words into a tested pattern
-method. Start [Claude Code](https://claude.com/claude-code) (or another
-agent that reads skills) in a clone of the PyCLM repository and describe
-what you want, for example "light the cells whose reporter is below X".
+Prefer to be walked through it? A coding agent can do it with the
+`pyclm-write-pattern-method` skill: see [Setting up with an AI agent](agent_skills.md).
 ```
 
 The first step in writing a custom pattern method is to implement a subclass of the `PatternMethod` base class.

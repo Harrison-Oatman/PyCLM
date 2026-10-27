@@ -5,13 +5,8 @@ data the run writes next to them. For the first time on a new microscope, see
 the [First-Time Setup Guide](first_time_setup.md).
 
 ```{hint}
-**Prefer to be walked through it?** The
-[`pyclm-design-experiment`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-design-experiment/SKILL.md)
-agent skill turns an experiment idea into a checked experiment folder and a
-dry run on the virtual microscope. Start [Claude
-Code](https://claude.com/claude-code) (or another agent that reads skills)
-in a clone of the PyCLM repository and describe what you want, for example
-"a bar of light moving at 1 µm/min over half my wells".
+Prefer to be walked through it? A coding agent can do it with the
+`pyclm-design-experiment` skill: see [Setting up with an AI agent](agent_skills.md).
 ```
 
 ## 1. Design the experiments

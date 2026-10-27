@@ -33,11 +33,8 @@ Start here
 - **Write your own light rule:** :doc:`custom_pattern_methods` and
   :doc:`tracking`.
 - **Open the data:** :doc:`data_format`.
-- **Get walked through it:** three `agent skills
-  <https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills>`_ let a
-  coding agent such as Claude Code guide you through microscope setup,
-  designing an experiment, and writing a pattern method. The hint boxes on
-  those pages say which one to use.
+- **Get walked through it:** :doc:`agent_skills` lets a coding agent such as
+  Claude Code guide you through setup, an experiment, or a new method.
 
 .. toctree::
    :maxdepth: 2
@@ -46,6 +43,7 @@ Start here
    installation
    first_time_setup
    usage
+   agent_skills
 
 .. toctree::
    :maxdepth: 2

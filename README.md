@@ -63,25 +63,17 @@ exported at the end.
 
 ## Setting up with an AI coding agent
 
-The repository includes three [agent skills](https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills):
-step-by-step guides a coding agent such as
-[Claude Code](https://claude.com/claude-code) can follow to walk you through
-the slow parts. The agent runs the `pyclm` checks itself and asks you only
-about your microscope and your experiment.
-
-| Skill | What it helps with |
-|---|---|
-| [`pyclm-microscope-bringup`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-microscope-bringup/SKILL.md) | Getting PyCLM running on your microscope: install, the Micro-Manager device interface, the `.cfg` presets, `pyclm_config.toml` (DMD calibration, camera ROI, focus lock), and the first real run. |
-| [`pyclm-design-experiment`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-design-experiment/SKILL.md) | Turning an experiment idea ("a bar of light moving at 1 µm/min over half my wells") into a checked experiment folder and a dry run on the virtual microscope. |
-| [`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md) | Turning a light rule described in words ("light cells whose reporter is below X") into a tested pattern method. |
-
-Start Claude Code in a clone of this repository and describe what you want,
-for example "help me set up PyCLM on our Nikon Ti2 with a Mightex Polygon".
-To use the skills from another folder, copy the folders in `.claude/skills/`
-into that folder's `.claude/skills/`, or into `~/.claude/skills/`. They are
-plain Markdown (`SKILL.md`), so other agents, or a person, can follow them
-too. The agent never changes your Micro-Manager configuration; it tells you
-what to change.
+The repository includes three [agent skills](https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills)
+that let a coding agent such as [Claude Code](https://claude.com/claude-code)
+walk you through microscope setup
+([`pyclm-microscope-bringup`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-microscope-bringup/SKILL.md)),
+designing an experiment
+([`pyclm-design-experiment`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-design-experiment/SKILL.md)),
+and writing a pattern method
+([`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md)).
+Start Claude Code in a clone of this repository and describe what you want;
+[Setting up with an AI agent](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
+has the details.
 
 ## Citation
 

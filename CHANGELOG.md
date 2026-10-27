@@ -15,9 +15,10 @@
   (normalize, center, color, gray, labeled, program, toward). The viewer's
   button is now "Normalize now". Identifiers and the internal notes in
   `docs/` are unchanged.
-- Hint boxes on the installation, first-time setup, usage, experiment TOML
-  and custom pattern method pages point to the agent skill that walks
-  through that page, and the documentation home page lists the skills.
+- A short documentation page, "Setting up with an AI agent", shows how to
+  use the agent skills with Claude Code. One-line hints on the
+  installation, first-time setup, usage, experiment TOML and custom pattern
+  method pages name the skill for that page and link to it.
 - Every method zoo entry ends with a table of all the keywords the method
   takes (default, what it does), and the page opens its Methods section
   with the keywords every method takes (`start_min`, `stop_min`). The

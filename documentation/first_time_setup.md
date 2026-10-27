@@ -9,13 +9,8 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 - A position list exported from MicroManager
 
 ```{hint}
-**Prefer to be walked through it?** The
-[`pyclm-microscope-bringup`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-microscope-bringup/SKILL.md)
-agent skill takes you through installing and setting up PyCLM on your
-microscope; it runs the checks itself and asks you only about your hardware.
-Start [Claude Code](https://claude.com/claude-code) (or another agent that
-reads skills) in a clone of the PyCLM repository and describe what you want,
-for example "help me set up PyCLM on our Nikon Ti2 with a Mightex Polygon".
+Prefer to be walked through it? A coding agent can do it with the
+`pyclm-microscope-bringup` skill: see [Setting up with an AI agent](agent_skills.md).
 ```
 
 ---
