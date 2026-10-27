@@ -118,6 +118,15 @@ arguments from the `[tracking]` table (everything except `method` and
 `save`), and it receives every acquired frame of that channel in order.
 Track ids should be positive integers that are never reused within a run.
 
+**Stage moves.** When a pattern method moves the stage (`recenter`,
+`drift_correct`, or `context.set_position` in a method of your own), every
+object jumps in the image by the move. Before the next `track`, the
+tracking process calls `shift(dy_px, dx_px)` with that jump, in the
+frame's pixels (rows down, columns right), converted through
+MicroManager's pixel-size affine. `centroid` moves the centroids it
+remembers, so ids survive the move. The default `shift` does nothing; a
+tracker that links by position should override it.
+
 ## Where the tracks go
 
 With the OME-Zarr format, the tracked labels are stored as a second label

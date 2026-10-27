@@ -37,6 +37,11 @@ class CentroidTracker(TrackingMethod):
         self._prev_centroids = np.zeros((0, 2), dtype=float)
         self._next_id = 1
 
+    def shift(self, dy_px, dx_px):
+        self._prev_centroids = self._prev_centroids + np.array(
+            [float(dy_px), float(dx_px)]
+        )
+
     def track(self, labels, t, pixel_size_um):
         labels = np.asarray(labels)
         props = regionprops_table(

@@ -152,6 +152,15 @@ family it would join.
 | `population_clamp` | The whole field on or off (or a duty) to hold the mean nuclear intensity at a target | closed | Per-nucleus feedback | Global feedback with a single input; simplest to analyse. |
 | `embryo_pole` / `embryo_band` | One pole only, or a band at a given position along the long axis | closed | Embryo axis | `embryo_outer` lights both poles symmetrically; asymmetric stimulation is the common ask. |
 
+**Status (2.0):** built as `rectangle`, `image_mask`, `dose_grid`
+(which covers `spot_array`), `chirp`, `all_cells` (`invert` covers
+`background`), `random_cells`, `select_cells` (which covers
+`colony_edge` with `band_um`), `nucleus_clamp` with `controller = "p"` /
+`"pi"` (`nucleus_proportional`) and `population_clamp`. Declined:
+`gradient` (as `ramp`), `moving_spot`, `random_pulses`, `follow_cell`,
+`embryo_pole` / `embryo_band`. See
+[pattern-methods-expansion-design.md](pattern-methods-expansion-design.md).
+
 Graded intensities on a binary DMD need spatial dithering or a duty
 cycle across timepoints; one shared helper (`dither(pattern, rng)`)
 would serve `gradient`, `spot_array` and `nucleus_proportional`.

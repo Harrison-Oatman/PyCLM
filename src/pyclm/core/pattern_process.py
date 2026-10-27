@@ -117,7 +117,11 @@ class PatternProcess(PipelineProcess):
             if geom is not None and props is not None:
                 # a grid experiment's method sees, and returns, the stitched frame
                 h, w = geom.shape(1)
-                props = CameraProperties(ROI(0, 0, int(w), int(h)), props.pixel_size_um)
+                props = CameraProperties(
+                    ROI(0, 0, int(w), int(h)),
+                    props.pixel_size_um,
+                    getattr(props, "camera_to_stage", None),
+                )
             model.configure_system(experiment_name, props, experiment)
 
     def register_method(self, model: type, name: str | None = None):
