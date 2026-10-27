@@ -1,5 +1,8 @@
 # First-Time Setup Guide
 
+*A coding agent can walk you through this page with the pyclm-microscope-bringup skill; see
+[Using PyCLM skills with Claude Code](agent_skills.md).*
+
 This guide walks through everything required to run a PyCLM experiment on a new microscope system. By the end you will have:
 
 - A working Python environment with PyCLM installed
@@ -7,11 +10,6 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 - A `PositionMover` matched to your focus-maintenance hardware
 - A pair of experiment configuration files (`[experiment].toml` and `schedule.toml`)
 - A position list exported from MicroManager
-
-```{hint}
-Prefer to be walked through it? A coding agent can do it with the
-`pyclm-microscope-bringup` skill: see [Using PyCLM skills with Claude Code](agent_skills.md).
-```
 
 ---
 

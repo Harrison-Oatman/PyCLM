@@ -16,9 +16,9 @@
   button is now "Normalize now". Identifiers and the internal notes in
   `docs/` are unchanged.
 - A short documentation page, "Using PyCLM skills with Claude Code",
-  shows how to use the agent skills. One-line hints on the installation,
-  first-time setup, usage, experiment TOML and custom pattern method pages
-  name the skill for that page and link to it.
+  shows how to use the agent skills. An italic line under the title of the
+  installation, first-time setup, usage, experiment TOML and custom pattern
+  method pages names the skill for that page and links to it.
 - Every method zoo entry ends with a table of all the keywords the method
   takes (default, what it does), and the page opens its Methods section
   with the keywords every method takes (`start_min`, `stop_min`). The

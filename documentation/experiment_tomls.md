@@ -1,14 +1,12 @@
 # Experiment TOMLs
 
+*A coding agent can walk you through this page with the pyclm-design-experiment skill; see
+[Using PyCLM skills with Claude Code](agent_skills.md).*
+
 Each experiment (one per imaging position) is described by one TOML file in
 the experiment directory. The file's stem is the experiment name that
 position labels refer to: position `bar10.pos1` uses `bar10.toml`. The
 timing shared by every experiment lives in `schedule.toml`.
-
-```{hint}
-Prefer to be walked through it? A coding agent can do it with the
-`pyclm-design-experiment` skill: see [Using PyCLM skills with Claude Code](agent_skills.md).
-```
 
 A complete example:
 

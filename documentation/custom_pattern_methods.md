@@ -1,13 +1,11 @@
 # Writing Custom Pattern Methods
 
+*A coding agent can walk you through this page with the pyclm-write-pattern-method skill; see
+[Using PyCLM skills with Claude Code](agent_skills.md).*
+
 ## Overview
 Custom patterns provide a way to extend PyCLM and enable a wide range of new experiments using python.
 The custom pattern API is set up to minimize the amount of boilerplate code the user has to write.
-
-```{hint}
-Prefer to be walked through it? A coding agent can do it with the
-`pyclm-write-pattern-method` skill: see [Using PyCLM skills with Claude Code](agent_skills.md).
-```
 
 The first step in writing a custom pattern method is to implement a subclass of the `PatternMethod` base class.
 
