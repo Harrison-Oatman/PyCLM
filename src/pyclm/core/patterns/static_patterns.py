@@ -17,7 +17,7 @@ class CirclePattern(PatternMethod):
         source="mdck",
         kwargs={"radius_um": 60},
         title="Circle",
-        description="Filled circle centred on the camera field of view.",
+        description="Filled circle centered on the camera field of view.",
         group="static",
     )
 

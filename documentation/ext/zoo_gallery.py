@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# the overlay: the pattern in cyan over the grey image
+# the overlay: the pattern in cyan over the gray image
 _CYAN = np.array([0.0, 0.85, 0.85])
 _ALPHA = 0.5
 
@@ -466,7 +466,7 @@ def _minutes(t_seconds: float) -> str:
 
 
 def _frame(ax) -> None:
-    """No ticks, a thin grey frame (so an all-white pattern still shows)."""
+    """No ticks, a thin gray frame (so an all-white pattern still shows)."""
     ax.set_xticks([])
     ax.set_yticks([])
     for spine in ax.spines.values():
@@ -587,7 +587,7 @@ def _write_fragment(
         "Grouped by family; click a card for the example's parameters and its pattern over time.",
         "",
     ]
-    # one grid, in family order, each card labelled with its family;
+    # one grid, in family order, each card labeled with its family;
     # _static/zoo.js adds filter buttons from the cards' data attributes
     lines.append('<div class="zoo-grid">')
     for g, title, _blurb, members in groups:

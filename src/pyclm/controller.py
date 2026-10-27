@@ -435,9 +435,7 @@ class Controller:
                     wait(future_to_process.keys(), return_when=ALL_COMPLETED)
 
                 except KeyboardInterrupt:
-                    logger.warning(
-                        "Overriding stop_event handling, cancelling futures."
-                    )
+                    logger.warning("Overriding stop_event handling, canceling futures.")
                     for f in future_to_process:
                         f.cancel()
 

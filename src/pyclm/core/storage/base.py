@@ -154,7 +154,7 @@ class FrameWriter(ABC):
     ``open`` prepares every output for the plan (readers may open the outputs
     as soon as it returns); ``write_frame`` receives raw and stimulation
     frames, ``write_labels`` segmentation masks, ``write_tracks`` tracking
-    output; ``close`` finalises. Writers must never block on readers.
+    output; ``close`` finalizes. Writers must never block on readers.
 
     ``recorded`` (from the Router) says which ``(experiment, channel)`` pairs
     will actually arrive for each kind; without it :meth:`records` falls back

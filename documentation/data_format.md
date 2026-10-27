@@ -81,7 +81,7 @@ frames between real ones.
 
 Each group records `every_t` and `t_delay` in its `pyclm` attributes and as
 the NGFF time-scale transform (`every_t × interval_seconds`), so viewers that
-honour the transform (napari does) place groups of different cadence on the
+honor the transform (napari does) place groups of different cadence on the
 same real time axis. To map a slot back to the plan timepoint:
 `t = t_delay + slot × every_t`.
 
@@ -133,7 +133,7 @@ the stitched pattern the method returned; `patterns/dmd/0` holds one image
 per tile, the `rows × columns` images of one pattern stored contiguously
 in the tiles' order, so `dmd_index + k` is tile `k` and the `tiles`
 attribute says which row and column each is. The frames table's `x`, `y`
-are the grid's centre.
+are the grid's center.
 
 ### The frames table
 
@@ -170,7 +170,7 @@ tracked object and timepoint, for all experiments in the directory:
 | `group`, `local_index` | where the frame lives in the store |
 | `track_id` | the stable id of the object (matches the value in `labels/tracks`) |
 | `label` | the object's id in the segmentation of that frame |
-| `y`, `x`, `y_um`, `x_um` | centroid in pixels of the (binned) frame and in micrometres |
+| `y`, `x`, `y_um`, `x_um` | centroid in pixels of the (binned) frame and in micrometers |
 | `area` | pixels |
 | `parent` | parent track id for divisions, 0 if none |
 
@@ -292,7 +292,7 @@ Every export writes one hyperstack per cadence group, named
 `<experiment>_<group>.tif`, with the axes `TCYX`, the frame interval and
 pixel size set for ImageJ, and channels in this order:
 
-1. the raw channels of the group, grey LUT;
+1. the raw channels of the group, gray LUT;
 2. the segmentation labels of each channel, one set per `[segmentation]`
    table in the store's order, yellow then green, red and blue LUTs (only if
    any were saved);
@@ -307,13 +307,13 @@ written into the experiment directory when the run ends.
 **From the command line**, for a finished directory in either format:
 
 ```bash
-uv run convert_hdf5s path/to/experiment_dir
+pyclm export path/to/experiment_dir
 ```
 
 Restrict the export to particular channels or groups by naming them:
 
 ```bash
-uv run convert_hdf5s path/to/experiment_dir 545 stim
+pyclm export path/to/experiment_dir 545 stim
 ```
 
 Older HDF5 files that predate the embedded affine transform take it from

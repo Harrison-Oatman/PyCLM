@@ -842,7 +842,7 @@ class OMEZarrWriter(FrameWriter):
                     self._frames_table(), self.frames_path.with_suffix(".csv")
                 )
             except Exception as e:
-                logger.error(f"failed to finalise frames table: {e}", exc_info=True)
+                logger.error(f"failed to finalize frames table: {e}", exc_info=True)
         if self.tracks_path is not None and self.track_rows:
             try:
                 self._write_tracks_table()
@@ -850,7 +850,7 @@ class OMEZarrWriter(FrameWriter):
                     self._tracks_table(), self.tracks_path.with_suffix(".csv")
                 )
             except Exception as e:
-                logger.error(f"failed to finalise tracks table: {e}", exc_info=True)
+                logger.error(f"failed to finalize tracks table: {e}", exc_info=True)
         self.stores.clear()
         self.is_open = False
 

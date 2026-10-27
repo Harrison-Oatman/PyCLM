@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- The README and the documentation home page open with a short overview and
+  a "Start here" list that leads with the method zoo, then the demo, setup,
+  experiment files, custom methods and data. The documentation contents are
+  grouped into Getting started, Pattern methods and Reference. The README
+  uses absolute links so they also work on PyPI. The Usage page no longer
+  says to run `main.py`, and it and the data format page use `pyclm export`
+  instead of `uv run convert_hdf5s` (still an alias). `imgs/Figure 1.png`
+  is now `imgs/pyclm-overview.png`.
+- US spelling throughout the user documentation, the READMEs, the agent
+  skills, the wet-test guides, docstrings and the messages PyCLM prints
+  (normalize, center, color, gray, labeled, program, toward). The viewer's
+  button is now "Normalize now". Identifiers and the internal notes in
+  `docs/` are unchanged.
+- A short documentation page, "Using PyCLM skills with Claude Code",
+  shows how to use the agent skills. An italic line under the title of the
+  installation, first-time setup, usage, experiment TOML and custom pattern
+  method pages names the skill for that page and links to it.
 - Every method zoo entry ends with a table of all the keywords the method
   takes (default, what it does), and the page opens its Methods section
   with the keywords every method takes (`start_min`, `stop_min`). The
@@ -102,9 +119,9 @@
 - `method = "rings"` (concentric rings moving out or in; `wave_speed = 0`
   holds them still) is registered. It had a zoo card as "wave", but no
   TOML name.
-- **Behaviour change:** `direction`'s `"u"` and `"d"` were swapped: `"u"`
-  lit the lower side of each cell. Cells move towards the light, so `"u"`
-  now lights the upper side (towards row 0) and `"d"` the lower. An
+- **Behavior change:** `direction`'s `"u"` and `"d"` were swapped: `"u"`
+  lit the lower side of each cell. Cells move toward the light, so `"u"`
+  now lights the upper side (toward row 0) and `"d"` the lower. An
   experiment written against the old letters should swap them.
 - `global_cycle`, `move_down` and `fb_bounce` are deprecated: they are
   fixed cases of `global_pulse` and `direction`, and `pyclm check` warns
@@ -251,7 +268,7 @@ becomes a tagged release.
   measuring, per-track memory and painting per-object values back into a
   pattern, so a per-cell controller is a few lines.
 - **Documented, tested examples**: leader cells with directed
-  stimulation, a three-phase per-cell intensity programme, a KTR
+  stimulation, a three-phase per-cell intensity program, a KTR
   nuclear/cytosolic ratio clamp (`documentation/examples/`).
 
 ### Stage 4 — runtime setting changes and feedback from the microscope
@@ -262,7 +279,7 @@ becomes a tagged release.
   `context.position()` for read-back. Changes apply from the next
   timepoint (the same delay as the pattern); the schedule, channels and
   cadence never change. The driving case is a red / far-red optogenetic
-  tool switched on and off from a programme string through the lasers'
+  tool switched on and off from a program string through the lasers'
   device properties (documented, tested example).
 - **Provenance.** `events.parquet` / `events.csv` record every request
   (requested and applied timepoints, old and new value, applied or
@@ -313,7 +330,7 @@ becomes a tagged release.
 - **The viewer stays on napari** (assessed against ndv and pymmcore-gui:
   ndv is alpha without label layers, pymmcore-gui pins PyQt6 and zarr < 3)
   and gains a dock with a status line that updates every second and a
-  **minimap** of the positions in stage coordinates, coloured by
+  **minimap** of the positions in stage coordinates, colored by
   experiment, the current position filled, fields of view drawn.
 - **Positions are an axis in the viewer**, not layers: one layer per
   channel stacked over (position, t, y, x), so contrast is one setting per
@@ -367,8 +384,8 @@ becomes a tagged release.
 ### Stage 6 — grids, skipping idle positions, the camera ROI, patterns in both spaces
 
 - **Grid acquisition** from MicroManager's Create Grid: the tiles of a grid
-  (labelled `<prefix>-<n>-<col>_<row>`, with `GridRow` / `GridCol`) fold
-  into one position at their centre. Every channel visits all the tiles at
+  (labeled `<prefix>-<n>-<col>_<row>`, with `GridRow` / `GridCol`) fold
+  into one position at their center. Every channel visits all the tiles at
   each timepoint (through the configured position mover, so PFS locks per
   tile) and publishes one stitched frame; the pattern method's
   `pattern_shape` is the stitched frame and its pattern is cut into one DMD
@@ -412,17 +429,17 @@ becomes a tagged release.
   the basic mover and a Nikon's PFS was never engaged. `pyclm check`
   reports the resolved mover; a mover passed in code still wins.
 
-### Labelled schedule and configuration files
+### Labeled schedule and configuration files
 
 - `schedule.<anything>.toml` and `pyclm_config.<anything>.toml` are
-  recognised as the schedule and the configuration (`schedule.toml`,
+  recognized as the schedule and the configuration (`schedule.toml`,
   `pyclm_config.toml` still work); every other TOML is an experiment. Two
   schedules or two configurations in one directory are an error, in
   `pyclm check` and at run start.
 
 ### Documentation
 
-- The API reference is reorganised by task (running and preparing,
+- The API reference is reorganized by task (running and preparing,
   configuration, writing methods, reading data, the shipped pattern
   methods, the pipeline for developers) and covers the modules added
   since Stage 3; pages are named after their modules.
@@ -461,7 +478,7 @@ becomes a tagged release.
 
 ### Fixes
 
-- A negative `bar_speed` moves the bar (and the sawtooth) towards -y; it
+- A negative `bar_speed` moves the bar (and the sawtooth) toward -y; it
   used to make the modulo negative and light the field wrongly. The period
   in time now follows a `set_pattern` change of `bar_speed`.
 - OME-Zarr metadata writes (progress, pattern ids, array resizes) and

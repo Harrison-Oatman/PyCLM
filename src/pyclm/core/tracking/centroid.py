@@ -1,6 +1,6 @@
 """
 The built-in tracker: nearest-centroid linking with a Hungarian assignment,
-gated by a maximum displacement in micrometres. No divisions, no gap
+gated by a maximum displacement in micrometers. No divisions, no gap
 closing; an object that is not matched starts a new track and one that
 disappears simply ends.
 """

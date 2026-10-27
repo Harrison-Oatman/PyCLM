@@ -181,7 +181,7 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         """
         The part of the source frame the camera sees. A frame of the ROI's
         size is the camera frame; a larger one is a region the stage moves
-        over (a grid's TIF): the window is centred on the listed position
+        over (a grid's TIF): the window is centered on the listed position
         and shifted by the stage's offset from it, in the TIF's pixels.
         """
         if frame.ndim < 2:

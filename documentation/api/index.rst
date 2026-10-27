@@ -1,7 +1,7 @@
 API reference
 =============
 
-The reference is organised by what you are doing. Everything a user needs
+The reference is organized by what you are doing. Everything a user needs
 is importable from ``pyclm`` or ``pyclm.io``; the pipeline internals are
 documented last, for developers.
 

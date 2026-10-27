@@ -1,30 +1,55 @@
 # Usage
 
-For first time usage, see the [First-Time Setup Guide](first_time_setup.md).
+*A coding agent can walk you through this page with the pyclm-design-experiment skill; see
+[Using PyCLM skills with Claude Code](agent_skills.md).*
 
-Running an experiment with PyCLM is split into three parts:
+A PyCLM run is one directory: the files that describe the experiments, and the
+data the run writes next to them. For the first time on a new microscope, see
+the [First-Time Setup Guide](first_time_setup.md).
 
-## 1. Designing a multi-experiment
-Multiple experiments can be run simultaneously using PyCLM, without any programming experience.
+## 1. Design the experiments
 
-1. Choose an empty directory to contain the multi-experiment configuration files. This is also where PyCLM will generate the output (data and log files).
-2. Copy in .toml files corresponding to the experiment(s) that will be run.
-3. Write (or reuse) a schedule.toml file.
-4. Choose imaging positions (using the micromanager interface), and assign an experiment to each position.
+Several experiments run at once, one per imaging position, without any
+programming.
 
-## 2. Running a multi-experiment
+1. Start a directory with `pyclm new <dir>` (`--template open-loop` or
+   `closed-loop`), or copy one from an earlier run.
+2. Write one `<experiment>.toml` per experiment: its channels, stimulation,
+   and the `[pattern]` table that picks the light rule. The
+   [Method zoo](method_zoo.md) has a table to copy for every built-in method;
+   [Experiment TOMLs](experiment_tomls.md) explains every key.
+3. Write (or reuse) a `schedule.toml`: how many timepoints, and how far apart.
+4. Choose the imaging positions in Micro-Manager and save the position list
+   into the directory as `multipoints.xml` (or `PositionList.pos`). A position named
+   `<experiment>.<suffix>` runs `<experiment>.toml`.
 
-Start with `pyclm check <dir>`, which reports every problem in the files, and `pyclm preview` to see what a pattern method will do on an image; `pyclm run` checks again and refuses to start on errors. All of these are described in [The pyclm command](command_line.md).
+## 2. Check, preview, run
 
-Once a directory for the multi-experiment has been set up, close out of all existing microscope control software, activate your venv or conda environment, and run main.py with command-line arguments.
+```bash
+pyclm check <dir>                                # every problem in the files
+pyclm preview <dir> <experiment> --image frame.tif  # what the pattern does on an image
+pyclm run <dir> --dry --gui                      # the whole run on the virtual microscope
+pyclm run <dir> --gui                            # the real run
+```
 
-- Data is saved continuously during the multi-experiment, and the code execution can be aborted at any time without data loss.
-- Experiment progress can be monitored through the experiment log, or in real time using the `--gui` flag, which opens a live Napari viewer that updates as images are acquired.
+`pyclm run` checks again and refuses to start on errors. Close other
+microscope control software before a real run. Data is saved as the run goes,
+so stopping it (Ctrl+C, or a `stop_run` command) loses nothing already
+acquired; `--gui` opens a live viewer. All the subcommands, and the commands
+you can send to a running experiment, are in [The pyclm command](command_line.md).
 
-## 3. Analyzing a completed multi-experiment
-Each experiment (position) is written to its own output as the run proceeds, either an OME-Zarr store or an HDF5 file depending on `[output] format` in `pyclm_config.toml`. Alongside the images the output holds the acquisition plan, per-frame timing and position, the segmentation masks, and the DMD pattern in force at every stimulation.
+## 3. Analyze the data
 
-- When the run finishes, ImageJ hyperstacks are exported next to the data (raw channels, segmentation labels, and the pattern warped into camera space). Re-run the export at any time with `uv run convert_hdf5s <experiment_dir>`.
-- Open any output in Python with `pyclm.io.open(path)`; OME-Zarr outputs also open directly in Fiji, napari, and `zarr`.
-- See [Data format and export](data_format.md) for the layouts, the frames table, and the export options.
-- For convenience, a script for simple tracking (or segmentation and tracking) is also available.
+Each experiment (position) is written to its own output as the run proceeds,
+an OME-Zarr store by default or an HDF5 file with `[output] format = "hdf5"`
+in `pyclm_config.toml`. Next to the images it holds the acquisition plan,
+per-frame timing and position, the segmentations and tracks, and the DMD
+pattern in force at every stimulation.
+
+- When the run finishes, ImageJ hyperstacks are exported next to the data
+  (raw channels, segmentation labels, and the pattern warped into camera
+  space). Export again at any time with `pyclm export <dir>`.
+- Open any output in Python with `pyclm.io.open(path)`; OME-Zarr outputs also
+  open directly in Fiji, napari, and `zarr`.
+- See [Data format and export](data_format.md) for the layouts, the frames
+  and tracks tables, and the export options.

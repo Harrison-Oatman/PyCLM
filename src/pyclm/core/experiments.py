@@ -233,7 +233,7 @@ class MicroscopePosition(PositionBase):
     keyed by device name, e.g. ``{"PFSOffset": 11122.0}``.
 
     A grid (MicroManager's Create Grid, see :mod:`pyclm.core.grid`) is one
-    position at the centre of its tiles: ``tiles`` holds one position per
+    position at the center of its tiles: ``tiles`` holds one position per
     tile (each with ``grid_rc = (row, col)``), ``grid`` the rows, columns
     and pitch in µm, and ``geometry`` the :class:`~pyclm.core.grid.GridGeometry`
     once the camera is known. All three are None for a plain position.

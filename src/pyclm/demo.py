@@ -131,7 +131,7 @@ def synthetic_cells(
 ) -> np.ndarray:
     """
     A (frames, size, size) uint16 movie of round cells on a noisy background,
-    drifting slowly outward from the centre (what move_out would encourage).
+    drifting slowly outward from the center (what move_out would encourage).
     """
     rng = np.random.default_rng(seed)
     # cells on a jittered grid, so that they rarely touch
