@@ -128,8 +128,11 @@ and `pyclm export` (or the automatic export) produces ImageJ stacks. See
 With `stimulation_timing = "shutter"` the light is on for the exposure
 plus however long the shutter takes to open and close, whereas a camera
 exposure keeps the auto-shutter open for the camera's own overhead too, so
-the dose per stimulation can change. Measure it with a power meter (or
-compare responses) before using the option for an experiment. The shutter is
+the dose per stimulation can change. On the lab's rig the shutter timed
+the light much more consistently than a snap, which leaves the light on
+for as long as the camera takes. Measure the dose with a power meter (or
+compare responses) before switching an experiment series over, so its
+results stay comparable. The shutter is
 Micro-Manager's current shutter (`Core-Shutter`), the one the stimulation's
 config groups select.
 

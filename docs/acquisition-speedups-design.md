@@ -64,7 +64,10 @@ reapply_camera_settings = false # default false: exposure / binning set only on 
    stays open for the camera's overhead as well as the exposure; with the
    shutter, the light is on for the exposure plus the shutter's own
    open/close time. The setup docs say to measure it before using the
-   option for an experiment.
+   option for an experiment. *Scope test, 2026-10-28 (Harrison, PR #50):*
+   acquisition was slightly faster in a live experiment, and the shutter
+   times the light much more consistently than a snap, which can leave the
+   DMD light on longer than the exposure depending on the camera's speed.
 8. **A run ends with a summary line** from the microscope (settle mode,
    capture, timing; config groups and camera values not set again;
    stimulations by shutter; blank stimulations skipped), so a scope test
