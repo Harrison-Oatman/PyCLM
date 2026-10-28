@@ -340,7 +340,8 @@ Built-in (decision 5): **`centroid`** — `regionprops_table` for centroids
 and areas, Hungarian assignment on centroid distance
 (`scipy.optimize.linear_sum_assignment`, already a transitive dependency)
 gated by `max_distance_um` (default 20), unmatched regions get new ids,
-`parent = 0`. No divisions, no gap closing; it is the honest baseline and
+`parent = 0`. No divisions, no gap closing (gap closing added 2026-10-28,
+see [tracking-gap-closing-design.md](tracking-gap-closing-design.md)); it is the honest baseline and
 it is fast (< 5 ms for a few hundred regions). A **`laptrack`** adapter
 that re-links a sliding window of the last `window` timepoints with
 LapTrack (gap closing and splitting, `parent` filled) is registered only

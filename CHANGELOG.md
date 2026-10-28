@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **The `centroid` tracker closes gaps** (docs/tracking-gap-closing-design.md).
+  An object that segmentation misses keeps its id when it comes back within
+  `max_gap_frames` frames (default 2; 0 is the old behavior) and within
+  `max_distance_um` of where it was last seen; a stage move shifts the
+  waiting tracks too. Each frame is now one sparse assignment over nearby
+  pairs with a "no link" option, instead of a dense Hungarian over all
+  pairs: a few ms a frame for thousands of objects, and in crowded spots
+  links can differ from before. `documentation/tracking.md` has a recipe
+  for re-tracking `tracks.parquet` with LapTrack, divisions included.
+
 - **Per-frame speed-ups to try on the rig: an `[acquisition]` table in
   `pyclm_config.toml`** (docs/acquisition-speedups-design.md). The first three options are
   off by default; the log ends each run with a line of what they saved.
