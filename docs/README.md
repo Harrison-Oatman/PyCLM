@@ -28,6 +28,7 @@ built or published.
 | [method-zoo-design.md](method-zoo-design.md) | The method zoo review (2026-10-26): coverage of `known_models`, duplicates grouped, the thumbnail grid, further display ideas, decisions to confirm. | The zoo extension or `ZooMeta` change. |
 | [multichannel-segmentation-design.md](multichannel-segmentation-design.md) | Multi-channel segmentation (`channels` on a `[segmentation]` table, one `(H, W, C)` image per timepoint, `max_channels`) and Cellpose auto-normalization (2026-10-28): numbered decisions, including the router's record-only rule. | Segmentation inputs or Cellpose normalization change. |
 | [acquisition-speedups-design.md](acquisition-speedups-design.md) | The `[acquisition]` options of `pyclm_config.toml` (2026-10-28): settle after a move only, sequence capture, shutter-timed stimulation, camera values set only on change; decisions and what to test at the microscope. | The microscope's per-frame path changes, or an option is made the default. |
+| [tracking-gap-closing-design.md](tracking-gap-closing-design.md) | Gap closing for live tracking (2026-10-28): laptrack, btrack and trackpy measured against an own frame-by-frame linker (latency, accuracy, failure in dense fields), and decisions to confirm (`max_gap_frames` on `centroid`). | Tracking methods or their keywords change. |
 | [spikes/](spikes/) | Runnable spike scripts and their artefacts. Not part of the package, not tested. | A spike is superseded (delete it) or a new one is run. |
 
 Conventions for this folder:
