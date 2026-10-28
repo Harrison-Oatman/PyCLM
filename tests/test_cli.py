@@ -59,9 +59,16 @@ def test_old_form_and_subcommands_dispatch(monkeypatch, tmp_path):
     assert calls[2][1]["mm_config"] == "x.cfg"
     assert (calls[3][1]["experiment"], calls[3][1]["image"], calls[3][1]["t"]) == (
         "bar10",
-        "a.tif",
+        ["a.tif"],
         "3",
     )
+    assert cli._preview_images(["a.tif"]) == "a.tif"
+    assert cli._preview_images(["545=a.tif", "638=b.tif"]) == {
+        "545": "a.tif",
+        "638": "b.tif",
+    }
+    with pytest.raises(ValueError, match="one form"):
+        cli._preview_images(["a.tif", "638=b.tif"])
     assert calls[4][1]["channels"] == ["545", "stim"]
     assert (calls[6][1]["template"], calls[6][1]["name"]) == ("open-loop", "bar")
 

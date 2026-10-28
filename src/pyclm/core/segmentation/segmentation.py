@@ -33,7 +33,16 @@ class SharedSegmentationResourceRequest:
 
 
 class SegmentationMethod:
+    """
+    Turns a frame into a label image. ``segment`` receives a 2D frame, or,
+    when the ``[segmentation]`` table lists several ``channels``, one
+    ``(height, width, channel)`` image with the channels in that order.
+    ``max_channels`` is how many channels a method accepts (1: a method that
+    only knows 2D frames); ``pyclm check`` refuses a table that lists more.
+    """
+
     name = "base_model"
+    max_channels: int = 1
 
     def __init__(self, experiment_name, **kwargs):
         self.experiment_name = experiment_name

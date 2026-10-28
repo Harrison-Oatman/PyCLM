@@ -28,7 +28,7 @@ OS processes**, despite the naming. All processes share one
 | Microscope | `MicroscopeProcess`, `core/microscope.py` | Executes events against a `MicroscopeCoreInterface`: moves stage, sets config groups and device properties, uploads SLM images, snaps. Own loop with a per-message error guard (aborts after `max_consecutive_errors`, default 10). | produces `raw`; ends the raw stream on the Manager's close |
 | Writer | `WriterProcess`, `core/writer_process.py` (`MicroscopeOutbox` is an alias) | Hands every frame, label image and track table to the configured `FrameWriter` (`core/storage/`: OME-Zarr format 2, the default, or HDF5 format 1). | consumes `raw` for every channel and, with `demand=False`, `seg` / `tracks` where the method has `save = true`; `always_active` |
 | SLM buffer | `SLMBuffer`, `core/manager.py` | Holds the latest pattern per experiment, applies the camera→SLM affine, answers the microscope's "give me the current pattern" request. | none (the pattern → SLM → microscope path is a control handshake, not routed) |
-| Segmentation | `SegmentationProcess`, `core/segmentation_process.py` | Runs one `SegmentationMethod` per `[segmentation]` table the experiment configures (the default table and any `[segmentation.<name>]`) on the frames the router delivers, each at the cadence its consumers need (`segmentations_for`). | produces `seg` and `seg:<name>` from `raw`; started only where some segmentation is demanded |
+| Segmentation | `SegmentationProcess`, `core/segmentation_process.py` | Runs one `SegmentationMethod` per `[segmentation]` table the experiment configures (the default table and any `[segmentation.<name>]`) on the frames the router delivers, each at the cadence its consumers need (`segmentations_for`). A table with `channels` is fed every listed channel's frames; `_gather` holds them per timepoint (an earlier incomplete timepoint is dropped with a warning) and `stack_channels` makes one `(H, W, C)` image. | produces `seg` and `seg:<name>` from `raw`; started only where some segmentation is demanded |
 | Tracking | `TrackingProcess`, `core/tracking_process.py` | Runs a `TrackingMethod` per (experiment, channel) on every segmentation of that channel. | produces `tracks` from `seg`; `continuous` (needs every frame); started only where `tracks` is demanded |
 | Pattern | `PatternProcess`, `core/pattern_process.py` | Collects the raw/seg/tracks data a `PatternMethod` declared it needs, keeps a bounded per-experiment history, runs `generate()`, sends the result to the SLM buffer. | consumes at `"pattern"` cadence; `always_active` |
 
@@ -78,11 +78,16 @@ and calls `resolve()`, which:
    `"pattern"` = only at timepoints where `plan.pattern_due(experiment, t)`);
 2. for every demanded kind other than `raw`, subscribes the kind's producer
    to its input kinds at the widest downstream cadence (`"always"` if the
-   producer is `continuous`), iterating until nothing changes; a demanded
+   producer is `continuous`), iterating until nothing changes (an input
+   given by the producer's `inputs()` as a `(kind, channel)` pair is of
+   another channel of the same experiment: a multi-channel segmentation of
+   545 subscribes to 638's raw frames too); a demanded
    kind with no producer, or whose producer's `can_produce` says the
    experiment has no method configured, raises `RoutingError`;
-3. adds `demand=False` subscriptions (the writer's) only for data that is
-   produced anyway;
+3. adds `demand=False` subscriptions (the writer's) only for keys a
+   demanding consumer already receives or a source makes (a producer with
+   no inputs, like the microscope's `skipped`), so recording never widens
+   production;
 4. computes each consumer's upstream set (the producers of the kinds it
    receives, plus the raw producer), creates one inbox per active process
    (something routed to it, or `always_active`) and calls `attach`.
@@ -169,7 +174,7 @@ the pipeline runs from (see the end of this section).
   override is deliberately disabled);
 - a stimulation `ImagingConfig` from `[stimulation]` (its `binning` defaults
   to the imaging binning);
-- `SegmentationConfig(method, **rest)` from `[segmentation]` or
+- `SegmentationConfig(method, channels=..., **rest)` from `[segmentation]` or
   `SegmentationConfig("none")`, plus one per `[segmentation.<name>]`
   sub-table, all in `Experiment.segmentations` (`experiment.segmentation`
   is the default entry, `segmentation_names` the configured ones);
@@ -592,6 +597,7 @@ router concern, invisible to producers and to the Controller.
 | `test_settings.py` | Runtime setting changes: the context collecting and reading back settings, the pattern process shipping requests, the Manager applying them from `current_t` (old / new values, override stamping, the next burst), refusals, acknowledgements with lateness and errors, `status.json`, `finish()`, the frames table's override columns, the event log. |
 | `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
 | `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |
+| `test_multichannel_segmentation.py` | `channels` on a `[segmentation]` table: schema rules (imaging channels, one `every_t`), routing another channel's raw frames to the segmentation, gathering a timepoint into one `(H, W, C)` image and dropping an incomplete one, the shape error, `max_channels` in `pyclm check`, Cellpose's `normalize` argument (fixed, per channel, auto percentiles). |
 | `test_tracking.py` | The centroid linker (id stability, new ids, µm gate, empty frames), `Tracks`, `TrackingProcess`, `[tracking]` parsing, router wiring for tracks, `context.tracks()`. |
 | `test_storage.py` | Cadence grouping, the OME-Zarr writer end to end (layout, NGFF attrs, compact T, labels, tracks, pattern policies, chunks only for acquired frames, frames and tracks tables, routing attrs), `pyclm.io` readers for both formats, ImageJ export, the writer process delegating to the writer, HDF5 v1 dropping tracks with one warning. |
 | `test_swmr.py` | Writer init + write + `convert_hdf5s.make_tif` (HDF5 format 1). |

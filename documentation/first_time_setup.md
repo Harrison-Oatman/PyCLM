@@ -582,3 +582,9 @@ Listed in `methods` like a pattern method (or passed as
 `segmentation_methods={"my_seg": MySegmentation}` to `run_pyclm`), the
 method name is then available as `method = "my_seg"` in the `[segmentation]`
 block of any experiment TOML.
+
+`segment` gets one 2D frame. A method that can use several channels at
+once (a color image) sets the class attribute `max_channels` (for instance
+`max_channels = 2`); a `[segmentation]` table with `channels = ["545",
+"638"]` then hands it one `(height, width, channel)` array per timepoint,
+in the listed order (see [experiment TOMLs](experiment_tomls.md)).

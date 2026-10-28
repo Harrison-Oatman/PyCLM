@@ -129,7 +129,34 @@ class MethodBasedConfig:
         }
 
 
-SegmentationConfig = MethodBasedConfig
+class SegmentationConfig(MethodBasedConfig):
+    """
+    A ``[segmentation]`` table: the method and its kwargs, plus ``channels``,
+    the channels whose frames the method sees together as one
+    ``(H, W, C)`` image (None: only the channel being segmented).
+    """
+
+    def __init__(
+        self,
+        method_name: str,
+        save_output: bool = True,
+        every_t=1,
+        channels: list[str] | None = None,
+        **kwargs,
+    ):
+        super().__init__(method_name, save_output, every_t, **kwargs)
+        self.channels = list(channels) if channels else None
+
+    def inputs_for(self, channel: str) -> list[str]:
+        """The channels read to segment ``channel``, in the order the method sees them."""
+        return list(self.channels) if self.channels else [channel]
+
+    def as_dict(self):
+        out = super().as_dict()
+        out["channels"] = self.channels
+        return out
+
+
 PatternConfig = MethodBasedConfig
 
 

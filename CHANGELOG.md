@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Segmentation of several channels at once, and Cellpose
+  auto-normalization** (docs/multichannel-segmentation-design.md).
+  - `channels = ["545", "638"]` in a `[segmentation]` table hands the
+    method one `(height, width, channel)` image of those imaging channels
+    per timepoint, made once all of them are acquired; the masks belong to
+    the channel the pattern method asks for. Cellpose takes up to three
+    channels as a color image; a custom method takes one unless it sets
+    `max_channels`, and `pyclm check` refuses a table that lists more.
+  - Cellpose `auto_normalize = true` scales each frame by its own
+    percentiles (`percentile_low` 1, `percentile_high` 99) instead of the
+    fixed `normlow` / `normhigh`, which may now be per-channel lists.
+  - `pyclm preview --image 545=a.tif --image 638=b.tif` gives each channel
+    its own TIF.
+  - The router adds the writer's record-only subscriptions only for data a
+    consumer demands, so recording never makes a producer run more.
 - **Fixes and speed-ups from the session 3 scope run (2026-10-27/28;
   docs/known-issues.md 40-47).**
   - The microscope no longer sets a config group that is already at the

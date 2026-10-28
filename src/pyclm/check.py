@@ -220,6 +220,20 @@ def _configs_for(directory: Path, label: str) -> dict:
         return {}
 
 
+def _check_segmented_channel(report, file, cfg, seg: str, channel: str) -> None:
+    """A multi-channel segmentation segments one of the channels it lists."""
+    table = cfg.segmentation if seg == "segmentation" else cfg.segmentations.get(seg)
+    if table is None or not table.channels or channel in table.channels:
+        return
+    where = "[segmentation]" if seg == "segmentation" else f"[segmentation.{seg}]"
+    report.error(
+        file,
+        f"{where} channels",
+        f"the pattern method wants the segmentation of '{channel}', which is not "
+        f"among the channels the table reads ({table.channels}); add it to them",
+    )
+
+
 def _check_shared_config_groups(report: CheckReport, configs: dict) -> None:
     """
     The run reads the camera's pixel size once, at start, with the presets
@@ -751,6 +765,14 @@ def check_directory(
                     seg_cls, table.kwargs, "segmentation", table.method
                 ):
                     report.error(file, f"[{name}]", problem)
+                limit = int(getattr(seg_cls, "max_channels", 1))
+                if table.channels and len(table.channels) > limit:
+                    report.error(
+                        file,
+                        f"[{name}] channels",
+                        f"'{table.method}' takes at most {limit} channel(s); "
+                        f"{len(table.channels)} are listed ({table.channels})",
+                    )
 
         if cfg.tracking is not None:
             tr_cls = trackers.get(cfg.tracking.method)
@@ -796,6 +818,9 @@ def check_directory(
                 else:
                     named_wanted.add(seg)
             needs_tracks = needs_tracks or bool(tracks)
+            tracked = [cfg.tracking.segmentation] if tracks and cfg.tracking else []
+            for seg in [*seg_names, *tracked]:
+                _check_segmented_channel(report, file, cfg, seg, channel)
         if getattr(method, "_stim_requested", False):
             if getattr(method, "_stim_request_seg", False):
                 needs_default_seg = True
