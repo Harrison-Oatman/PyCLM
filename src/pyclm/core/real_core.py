@@ -84,11 +84,45 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
     def setExposure(self, exposure_ms: float) -> None:
         self._core.setExposure(exposure_ms)
 
+    def getExposure(self) -> float:
+        return float(self._core.getExposure())
+
     def snapImage(self) -> None:
         self._core.snapImage()
 
     def getImage(self) -> Any:
         return self._core.getImage()
+
+    def startSequenceAcquisition(
+        self, num_images: int, interval_ms: float, stop_on_overflow: bool
+    ) -> None:
+        self._core.startSequenceAcquisition(
+            int(num_images), float(interval_ms), bool(stop_on_overflow)
+        )
+
+    def isSequenceRunning(self) -> bool:
+        return bool(self._core.isSequenceRunning())
+
+    def stopSequenceAcquisition(self) -> None:
+        self._core.stopSequenceAcquisition()
+
+    def getRemainingImageCount(self) -> int:
+        return int(self._core.getRemainingImageCount())
+
+    def popNextImage(self) -> Any:
+        return self._core.popNextImage()
+
+    def clearCircularBuffer(self) -> None:
+        self._core.clearCircularBuffer()
+
+    def getShutterDevice(self) -> str:
+        return self._core.getShutterDevice()
+
+    def setShutterOpen(self, state: bool) -> None:
+        self._core.setShutterOpen(bool(state))
+
+    def waitForDevice(self, label: str) -> None:
+        self._core.waitForDevice(label)
 
     def getPixelSizeUm(self) -> float:
         return self._core.getPixelSizeUm()

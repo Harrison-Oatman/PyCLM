@@ -17,7 +17,10 @@ costs one ``queue.put`` per delivery; queues pass references, so consumers
 share the object and must not mutate it.
 
 A registered process needs ``name`` and ``attach(router, inbox)``, and may
-have ``produces`` (``{kind: (input kinds, ...)}``), ``subscriptions(plan)``,
+have ``produces`` (``{kind: (input kinds, ...)}``), ``inputs(kind,
+experiment, channel)`` (the input kinds for one output; an item may be a
+``(kind, channel)`` pair to read another channel of the same experiment, as
+a multi-channel segmentation does), ``subscriptions(plan)``,
 ``can_produce(kind, experiment, channel)``, ``continuous`` (a producer that
 needs every frame of its inputs once it runs at all, like tracking) and
 ``always_active``; see :class:`~pyclm.core.base_process.PipelineProcess`.
@@ -179,9 +182,9 @@ class Router:
             producer = self._producer_for(sub)
             proc = self._procs[producer]
             cadence = "always" if getattr(proc, "continuous", False) else sub.cadence
-            for kind_in in self._inputs(proc, sub):
+            for kind_in, channel_in in self._inputs_of(proc, sub):
                 derived = Subscription(
-                    producer, sub.experiment, sub.channel, kind_in, cadence, True
+                    producer, sub.experiment, channel_in, kind_in, cadence, True
                 )
                 if self._put(table, derived):
                     pending.append(derived)
@@ -238,15 +241,24 @@ class Router:
             return tuple(fn(sub.kind, experiment, sub.channel))
         return tuple(proc.produces[base_kind(sub.kind)])
 
+    def _inputs_of(self, proc: Any, sub: Subscription) -> list[tuple[str, str]]:
+        """``(kind, channel)`` of every input; a bare kind is of ``sub.channel``."""
+        return [
+            (item[0], item[1]) if isinstance(item, tuple) else (item, sub.channel)
+            for item in self._inputs(proc, sub)
+        ]
+
     def _is_produced(self, table, sub: Subscription) -> bool:
+        """
+        ``sub.key`` is made anyway: a demanding consumer already receives it,
+        or its producer is a source (no inputs, like the microscope's
+        ``skipped``). Inputs being routed are not enough: a multi-channel
+        segmentation of 545 reads 638's frames without segmenting 638.
+        """
+        if sub.key in table:
+            return True
         producer = self._producers.get(base_kind(sub.kind))
-        if producer is None:
-            return False
-        inputs = self._inputs(self._procs[producer], sub)
-        return all(
-            producer in table.get((sub.experiment, sub.channel, kind_in), {})
-            for kind_in in inputs
-        )
+        return producer is not None and not self._inputs_of(self._procs[producer], sub)
 
     def _producer_for(self, sub: Subscription) -> str:
         where = f"{sub.kind!r} of {sub.experiment}/{sub.channel}"

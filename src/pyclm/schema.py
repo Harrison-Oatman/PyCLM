@@ -22,7 +22,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .core.experiments import (
     ConfigGroup,
@@ -237,6 +244,27 @@ class MethodTable(BaseModel):
 class SegmentationTable(MethodTable):
     """``[segmentation]`` or a named ``[segmentation.<name>]``."""
 
+    channels: list[str] | None = Field(
+        None,
+        description="imaging channels the method sees together, in this order, as "
+        'one (height, width, channel) image, e.g. ["545", "638"] for a '
+        "two-color Cellpose input; the channel being segmented must be one of "
+        "them, and all must be acquired at the same timepoints. Default: only the "
+        "channel being segmented",
+    )
+
+    @field_validator("channels")
+    @classmethod
+    def _channels(cls, v):
+        if v is None:
+            return v
+        v = [str(c) for c in v]
+        if not v:
+            raise ValueError("channels must name at least one channel")
+        if len(set(v)) != len(v):
+            raise ValueError(f"channels lists a channel twice: {v}")
+        return v
+
 
 class TrackingTable(MethodTable):
     """``[tracking]``."""
@@ -317,6 +345,22 @@ class ExperimentConfig(Strict):
             raise ValueError(
                 f"[segmentation.{DEFAULT_SEGMENTATION}] is reserved for the default [segmentation] table"
             )
+        for table, seg in self._segmentation_tables():
+            if seg.channels is None:
+                continue
+            unknown = [c for c in seg.channels if c not in self.channels.presets]
+            if unknown:
+                raise ValueError(
+                    f"{table} channels {unknown} are not imaging channels "
+                    f"(presets: {self.channels.presets})"
+                )
+            cadences = {c: self.channel_every_t(c) for c in seg.channels}
+            if len(set(cadences.values())) > 1:
+                raise ValueError(
+                    f"{table} channels are acquired at different every_t "
+                    f"({cadences}); a multi-channel segmentation needs every "
+                    "channel at the same timepoints"
+                )
         if self.tracking is not None:
             name = self.tracking.segmentation
             have = self.segmentation_names
@@ -336,6 +380,19 @@ class ExperimentConfig(Strict):
     @property
     def channel_names(self) -> list[str]:
         return list(self.channels.presets)
+
+    def channel_every_t(self, preset: str) -> int:
+        """The every_t an imaging channel is acquired at (its override, else [imaging])."""
+        ov = self.channels.overrides.get(preset)
+        if ov is not None and ov.every_t is not None:
+            return int(ov.every_t)
+        return int(self.imaging.every_t)
+
+    def _segmentation_tables(self) -> list[tuple[str, SegmentationTable]]:
+        out = (
+            [] if self.segmentation is None else [("[segmentation]", self.segmentation)]
+        )
+        return out + [(f"[segmentation.{n}]", t) for n, t in self.segmentations.items()]
 
     def config_groups_used(self) -> set[tuple[str, str]]:
         """Every (group, preset) the experiment sets, including the channel group."""
@@ -405,11 +462,14 @@ class ExperimentConfig(Strict):
             else SegmentationConfig(
                 self.segmentation.method,
                 save_output=self.segmentation.save,
+                channels=self.segmentation.channels,
                 **self.segmentation.kwargs,
             )
         )
         segmentations = {
-            n: SegmentationConfig(t.method, save_output=t.save, **t.kwargs)
+            n: SegmentationConfig(
+                t.method, save_output=t.save, channels=t.channels, **t.kwargs
+            )
             for n, t in self.segmentations.items()
         }
         tracking = (
@@ -504,6 +564,38 @@ class OutputConfig(Strict):
     )
 
 
+class AcquisitionConfig(Strict):
+    """
+    ``[acquisition]`` of ``pyclm_config.toml``: how the microscope spends its
+    time per frame. ``settle``, ``camera_capture`` and ``stimulation_timing``
+    keep the old behavior by default; each is meant to be tried on the rig
+    and kept if it holds up.
+    """
+
+    settle: Literal["every_frame", "after_move"] = Field(
+        "every_frame",
+        description="when to wait settle_time_seconds: before every frame, or only "
+        "for the first frame after a stage move (a channel change at the same "
+        "position then waits only for the hardware to report ready)",
+    )
+    camera_capture: Literal["snap", "sequence"] = Field(
+        "snap",
+        description="how a frame is taken: snapImage, or a one-image sequence "
+        "acquisition, which some cameras start faster",
+    )
+    stimulation_timing: Literal["camera", "shutter"] = Field(
+        "camera",
+        description="how a stimulation is timed: by a camera exposure, or, when its "
+        "frame is not saved and no method reads it, by holding the current shutter "
+        "open for the exposure without the camera",
+    )
+    reapply_camera_settings: bool = Field(
+        False,
+        description="set exposure and binning before every frame; by default they "
+        "are set only when the camera reports other values",
+    )
+
+
 class PyclmConfig(Strict):
     """``pyclm_config.toml``: the hardware and output configuration."""
 
@@ -548,6 +640,7 @@ class PyclmConfig(Strict):
         "files (relative to this file) or module names; each method class is "
         "registered under its name attribute",
     )
+    acquisition: AcquisitionConfig = Field(default_factory=AcquisitionConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     @model_validator(mode="after")

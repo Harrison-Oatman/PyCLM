@@ -197,6 +197,7 @@ def run_pyclm(
     pattern_policy = config.output.pattern_policy
     export_imagej = config.output.export_imagej
     logger.info(f"output format {storage_format}, pattern policy {pattern_policy}")
+    logger.info(f"[acquisition] {config.acquisition.model_dump()}")
 
     base_path = experiment_directory
 
@@ -214,6 +215,7 @@ def run_pyclm(
         dry_image_source=dry_image_source,
         settle_time_s=settle_time_s,
         reapply_config_groups=config.reapply_config_groups,
+        acquisition=config.acquisition.model_dump(),
         storage_format=storage_format,
         pattern_policy=pattern_policy,
     )

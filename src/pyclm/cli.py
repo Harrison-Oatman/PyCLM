@@ -76,7 +76,13 @@ def build_parser() -> argparse.ArgumentParser:
         "experiment", help="a position label (bar10.00) or a TOML stem (bar10)"
     )
     src = p.add_mutually_exclusive_group(required=True)
-    src.add_argument("--image", default=None, help="a TIF to use for every channel")
+    src.add_argument(
+        "--image",
+        default=None,
+        action="append",
+        help="a TIF to use for every channel, or CHANNEL=TIF, repeated, one per "
+        "channel (for a multi-channel segmentation: --image 545=a.tif --image 638=b.tif)",
+    )
     src.add_argument("--snap", action="store_true", help="snap from the microscope")
     p.add_argument("--config", default=None, help="path to pyclm_config.toml")
     p.add_argument(
@@ -190,6 +196,7 @@ def cmd_preview(args) -> int:
 
     try:
         timepoints = parse_timepoints(args.t)
+        image = _preview_images(args.image)
     except ValueError as e:
         print(f"error: {e}")
         return 1
@@ -197,7 +204,7 @@ def cmd_preview(args) -> int:
         result = preview(
             Path(args.directory),
             args.experiment,
-            image=args.image,
+            image=image,
             snap=args.snap,
             config_path=args.config,
             out_dir=args.out,
@@ -271,6 +278,20 @@ def cmd_new(args) -> int:
         print(f"  {path.name}")
     print("edit the files, then: pyclm check " + args.directory)
     return 0
+
+
+def _preview_images(values: list[str] | None):
+    """``--image`` values: one path for every channel, or ``CHANNEL=path`` per channel."""
+    if not values:
+        return None
+    pairs = [v.split("=", 1) for v in values if "=" in v]
+    if not pairs:
+        if len(values) > 1:
+            raise ValueError("several --image values must each be CHANNEL=TIF")
+        return values[0]
+    if len(pairs) != len(values):
+        raise ValueError("mix of --image TIF and --image CHANNEL=TIF; use one form")
+    return {channel: path for channel, path in pairs}
 
 
 def main(argv: list[str] | None = None) -> int:

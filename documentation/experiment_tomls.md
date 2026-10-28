@@ -119,6 +119,41 @@ and several can run on one channel, for instance nuclei and whole cells of
 a biosensor channel (see [custom pattern methods](custom_pattern_methods.md)).
 Each runs only when asked for, at the cadence it is asked for.
 
+A segmentation can read several imaging channels of the same position at
+once, for instance a nuclear marker in 545 and a membrane marker in 638:
+
+```toml
+[channels]
+group = "Channel"
+presets = ["545", "638"]
+
+[segmentation]
+method = "cellpose"
+channels = ["545", "638"]     # the method gets one color image per timepoint
+auto_normalize = true
+```
+
+The method then receives one `(height, width, channel)` image with the
+channels in the listed order, made once every listed channel of a
+timepoint has been acquired; the masks belong to the channel the pattern
+method names in `add_requirement` (`seg=True` on `"545"` here), which must
+be one of the listed channels. The listed channels must be imaging
+channels imaged at the same `every_t` and binning; a timepoint missing one
+of them is not segmented (the log says which channel never came). A method
+says how many channels it takes (Cellpose takes up to three; a custom
+method takes one unless it sets `max_channels`), and `pyclm check` refuses
+a table that lists more.
+
+The `cellpose` method's arguments: `model` (default `"cpsam"`), `use_gpu`
+(default true), and how camera counts are scaled to 0-1 before inference.
+By default `normlow = 0` and `normhigh = 5000` are fixed counts mapped to 0
+and 1; with several channels each may be a list, one value per listed
+channel (`normlow = [100, 200]`, `normhigh = [3000, 8000]`).
+`auto_normalize = true` scales each frame (each channel of it) by its own
+percentiles instead, `percentile_low` (default 1) to `percentile_high`
+(default 99), which follows the sample when brightness changes over a run
+or between dishes.
+
 **`[tracking]`** (optional). `method` is a built-in name (`centroid`) or one
 registered with `run_pyclm(tracking_methods=...)`; `save` (default true)
 records the tracked labels and the tracks table; `segmentation` names the

@@ -248,8 +248,8 @@ def test_router_serves_two_segmentations_of_one_channel_at_their_own_cadence():
         ("exp.00", "545"): [("seg", "pattern"), ("seg:nuclei", "always")]
     }
     assert seg.segmentations_for("exp.00", "545") == [
-        ("segmentation", "pattern"),
-        ("nuclei", "always"),
+        ("545", "segmentation", "pattern"),
+        ("545", "nuclei", "always"),
     ]
 
     seg.request_method(exp)
