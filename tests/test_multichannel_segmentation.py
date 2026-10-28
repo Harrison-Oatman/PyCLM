@@ -102,7 +102,12 @@ def test_the_method_gets_both_channels_of_one_timepoint_as_one_image():
     seg = SegmentationProcess()
     seg.register_method(TwoColor, "two_color")
     router = Router(plan)
-    for proc in (Camera(), WriterProcess(base_path=None), seg, PatternProcess(AllQueues())):
+    for proc in (
+        Camera(),
+        WriterProcess(base_path=None),
+        seg,
+        PatternProcess(AllQueues()),
+    ):
         router.add(proc)
     router.resolve()
 
@@ -111,7 +116,9 @@ def test_the_method_gets_both_channels_of_one_timepoint_as_one_image():
     assert routes["638"]["raw"] == ["segmentation@pattern", "writer(record)"]
     assert routes["545"]["raw"] == ["segmentation@pattern", "writer(record)"]
     # and nothing segments 638 itself
-    assert router.produced_by("segmentation") == {("exp.00", "545"): [("seg", "pattern")]}
+    assert router.produced_by("segmentation") == {
+        ("exp.00", "545"): [("seg", "pattern")]
+    }
     assert routes["545"]["seg"][0].startswith("pattern")
 
     seg.request_method(exp)
@@ -133,7 +140,9 @@ def test_the_method_gets_both_channels_of_one_timepoint_as_one_image():
     seg.handle_data(AcquisitionData(event_for(exp, 2, "545"), a))
     seg.handle_data(AcquisitionData(event_for(exp, 4, "545"), a))
     seg.handle_data(AcquisitionData(event_for(exp, 4, "638"), b))
-    assert [d.event.t_index for d in drain(router.inbox("pattern")) if d.kind == "seg"] == [4]
+    assert [
+        d.event.t_index for d in drain(router.inbox("pattern")) if d.kind == "seg"
+    ] == [4]
     assert not seg._pending
 
 
@@ -183,7 +192,9 @@ def test_check_refuses_more_channels_than_the_method_takes(tmp_path):
         (d / "bar10.toml").read_text().replace('"cellpose"', '"one_channel"')
     )
     report = check_directory(d, segmentation_methods={"one_channel": OneChannel})
-    assert any("takes at most 1 channel" in str(f) for f in report.errors), report.text()
+    assert any("takes at most 1 channel" in str(f) for f in report.errors), (
+        report.text()
+    )
 
 
 # ---------------------------------------------------------------- cellpose
@@ -211,7 +222,9 @@ def test_cellpose_passes_a_color_image_and_its_normalization():
             self.calls.append((np.asarray(data).shape, kwargs["normalize"]))
             return np.zeros(np.asarray(data).shape[:2], np.uint16)
 
-    method = CellposeSegmentationMethod("e.00", auto_normalize=True, percentile_high=99.5)
+    method = CellposeSegmentationMethod(
+        "e.00", auto_normalize=True, percentile_high=99.5
+    )
     method.provide_resource(FakeResource())
     method.segment(np.zeros((8, 8, 2)))
     method.segment(np.zeros((8, 8)))
