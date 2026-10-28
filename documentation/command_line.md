@@ -214,4 +214,7 @@ write_command("path/to/experiment_dir", {"command": "set_exposure",
 or, by hand, a file `commands/anything.json` containing
 `{"command": "pause"}`. `status.json` reports `paused`, `stopping`,
 `pending_commands` and `commands_applied`, and the viewer's status line
-shows them.
+shows them. Commands are read between timepoints, so when the run is behind
+they take effect after the timepoints already sent; `acquired_t` in
+`status.json` says where the microscope is. A command still unread when the
+run ends is recorded in `events.parquet` as `not applied`.

@@ -234,3 +234,28 @@ def test_set_pattern_round_trip(tmp_path):
         ("bogus", "refused", None),
     ]
     assert pattern_rows[1]["detail"] == "unknown parameter"
+
+
+def test_a_command_left_unread_at_the_end_is_recorded_as_not_applied(tmp_path):
+    """Session 3: a stop sent after the last timepoint went out was never applied
+    and left no trace."""
+    exp = make_experiment("exp.00")
+    _aq, manager, _plan, log = make_manager(exp, tmp_path)
+    write_command(tmp_path, {"command": "stop_experiment", "experiment": "exp.00"})
+    manager.finish()
+    command_rows = rows(log, "command")
+    assert [r["status"] for r in command_rows] == ["not applied"]
+    assert "after the last timepoint" in command_rows[0]["detail"]
+    assert not list((tmp_path / "commands").glob("*.json"))
+
+
+def test_status_reports_the_timepoint_the_microscope_has_reached(tmp_path):
+    exp = make_experiment("exp.00")
+    _aq, manager, _plan, _log = make_manager(exp, tmp_path)
+    assert manager.status()["acquired_t"] is None
+    manager.current_t = 5
+    rec = {"frames": 1, "errors": 0, "lateness_s": 0.0, "skipped": 0}
+    manager.acks = {2: {"exp.00": dict(rec)}, 3: {"exp.00": dict(rec)}}
+    status = manager.status()
+    assert status["t"] == 5
+    assert status["acquired_t"] == 3

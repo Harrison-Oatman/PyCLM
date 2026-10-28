@@ -56,6 +56,7 @@ class MicroscopeProcess(BaseProcess):
         position_mover: PositionMover | None = None,
         stop_event: Event | None = None,
         settle_time_s: float = 1.0,
+        reapply_config_groups: bool = False,
         slm_await_s: float = 5.0,
         max_consecutive_errors: int = 10,
     ):
@@ -75,6 +76,11 @@ class MicroscopeProcess(BaseProcess):
 
         # seconds to wait after waitForSystem() before snapping
         self.settle_time_s = settle_time_s
+        # the preset each config group was last set to; a group already there
+        # is not set again (reapply_config_groups turns this off)
+        self.reapply_config_groups = reapply_config_groups
+        self._config_state: dict[str, str] = {}
+        self.config_sets_skipped = 0
         # seconds to wait for the SLM buffer to answer an update_pattern_event
         self.slm_await_s = slm_await_s
         self.max_consecutive_errors = max_consecutive_errors
@@ -94,8 +100,12 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern_id = None
         self.current_camera_pattern = None
         self.current_dmd_ids = None
+        self.current_pattern_t = None
         # (t, experiment) whose stimulation-only visit a blank pattern cancelled
         self._blank_skips: set[tuple[int, str]] = set()
+        # SLM replies that arrived before the event they answer was handled
+        self._slm_replies: dict = {}
+        self.max_early_replies = 256
         self.skipped_moves = 0
         self.skipped_acquisitions = 0
 
@@ -140,6 +150,20 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern = np.zeros((self.slm_h, self.slm_w))
 
         self.slm_initialized = True
+        # the DMD may still hold the image of whatever ran before
+        self.blank_slm()
+
+    def blank_slm(self):
+        """Put an all-dark image on the DMD (at the start and end of a run)."""
+        if not self.slm_initialized or self.slm_device in (None, "dummy"):
+            return
+        try:
+            self.core.setSLMImage(
+                self.slm_device, np.zeros((self.slm_h, self.slm_w), dtype=np.uint8)
+            )
+            logger.info("SLM blanked")
+        except Exception as e:
+            logger.warning(f"could not blank the SLM: {e!r}")
 
     def process(self, event_await_s=0, slm_await_s=None):
         logger.debug(f"started MicroscopeProcess on {self.core}")
@@ -202,6 +226,7 @@ class MicroscopeProcess(BaseProcess):
 
             case "close":
                 # no more events from the manager: end the raw stream
+                self.blank_slm()
                 self.end_stream()
                 return True
 
@@ -217,16 +242,29 @@ class MicroscopeProcess(BaseProcess):
         logger.info("setting config groups:")
 
         for group, config in config_groups:
+            if (
+                not self.reapply_config_groups
+                and self._config_state.get(group) == config
+            ):
+                self.config_sets_skipped += 1
+                continue
             self.core.setConfig(group, config)
+            self._config_state[group] = config
 
             logger.info(f"{group} = {config}")
 
         return 0
 
+    def forget_config_state(self):
+        """Something other than a config group changed the hardware: set every group again."""
+        self._config_state.clear()
+
     def handle_device_update(self, devices: list[DeviceProperty]):
-        if devices is None:
+        if not devices:
             return 0
 
+        # a property may belong to a config group's preset
+        self.forget_config_state()
         logger.info("setting device properties:")
 
         for label, name, value, t in devices:
@@ -321,9 +359,14 @@ class MicroscopeProcess(BaseProcess):
         """
         Wait for the SLM buffer's reply to ``event_id``.
 
-        Replies for other events (left over from an earlier timeout) are
-        discarded. Returns None if no matching reply arrives within ``timeout_s``.
+        A reply to another event is kept for that event; replies left over
+        from an earlier timeout are dropped once more than
+        ``max_early_replies`` are kept. Returns None if no matching reply arrives within ``timeout_s``.
         """
+        early = self._slm_replies.pop(event_id, None)
+        if early is not None:
+            return early
+
         deadline = time() + timeout_s
 
         while True:
@@ -343,9 +386,15 @@ class MicroscopeProcess(BaseProcess):
                 continue
 
             if pattern_data.event_id != event_id:
-                logger.warning(
-                    f"discarding stale SLM pattern for event {pattern_data.event_id}"
-                )
+                # the buffer may answer out of order (it holds an experiment's
+                # handshakes until its first pattern arrives): keep the reply
+                # for its own event; replies to events that timed out are
+                # dropped once the store is full
+                self._slm_replies[pattern_data.event_id] = pattern_data
+                while len(self._slm_replies) > self.max_early_replies:
+                    stale = next(iter(self._slm_replies))
+                    logger.warning(f"discarding stale SLM pattern for event {stale}")
+                    del self._slm_replies[stale]
                 continue
 
             return pattern_data
@@ -399,6 +448,7 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern_id = pattern_data.pattern_unique_id
         self.current_camera_pattern = pattern_data.camera_pattern
         self.current_dmd_ids = pattern_data.dmd_ids
+        self.current_pattern_t = getattr(pattern_data, "pattern_t", None)
 
         return 0
 
@@ -455,6 +505,7 @@ class MicroscopeProcess(BaseProcess):
                 self.current_pattern_id,
                 camera_pattern=self.current_camera_pattern,
                 dmd_ids=self.current_dmd_ids,
+                pattern_t=self.current_pattern_t,
             )
         else:
             data_out = AcquisitionData(aq_event, image)

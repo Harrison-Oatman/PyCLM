@@ -69,6 +69,7 @@ FRAMES_COLUMNS = (
     "pattern_id",
     "pattern_index",
     "dmd_index",
+    "pattern_t",
     "pixel_size_um",
 )
 TRACKS_COLUMNS = (
@@ -489,6 +490,7 @@ class OMEZarrWriter(FrameWriter):
         pattern_id=None,
         pattern_index=None,
         dmd_index=None,
+        pattern_t=None,
     ) -> dict:
         ev = data.event
         pos = ev.position.as_dict()
@@ -510,6 +512,7 @@ class OMEZarrWriter(FrameWriter):
             "pattern_id": None if pattern_id is None else str(pattern_id),
             "pattern_index": pattern_index,
             "dmd_index": dmd_index,
+            "pattern_t": pattern_t,
             "pixel_size_um": None
             if ev.pixel_width_um is None
             else float(ev.pixel_width_um),
@@ -546,6 +549,7 @@ class OMEZarrWriter(FrameWriter):
                         pattern_id,
                         pattern_index,
                         dmd_index,
+                        getattr(data, "pattern_t", None),
                     )
                 )
 
@@ -575,6 +579,7 @@ class OMEZarrWriter(FrameWriter):
                             pattern_id,
                             pattern_index,
                             dmd_index,
+                            getattr(data, "pattern_t", None),
                         )
                     )
 
@@ -798,6 +803,7 @@ class OMEZarrWriter(FrameWriter):
                 ("pattern_id", pa.string()),
                 ("pattern_index", pa.int32()),
                 ("dmd_index", pa.int32()),
+                ("pattern_t", pa.int32()),
                 ("pixel_size_um", pa.float64()),
             ]
         )
