@@ -4,8 +4,8 @@ Status: requested by Harrison on 2026-10-28 ("pyclm tracking methods do not
 currently allow gap closing ... We can also consider adding a dependency to
 some tracking package that works efficiently in python, to avoid
 reimplementing what has already been optimized"). Also item 22 of the
-session 3 recommendations. Nothing is implemented yet; the decisions in §4
-are open.
+session 3 recommendations. Harrison approved every decision in §4 as
+recommended on 2026-10-28; implemented the same day (§6).
 
 ## 1. Verdict
 
@@ -208,3 +208,22 @@ Testing at the microscope: a nuclear-marker run with tracking on and a
 `PerTrack`-based method, comparing the number of track ids per position
 with `max_gap_frames = 0` and `2` (same TOML, two positions), and the
 tracking time per frame in the log.
+
+## 6. Implementation notes
+
+- `src/pyclm/core/tracking/centroid.py`, `link()`: the prototype solved
+  each connected cluster with its own `linear_sum_assignment`. The shipped
+  version builds the same augmented matrix once, as a sparse matrix, and
+  solves it with one `scipy.sparse.csgraph.min_weight_full_bipartite_matching`
+  call (costs carry a 1e-9 offset because a sparse matrix drops explicit
+  zeros). On the spike's data it gives identical links, gap bridging and
+  swaps, and is 5 to 8 times faster: 0.7, 1.9 and 5.7 ms median for 200,
+  1000 and 3000 nuclei (σ 3 px), 2.6 ms for 1000 at σ 10 px; measured
+  with a scratch script reusing `simulate` and `score` from the spike.
+- The gap is counted in calls to `track`, i.e. in frames of the tracked
+  channel, so a channel imaged every third timepoint counts its own frames.
+- Tests: `tests/test_tracking.py` (gap bridged within `max_gap_frames`,
+  forgotten after it, `max_gap_frames = 0`, a waiting and a present track
+  competing for one object, a stage shift during a gap, a dense field of
+  400 objects with 10 % missed per frame, ids never reused, a negative
+  gap rejected).
