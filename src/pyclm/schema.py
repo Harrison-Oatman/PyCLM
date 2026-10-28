@@ -530,6 +530,12 @@ class PyclmConfig(Strict):
         ge=0,
         description="seconds to wait after the hardware reports ready, before each snap",
     )
+    reapply_config_groups: bool = Field(
+        False,
+        description="set every config group before every frame, as PyCLM did before "
+        "1.2; by default a group already at the wanted preset is not set again "
+        "(each setConfig + waitForSystem costs 30-170 ms even when nothing changes)",
+    )
     camera_roi: list[int] | None = Field(
         None,
         description="camera ROI [x, y, width, height] in unbinned pixels, set when a run "
@@ -567,15 +573,18 @@ class PyclmConfig(Strict):
         unbinned camera pixels: the DMD rectangle mapped through the inverse
         of the camera-to-SLM affine.
         """
-        import cv2
+        return dmd_footprint(self.affine, self.slm_shape)
 
-        h, w = self.slm_shape
-        inv = cv2.invertAffineTransform(self.affine)
-        corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float32)
-        cam = corners @ inv[:, :2].T + inv[:, 2]
-        x0, y0 = np.floor(cam.min(axis=0))
-        x1, y1 = np.ceil(cam.max(axis=0))
-        return (int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+    def suggested_camera_roi(
+        self, sensor: tuple[int, int] | None = None
+    ) -> tuple[list[int], list[str]]:
+        """
+        The ``camera_roi`` that images exactly what the DMD can light: its
+        footprint clipped to the camera (to x, y >= 0 and, given the sensor's
+        ``(width, height)`` in unbinned pixels, to the sensor). Also returns
+        the sensor edges the DMD does not reach (``"left"``, ``"top"``, ...).
+        """
+        return suggest_camera_roi(self.dmd_footprint(), sensor)
 
     @property
     def affine(self) -> np.ndarray:
@@ -591,6 +600,43 @@ class PyclmConfig(Strict):
 
 
 # ------------------------------------------------------------- loading
+def dmd_footprint(affine, slm_shape) -> tuple[int, int, int, int]:
+    """The camera region ``(x, y, width, height)`` a DMD of ``slm_shape`` (h, w) reaches through ``affine``."""
+    import cv2
+
+    h, w = slm_shape
+    inv = cv2.invertAffineTransform(np.asarray(affine, dtype=np.float32))
+    corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float32)
+    cam = corners @ inv[:, :2].T + inv[:, 2]
+    x0, y0 = np.floor(cam.min(axis=0))
+    x1, y1 = np.ceil(cam.max(axis=0))
+    return (int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+
+
+def suggest_camera_roi(
+    footprint, sensor: tuple[int, int] | None = None
+) -> tuple[list[int], list[str]]:
+    """
+    Clip a DMD footprint ``(x, y, width, height)`` to the camera; see
+    :meth:`PyclmConfig.suggested_camera_roi`.
+    """
+    fx, fy, fw, fh = (int(v) for v in footprint)
+    x0, y0, x1, y1 = max(fx, 0), max(fy, 0), fx + fw, fy + fh
+    unreached = []
+    if sensor is not None:
+        sw, sh = (int(v) for v in sensor)
+        if fx > 0:
+            unreached.append("left")
+        if fy > 0:
+            unreached.append("top")
+        if x1 < sw:
+            unreached.append("right")
+        if y1 < sh:
+            unreached.append("bottom")
+        x1, y1 = min(x1, sw), min(y1, sh)
+    return [x0, y0, max(x1 - x0, 0), max(y1 - y0, 0)], unreached
+
+
 def _groups(table: dict[str, str]) -> list[ConfigGroup]:
     return [ConfigGroup(g, p) for g, p in table.items()]
 

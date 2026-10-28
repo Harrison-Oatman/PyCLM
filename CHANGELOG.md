@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- **Fixes and speed-ups from the session 3 scope run (2026-10-27/28;
+  docs/known-issues.md 40-47).**
+  - The microscope no longer sets a config group that is already at the
+    preset a frame needs (each `setConfig` + `waitForSystem` cost 30-170 ms
+    even when nothing changed; about 0.2 s a frame on the lab's rig). A
+    frame with `[device_properties]` makes the next frame set every group
+    again. `reapply_config_groups = true` in `pyclm_config.toml` restores the
+    old behavior.
+  - The first stimulation of an experiment waits (up to 5 s) for its first
+    pattern instead of being answered with the blank placeholder, which made
+    the microscope skip it. The microscope keeps an SLM reply that arrives
+    for a later event rather than discarding it. This also fixes the six
+    dry-run HDF5 tests that failed on main.
+  - The DMD is blanked when a run starts and ends.
+  - Binned patterns land half an unbinned pixel per binning step closer to
+    where they belong: `compose_affine` now centers binned pixel `p` on
+    unbinned `binning * p + (binning - 1) / 2` (a 0.25 binned-pixel shift
+    at binning 2 before).
+  - `status.json` reports `acquired_t`, the timepoint the microscope has
+    reached (behind `t` when the run is late); the viewer's status line
+    shows it. Commands still unread when the run ends are recorded in
+    `events.parquet` as `not applied`.
+  - Each stimulation row of `frames.parquet` records `pattern_t`, the
+    timepoint the pattern in force was made for.
+  - `pyclm check`: pixel-size presets conditioned on a state device's
+    `State` now match an objective preset that sets its `Label` (and the
+    reverse); the camera-to-stage affine is printed with the pixel size,
+    and presets whose affines map the camera axes differently are a
+    warning; the suggested `camera_roi` no longer grows past the sensor
+    (`pyclm run` prints it clipped to the camera); identical warnings of
+    several experiment files print as one line, as do the run's
+    unused-table warnings.
+  - A methods file that is also installed as an entry point is one method,
+    with a note, rather than "defined twice".
+  - The console writes UTF-8, so a run whose output goes to a file on
+    Windows no longer dies on the emoji in pymmcore-plus's device table.
+  - First-time setup installs the `calibration` extra (pycromanager, for
+    `scripts/calibration.ipynb`).
+
 - Every method zoo entry ends with a table of all the keywords the method
   takes (default, what it does), and the page opens its Methods section
   with the keywords every method takes (`start_min`, `stop_min`). The

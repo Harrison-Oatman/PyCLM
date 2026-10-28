@@ -61,6 +61,7 @@ class Controller:
         dry_image_source: Path | None = None,
         settle_time_s: float = 1.0,
         storage_format: str = "ome-zarr",
+        reapply_config_groups: bool = False,
         pattern_policy: str = "on_change",
     ):
         if not dry:
@@ -86,6 +87,7 @@ class Controller:
             position_mover=position_mover,
             stop_event=self.stop_event,
             settle_time_s=settle_time_s,
+            reapply_config_groups=reapply_config_groups,
         )
         self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
         self.writer_process = WriterProcess(
@@ -203,7 +205,10 @@ class Controller:
             self.core.setROI(*[int(v) for v in camera_roi])
             logger.info(f"camera ROI set to {tuple(int(v) for v in camera_roi)}")
 
+        roi_was_set = camera_roi is not None
         camera_roi = ROI(*self.core.getROI())
+        if not roi_was_set and not isinstance(self.core, SimulatedMicroscopeCore):
+            self._log_suggested_roi(affine_transform, slm_shape, camera_roi)
         camera_resolution = self.core.getPixelSizeUm()
         if not camera_resolution:
             logger.warning(
@@ -305,6 +310,30 @@ class Controller:
         self.processes = [self.manager, self.slm_buffer, *router.active_processes()]
 
     @staticmethod
+    def _log_suggested_roi(affine_transform, slm_shape, camera_roi) -> None:
+        """No camera_roi configured: say which ROI would image what the DMD can light."""
+        from .schema import dmd_footprint, suggest_camera_roi
+
+        try:
+            sensor = (
+                camera_roi.x_offset + camera_roi.width,
+                camera_roi.y_offset + camera_roi.height,
+            )
+            footprint = dmd_footprint(affine_transform, slm_shape)
+            roi, unreached = suggest_camera_roi(footprint, sensor)
+        except Exception:
+            return
+        edges = (
+            f"; the DMD does not reach the {', '.join(unreached)} edge(s)"
+            if unreached
+            else ""
+        )
+        logger.info(
+            f"camera_roi not set: camera_roi = {roi} would image exactly what "
+            f"the DMD can light{edges}"
+        )
+
+    @staticmethod
     def _shared_config_groups(schedule: ExperimentSchedule) -> list[ConfigGroup]:
         """The (group, preset) pairs every channel of every experiment sets."""
         shared: set[tuple[str, str]] | None = None
@@ -328,7 +357,11 @@ class Controller:
             self.tracking.request_method(schedule.experiments[name], channel)
         tracked_experiments = {name for name, _ in tracked}
 
+        # one warning per kind of unused table, naming the experiments: a
+        # session file shared by every position would otherwise repeat it
+        unused: dict[str, list[str]] = {}
         for name, experiment in schedule.experiments.items():
+            pattern = experiment.pattern.method_name
             for seg, cfg in experiment.segmentations.items():
                 if cfg.method_name == "none" or (name, seg) in seg_demanded:
                     continue
@@ -338,19 +371,26 @@ class Controller:
                     else f"[segmentation.{seg}]"
                 )
                 which = "" if seg == DEFAULT_SEGMENTATION else f" {seg!r}"
-                logger.warning(
-                    f"experiment {name}: {table} method '{cfg.method_name}' is "
-                    f"configured but the pattern method "
-                    f"'{experiment.pattern.method_name}' does not request "
-                    f"segmentation{which}, so it will not run"
-                )
+                unused.setdefault(
+                    f"{table} method '{cfg.method_name}' is configured but the "
+                    f"pattern method does not request segmentation{which}, so it "
+                    "will not run",
+                    [],
+                ).append(f"{name} ({pattern})")
             method = experiment.tracking.method_name
             if name not in tracked_experiments and method != "none":
-                logger.warning(
-                    f"experiment {name}: tracking method '{method}' is configured "
-                    f"but the pattern method '{experiment.pattern.method_name}' "
-                    "does not request tracks, so no tracking will run"
-                )
+                unused.setdefault(
+                    f"tracking method '{method}' is configured but the pattern "
+                    "method does not request tracks, so no tracking will run",
+                    [],
+                ).append(f"{name} ({pattern})")
+        for message, names in unused.items():
+            who = (
+                f"experiment {names[0]}"
+                if len(names) == 1
+                else f"{len(names)} experiments [{', '.join(names)}]"
+            )
+            logger.warning(f"{who}: {message}")
 
     def health(self) -> dict:
         """Process error counters, undeliverable frames and dropped frames, for status.json."""

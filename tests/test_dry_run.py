@@ -330,6 +330,12 @@ def test_dry_run_ome_zarr(yml_experiment_dir):
             assert g.frame(0, "545").shape == _CAMERA_SHAPE
             assert exp.current_t == _STEPS - 1
             assert exp.pattern_at(_STEPS - 1).shape == _SLM_SHAPE
+            # every stimulation records the timepoint its pattern was made for
+            stims = [r for r in exp.frames.to_pylist() if r["kind"] == "stim_event"]
+            assert stims
+            assert all(
+                r["pattern_t"] is not None and r["pattern_t"] <= r["t"] for r in stims
+            )
         assert (yml_experiment_dir / f"{store.stem}_imaging.tif").exists()
 
 

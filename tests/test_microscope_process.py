@@ -20,7 +20,7 @@ from pyclm.core.events import (
     UpdatePatternEvent,
     UpdateStagePositionEvent,
 )
-from pyclm.core.experiments import DeviceProperty, MicroscopePosition
+from pyclm.core.experiments import ConfigGroup, DeviceProperty, MicroscopePosition
 from pyclm.core.messages import (
     AcquisitionEventMessage,
     CloseMessage,
@@ -153,6 +153,20 @@ def test_slm_handshake_skips_stale_replies():
     assert aq.slm_to_microscope.empty()
 
 
+def test_slm_reply_that_arrives_early_is_kept_for_its_event():
+    """The SLM buffer may answer out of order: a reply for a later event is
+    kept until that event is handled, not thrown away."""
+    aq, microscope, _core = make_microscope()
+    first, second = UpdatePatternEvent("exp.00"), UpdatePatternEvent("exp.00")
+    aq.slm_to_microscope.put(EventSLMPattern(second.id, np.ones((8, 8), np.uint8), "b"))
+    aq.slm_to_microscope.put(EventSLMPattern(first.id, np.ones((8, 8), np.uint8), "a"))
+
+    microscope.handle_update_pattern_event(first, slm_await_s=1.0)
+    assert microscope.current_pattern_id == "a"
+    microscope.handle_update_pattern_event(second, slm_await_s=0.05)
+    assert microscope.current_pattern_id == "b"
+
+
 def test_slm_handshake_timeout_keeps_current_pattern(caplog):
     _aq, microscope, _ = make_microscope()
     microscope.current_pattern_id = "previous"
@@ -283,3 +297,48 @@ def test_pfs_that_switched_itself_off_is_restarted():
     mover.PFS_TIMEOUT_S = 5.0
     mover.move_to(MicroscopePosition(1.0, 2.0, 3.0), core)
     assert calls == ["On", "Off", "On"]
+
+
+def test_dmd_is_blanked_at_start_and_end():
+    """Session 3: the DMD can still show an old image at the first stimulation."""
+    _aq, microscope, core = make_microscope()
+    assert core._slm_image is not None
+    assert not core._slm_image.any()
+    core._slm_image = np.ones_like(core._slm_image)
+    microscope.handle_message(CloseMessage())
+    assert not core._slm_image.any()
+
+
+class CountingCore(SimulatedMicroscopeCore):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.set_configs = []
+
+    def setConfig(self, group, config):
+        self.set_configs.append((group, config))
+        super().setConfig(group, config)
+
+
+@pytest.mark.parametrize("reapply", [False, True])
+def test_config_groups_already_set_are_not_set_again(reapply):
+    """Session 3: re-setting unchanged groups cost ~0.2 s a frame (setConfig +
+    waitForSystem). A device property may belong to a preset, so it resets the memory."""
+    aq = AllQueues()
+    core = CountingCore(FakeImageSource((16, 16)))
+    microscope = MicroscopeProcess(
+        core, aq, stop_event=Event(), settle_time_s=0.0, reapply_config_groups=reapply
+    )
+    groups = [ConfigGroup("Channel", "545"), ConfigGroup("LightPath", "Fluor")]
+    microscope.handle_config_update(groups)
+    microscope.handle_config_update(
+        [ConfigGroup("Channel", "638"), ConfigGroup("LightPath", "Fluor")]
+    )
+    expected = [("Channel", "545"), ("LightPath", "Fluor"), ("Channel", "638")]
+    if reapply:
+        expected.insert(3, ("LightPath", "Fluor"))
+    assert core.set_configs == expected
+
+    microscope.handle_device_update([DeviceProperty("Sola", "Power", "30", "str")])
+    core.set_configs.clear()
+    microscope.handle_config_update([ConfigGroup("LightPath", "Fluor")])
+    assert core.set_configs == [("LightPath", "Fluor")]

@@ -34,6 +34,7 @@ def test_status_text_covers_the_states():
     base = {"t": 3, "timepoints": 10, "experiments": {}}
     assert status_text(base) == "t 3/10"
     assert status_text({**base, "done": True}) == "t 3/10 | done"
+    assert status_text({**base, "acquired_t": 1}) == "t 3/10 (acquired 1)"
     assert status_text({**base, "paused": True, "current_experiment": "a.00"}) == (
         "t 3/10 | paused | at a.00"
     )

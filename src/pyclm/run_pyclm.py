@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from .check import CheckFailed, check_directory, find_pyclm_config
+from .console import utf8_console
 from .controller import Controller
 from .core import PatternMethod, SegmentationMethod
 from .core.position_mover import PositionMover
@@ -17,6 +18,7 @@ from .directories import dry_schedule_from_directory, schedule_from_directory
 from .schema import PyclmConfig
 
 logger = logging.getLogger(__name__)
+
 
 # marks the handlers installed by set_logging so a later call can replace them
 _PYCLM_HANDLER_FLAG = "_pyclm_run_handler"
@@ -211,6 +213,7 @@ def run_pyclm(
         position_mover=position_mover,
         dry_image_source=dry_image_source,
         settle_time_s=settle_time_s,
+        reapply_config_groups=config.reapply_config_groups,
         storage_format=storage_format,
         pattern_policy=pattern_policy,
     )
@@ -229,6 +232,7 @@ def run_pyclm(
             c.register_tracking_method(name, method)
 
     core = c.core
+    utf8_console()
     core.describe()
 
     if focus_device:

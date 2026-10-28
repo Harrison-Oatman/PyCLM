@@ -1,6 +1,7 @@
 """Custom methods from pyclm_config.toml `methods` and the pyclm.methods entry points."""
 
 import shutil
+import sys
 import types
 
 import numpy as np
@@ -129,6 +130,33 @@ def test_entry_points(monkeypatch, tmp_path):
     assert found.pattern == {"spot": Spot}
     assert len(warnings) == 1
     assert "broken" in warnings[0]
+
+
+def test_a_methods_file_that_is_also_an_entry_point_is_one_method(
+    monkeypatch, tmp_path
+):
+    """Session 3: optowave/patterns.py was listed under methods and installed as
+    an entry point; the two imports are one definition, not a clash."""
+    import importlib.util
+
+    path = tmp_path / "half.py"
+    path.write_text(HALF_ON)
+    spec = importlib.util.spec_from_file_location("installed_pkg.half", path)
+    installed = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "installed_pkg.half", installed)
+    spec.loader.exec_module(installed)
+
+    class EP:
+        name, value = "lab", "installed_pkg.half"
+
+        def load(self):
+            return installed
+
+    monkeypatch.setattr(pm, "entry_points", lambda group: [EP()])
+    config = types.SimpleNamespace(methods=["half.py"])
+    found, warnings = discover(config, tmp_path / "pyclm_config.toml")
+    assert list(found.pattern) == ["half_on"]
+    assert any("the same file" in w for w in warnings)
 
 
 # ------------------------------------------------------------------ check, run

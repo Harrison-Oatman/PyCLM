@@ -57,11 +57,14 @@ __all__ = ["Manager", "MicroscopeOutbox", "SLMBuffer", "WriterProcess"]
 def compose_affine(affine, roi_offset=(0.0, 0.0), binning=1) -> np.ndarray:
     """
     The camera-to-SLM affine for a pattern expressed in a camera ROI at a
-    binning: ``affine`` is calibrated in full-frame unbinned pixels, so a
-    pattern pixel ``p`` sits at ``binning * p + roi_offset`` in that frame.
+    binning: ``affine`` is calibrated in full-frame unbinned pixels, so the
+    center of pattern pixel ``p`` sits at
+    ``binning * p + (binning - 1) / 2 + roi_offset`` in that frame (a binned
+    pixel covers unbinned pixels ``binning * p`` to ``binning * p + binning - 1``).
     """
     at = np.array(affine, dtype=np.float32)
-    ox, oy = roi_offset
+    half = (binning - 1) / 2
+    ox, oy = roi_offset[0] + half, roi_offset[1] + half
     if ox or oy:
         at[:, 2] = at[:, 2] + at[:, :2] @ np.array([ox, oy], dtype=np.float32)
     if binning != 1:
@@ -84,6 +87,14 @@ class SLMBuffer(BaseProcess):
         self.to_microscope = aq.slm_to_microscope
 
         self.slm_patterns = {}
+        # until an experiment's first pattern arrives, a handshake is held back
+        # rather than answered with the blank placeholder (which would make the
+        # microscope skip the stimulation); after ``first_pattern_wait_s`` the
+        # buffer stops waiting for that experiment
+        self.first_pattern_wait_s = 5.0
+        self._held: dict[str, list] = {}
+        self._held_since: dict[str, float] = {}
+        self._gave_up: set[str] = set()
 
         self.slm_shape = None
         self.affine_transform = None
@@ -126,7 +137,7 @@ class SLMBuffer(BaseProcess):
             # (pattern id, DMD image(s), camera-space uint8 pattern or None, DMD ids)
             geom = self.grids.get(name)
             if geom is None:
-                self.slm_patterns[name] = (0, slm_pattern, None, None)
+                self.slm_patterns[name] = (0, slm_pattern, None, None, None)
             else:
                 n = len(geom.tiles)
                 self.slm_patterns[name] = (
@@ -134,6 +145,7 @@ class SLMBuffer(BaseProcess):
                     [np.zeros(self.slm_shape, dtype=np.uint8) for _ in range(n)],
                     None,
                     [f"0:{k}" for k in range(n)],
+                    None,
                 )
 
         self.initialized = True
@@ -199,7 +211,9 @@ class SLMBuffer(BaseProcess):
                 slm_pattern,
                 camera,
                 dmd_ids,
+                getattr(data, "t_index", None),
             )
+            self._release(experiment_name)
         else:
             logger.warning(
                 f"Experiment name '{experiment_name}' not found in SLM patterns."
@@ -221,29 +235,56 @@ class SLMBuffer(BaseProcess):
 
             case "update_pattern_event":
                 event = msg.event
-
-                update_pattern_event_id = event.id
-                experiment_name = event.experiment_name
-
-                pattern = self.slm_patterns[experiment_name]
-
-                data = EventSLMPattern(
-                    update_pattern_event_id,
-                    pattern[1],
-                    pattern[0],
-                    camera_pattern=pattern[2],
-                    dmd_ids=pattern[3],
-                )
-
-                self.to_microscope.put(data)
+                name = event.experiment_name
+                if self._waiting_for_first(name):
+                    self._held.setdefault(name, []).append(event.id)
+                    self._held_since.setdefault(name, time())
+                else:
+                    self._release(name)
+                    self._answer(event.id, name)
 
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
 
         if self.manager_done and self.pattern_done:
+            for name in list(self._held):
+                self._release(name)
             return True
 
         return False
+
+    def _waiting_for_first(self, name: str) -> bool:
+        """No pattern of this experiment has arrived yet, and the wait has not run out."""
+        if name in self._gave_up or self.slm_patterns[name][0] != 0:
+            return False
+        since = self._held_since.get(name)
+        if since is not None and time() - since > self.first_pattern_wait_s:
+            logger.warning(
+                f"{name}: no pattern from the pattern method after "
+                f"{self.first_pattern_wait_s:g}s; answering with the blank pattern"
+            )
+            self._gave_up.add(name)
+            return False
+        return True
+
+    def _release(self, name: str):
+        """Answer the handshakes held for ``name`` with its current pattern."""
+        for event_id in self._held.pop(name, []):
+            self._answer(event_id, name)
+        self._held_since.pop(name, None)
+
+    def _answer(self, event_id, name: str):
+        pattern = self.slm_patterns[name]
+        self.to_microscope.put(
+            EventSLMPattern(
+                event_id,
+                pattern[1],
+                pattern[0],
+                camera_pattern=pattern[2],
+                dmd_ids=pattern[3],
+                pattern_t=pattern[4],
+            )
+        )
 
 
 class Manager:
@@ -566,6 +607,35 @@ class Manager:
         self.pending_commands = 0
         return handled
 
+    def _record_unapplied_commands(self):
+        """Commands that arrived after the last timepoint went out: recorded as not applied."""
+        if self.commands_dir is None:
+            return
+        from ..commands import mark_done, pending_in
+
+        for path, command, problem in pending_in(self.commands_dir):
+            what = command.command if command is not None else path.name
+            detail = (
+                problem
+                if command is None
+                else "arrived after the last timepoint was sent to the microscope"
+            )
+            logger.warning(f"command {path.name} not applied: {detail}")
+            self.event_log.record(
+                "command",
+                getattr(command, "experiment", None),
+                getattr(command, "channel", None),
+                what,
+                None,
+                command.describe() if command is not None else None,
+                "not applied",
+                detail,
+                self.current_t,
+                None,
+                "command",
+            )
+            mark_done(path)
+
     def apply_command(self, command, name: str = "") -> bool:
         """Apply one command; every outcome is an events row. Returns True if applied."""
         text = command.describe()
@@ -722,8 +792,11 @@ class Manager:
                     "errors": 0,
                     "skipped": 0,
                 }
+        # the microscope trails the dispatched timepoint when the run is behind
+        acquired = [t for t, recs in self.acks.items() if recs]
         return {
             "t": self.current_t,
+            "acquired_t": max(acquired) if acquired else None,
             "timepoints": self.plan.timepoints,
             "done": done,
             "current_experiment": self.current_experiment,
@@ -760,6 +833,7 @@ class Manager:
             return
         self.finished = True
         self.drain_inboxes()
+        self._record_unapplied_commands()
         self.write_status(done=True)
         self.event_log.close()
 

@@ -274,6 +274,9 @@ def cmd_new(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .console import utf8_console
+
+    utf8_console()
     argv = list(sys.argv[1:] if argv is None else argv)
     # the pre-Stage-5 form: pyclm <dir> [--dry] [--gui] [--config X]
     if argv and argv[0] not in COMMANDS and not argv[0].startswith("-"):

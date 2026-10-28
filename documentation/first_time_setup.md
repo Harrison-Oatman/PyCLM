@@ -15,9 +15,15 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 See [Installation](installation.md). On the microscope PC:
 
 ```bash
-pip install "closed-loop-microscopy[gui]"
+pip install "closed-loop-microscopy[gui,calibration]"
 mmcore use "C:\Program Files\Micro-Manager-2.0"
 ```
+
+The `calibration` extra installs pycromanager, which the DMD calibration
+notebook (`scripts/calibration.ipynb`) needs to drive the Micro-Manager
+Projector plugin. Reloading a hardware configuration in Micro-Manager resets
+the camera (binning back to 1, live mode off); a run sets binning from the
+experiment TOML, so this matters only for work in the Micro-Manager GUI.
 
 ---
 
@@ -66,6 +72,13 @@ position_mover = "pfs"
 # Optional. Seconds to wait after the hardware reports ready, before each snap.
 # Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
 settle_time_seconds = 1.0
+
+# Optional. Default false: a config group already at the preset a frame needs
+# is not set again (each setConfig waits for the hardware, 30-170 ms even when
+# nothing moves). Set true to set every group before every frame, for a device
+# that changes state behind Micro-Manager's back. A frame with
+# [device_properties] makes the next frame set every group again.
+reapply_config_groups = false
 
 # Optional. Camera ROI [x, y, width, height] in unbinned pixels, set when a run
 # (or `pyclm preview --snap`) starts. The DMD usually lights only part of the
