@@ -821,6 +821,23 @@ def check_directory(
             tracked = [cfg.tracking.segmentation] if tracks and cfg.tracking else []
             for seg in [*seg_names, *tracked]:
                 _check_segmented_channel(report, file, cfg, seg, channel)
+        if (
+            config is not None
+            and config.acquisition.stimulation_timing == "shutter"
+            and cfg.stimulation.exposure > 0
+            and (cfg.stimulation.save or getattr(method, "_stim_requested", False))
+        ):
+            why = (
+                "the method reads the stimulation frame"
+                if getattr(method, "_stim_requested", False)
+                else "[stimulation] save = true"
+            )
+            report.info(
+                file,
+                "[stimulation]",
+                f'stimulation_timing = "shutter", but {why}: its stimulations '
+                "are timed by the camera",
+            )
         if getattr(method, "_stim_requested", False):
             if getattr(method, "_stim_request_seg", False):
                 needs_default_seg = True

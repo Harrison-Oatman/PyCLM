@@ -93,6 +93,19 @@ camera_roi = [256, 128, 1536, 1792]
 # and `preview` alike. See "Custom Pattern and Segmentation Methods" below.
 methods = ["my_patterns.py"]
 
+# Optional. How the microscope spends its time per frame. The first three are
+# off by default; try them on your rig and keep the ones that hold up (the log
+# ends each run with a line of what they saved).
+[acquisition]
+settle = "every_frame"         # or "after_move": wait settle_time_seconds only for
+                               # the first frame after a stage move
+camera_capture = "snap"        # or "sequence": a one-image sequence acquisition
+                               # instead of snapImage (faster on some cameras)
+stimulation_timing = "camera"  # or "shutter": a stimulation whose frame is not saved
+                               # ([stimulation] save = false) and that no method reads
+                               # is the shutter held open for the exposure, no camera
+reapply_camera_settings = false  # true: set exposure and binning before every frame
+
 # Optional. How data is stored and exported.
 [output]
 format = "ome-zarr"          # "ome-zarr" (default) or "hdf5" (PyCLM's original layout)
@@ -111,6 +124,14 @@ distinct pattern, and a `frames.parquet`/`frames.csv` table of every frame and
 stimulation event. Whichever format is used, `pyclm.io.open(path)` reads it
 and `pyclm export` (or the automatic export) produces ImageJ stacks. See
 [Data format and export](data_format.md) for the full description.
+
+With `stimulation_timing = "shutter"` the light is on for the exposure
+plus however long the shutter takes to open and close, whereas a camera
+exposure keeps the auto-shutter open for the camera's own overhead too, so
+the dose per stimulation can change. Measure it with a power meter (or
+compare responses) before using the option for an experiment. The shutter is
+Micro-Manager's current shutter (`Core-Shutter`), the one the stimulation's
+config groups select.
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.
 

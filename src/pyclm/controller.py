@@ -63,6 +63,7 @@ class Controller:
         storage_format: str = "ome-zarr",
         reapply_config_groups: bool = False,
         pattern_policy: str = "on_change",
+        acquisition: dict | None = None,
     ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
@@ -88,6 +89,8 @@ class Controller:
             stop_event=self.stop_event,
             settle_time_s=settle_time_s,
             reapply_config_groups=reapply_config_groups,
+            # [acquisition] of pyclm_config.toml: settle, camera_capture, ...
+            **(acquisition or {}),
         )
         self.manager = Manager(aq=self.all_queues, stop_event=self.stop_event)
         self.writer_process = WriterProcess(

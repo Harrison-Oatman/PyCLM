@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Per-frame speed-ups to try on the rig: an `[acquisition]` table in
+  `pyclm_config.toml`** (docs/acquisition-speedups-design.md). The first three options are
+  off by default; the log ends each run with a line of what they saved.
+  - `settle = "after_move"` waits `settle_time_seconds` only for the first
+    frame after a stage move.
+  - `camera_capture = "sequence"` takes each frame with a one-image
+    sequence acquisition instead of `snapImage`.
+  - `stimulation_timing = "shutter"` times a stimulation whose frame is not
+    saved and that no method reads by holding the current shutter open for
+    the exposure, without the camera (about 0.5 s a light event on the
+    lab's rig; the dose can differ, see the setup docs). `pyclm check` notes
+    experiments whose stimulations still use the camera.
+  - Exposure and binning are set only when the camera reports other values
+    (`reapply_camera_settings = true` sets them every frame).
 - **Segmentation of several channels at once, and Cellpose
   auto-normalization** (docs/multichannel-segmentation-design.md).
   - `channels = ["545", "638"]` in a `[segmentation]` table hands the

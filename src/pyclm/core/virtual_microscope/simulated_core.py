@@ -43,6 +43,10 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
         self._last_image: np.ndarray | None = None
         self._exposure_ms: float = 0.0
+        self._sequence_buffer: list[np.ndarray] = []
+        self._shutter_device = "SimulatedShutter"
+        self.shutter_open = False
+        self.shutter_openings = 0
 
         self._properties: dict[str, dict[str, Any]] = {camera_name: {"Binning": "1x1"}}
         self._config_groups: dict[str, str] = {}
@@ -158,6 +162,43 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
 
     def setExposure(self, exposure_ms: float) -> None:
         self._exposure_ms = float(exposure_ms)
+
+    def getExposure(self) -> float:
+        return self._exposure_ms
+
+    # sequence acquisition: one frame per image asked for, taken at once
+    def startSequenceAcquisition(
+        self, num_images: int, interval_ms: float, stop_on_overflow: bool
+    ) -> None:
+        for _ in range(int(num_images)):
+            self.snapImage()
+            self._sequence_buffer.append(self._last_image)
+
+    def isSequenceRunning(self) -> bool:
+        return False
+
+    def stopSequenceAcquisition(self) -> None:
+        return None
+
+    def getRemainingImageCount(self) -> int:
+        return len(self._sequence_buffer)
+
+    def popNextImage(self) -> Any:
+        return self._sequence_buffer.pop(0)
+
+    def clearCircularBuffer(self) -> None:
+        self._sequence_buffer.clear()
+
+    def getShutterDevice(self) -> str:
+        return self._shutter_device
+
+    def setShutterOpen(self, state: bool) -> None:
+        self.shutter_open = bool(state)
+        if state:
+            self.shutter_openings += 1
+
+    def waitForDevice(self, label: str) -> None:
+        return None
 
     def snapImage(self) -> None:
         frame = np.asarray(self._image_source.next_frame([self._x, self._y]))

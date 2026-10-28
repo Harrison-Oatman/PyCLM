@@ -564,6 +564,38 @@ class OutputConfig(Strict):
     )
 
 
+class AcquisitionConfig(Strict):
+    """
+    ``[acquisition]`` of ``pyclm_config.toml``: how the microscope spends its
+    time per frame. ``settle``, ``camera_capture`` and ``stimulation_timing``
+    keep the old behavior by default; each is meant to be tried on the rig
+    and kept if it holds up.
+    """
+
+    settle: Literal["every_frame", "after_move"] = Field(
+        "every_frame",
+        description="when to wait settle_time_seconds: before every frame, or only "
+        "for the first frame after a stage move (a channel change at the same "
+        "position then waits only for the hardware to report ready)",
+    )
+    camera_capture: Literal["snap", "sequence"] = Field(
+        "snap",
+        description="how a frame is taken: snapImage, or a one-image sequence "
+        "acquisition, which some cameras start faster",
+    )
+    stimulation_timing: Literal["camera", "shutter"] = Field(
+        "camera",
+        description="how a stimulation is timed: by a camera exposure, or, when its "
+        "frame is not saved and no method reads it, by holding the current shutter "
+        "open for the exposure without the camera",
+    )
+    reapply_camera_settings: bool = Field(
+        False,
+        description="set exposure and binning before every frame; by default they "
+        "are set only when the camera reports other values",
+    )
+
+
 class PyclmConfig(Strict):
     """``pyclm_config.toml``: the hardware and output configuration."""
 
@@ -608,6 +640,7 @@ class PyclmConfig(Strict):
         "files (relative to this file) or module names; each method class is "
         "registered under its name attribute",
     )
+    acquisition: AcquisitionConfig = Field(default_factory=AcquisitionConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     @model_validator(mode="after")
