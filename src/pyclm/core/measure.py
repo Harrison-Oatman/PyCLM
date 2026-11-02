@@ -39,7 +39,7 @@ _STATS = {
 
 class Regions:
     """
-    Labelled regions of one frame (0 = background). Every per-object result
+    Labeled regions of one frame (0 = background). Every per-object result
     is an array aligned with :attr:`ids`.
     """
 

@@ -72,9 +72,9 @@ Get answers to these before writing anything. Ask only what is missing:
 
 ## 2. Pick the pattern method
 
-Read `documentation/method_zoo.md` (or the method zoo page on
-pyclm.readthedocs.io). Map the description to a built-in method and its
-arguments. The common ones:
+Read the method zoo page (https://pyclm.readthedocs.io/en/latest/method_zoo.html,
+or `method_zoo.html` of a local docs build). Map the description to a
+built-in method and its arguments. The common ones:
 
 | Want | `method` |
 |---|---|
@@ -84,8 +84,8 @@ arguments. The common ones:
 | Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar`, `chirp` (a period that sweeps) |
 | Any method pulsed on and off | `pulsed` with `[pattern.inner]` |
 | Light whole cells: all, a random fraction, or chosen by area / intensity / position; a band at the colony edge | `all_cells` (`invert` for the background), `random_cells` (needs tracks), `select_cells` |
-| Light one side of each cell (cells move towards the light) | `move_out`, `move_in`, `move_rotate`, `move_sequence` (a sequence of `u`, `d`, `l`, `r`, `s`) |
-| Hold each nucleus at a target | `nucleus_clamp` (`controller = "bang_bang"`, `"p"`, `"pi"`), `target_image` (towards a target image), `relative_clamp` (a fraction of each cell's own range) |
+| Light one side of each cell (cells move toward the light) | `move_out`, `move_in`, `move_rotate`, `move_sequence` (a sequence of `u`, `d`, `l`, `r`, `s`) |
+| Hold each nucleus at a target | `nucleus_clamp` (`controller = "bang_bang"`, `"p"`, `"pi"`), `target_image` (toward a target image), `relative_clamp` (a fraction of each cell's own range) |
 | Hold the field's mean nuclear intensity with one input | `population_clamp` (a whole-field dose, the exposure, or a laser power) |
 | Light the middle or the poles of an embryo | `embryo_inner`, `embryo_outer` |
 | Different methods on two halves of the field | `split` with `[pattern.left]`/`[pattern.right]` or `top`/`bottom` |
@@ -105,9 +105,17 @@ Methods and arguments renamed in 2.0 (`direction`, `rotate_ccw`,
 `bar_speed`, `duty_cycle` + `period`, ...) still run with a warning;
 `pyclm check --fix <dir>` rewrites the TOMLs.
 
-The authoritative list is `known_models` in
-`src/pyclm/core/patterns/__init__.py`. Read the class's `__init__` for
-the argument names, units and defaults. `pyclm check` rejects unknown
+Each method's card on the method zoo page has a **Keywords** table: every
+argument the method takes, its default ("required" when it has none) and
+what it does, with the generic `start_min` / `stop_min` in one table at
+the top of the Methods section. Take argument names, units and defaults
+from those tables, not from the source; they are built from the code
+and its `:param` lines, and a test keeps them complete. The cards and
+tables are generated when the docs build, so `documentation/method_zoo.md`
+in a clone does not contain them; without network, build the docs
+(`uv run --group docs sphinx-build -b html documentation <out>`). A method registered
+by the lab (the `methods` key of `pyclm_config.toml`) is not in the zoo:
+read its file. `pyclm check` rejects unknown
 arguments, so never guess them.
 
 ## 3. Write the directory

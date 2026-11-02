@@ -404,7 +404,7 @@ def verify_11(directory: Path):
                     (
                         f"{exp.name}: stimulation frame lit to the edges",
                         edge.mean() > 0.5 * sf.mean(),
-                        f"edge/centre {edge.mean() / max(sf.mean(), 1):.2f}",
+                        f"edge/center {edge.mean() / max(sf.mean(), 1):.2f}",
                     )
                 )
     return rows

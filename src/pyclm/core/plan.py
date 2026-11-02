@@ -582,7 +582,7 @@ class AcquisitionPlan:
         """
         Rough duration of timepoint ``t``: per acquisition the exposure plus the
         settle time, plus ``move_s`` per position visited. Stage moves and SLM
-        uploads are not modelled beyond ``move_s``.
+        uploads are not modeled beyond ``move_s``.
         """
         total = 0.0
         for ev in self.events_at(t):

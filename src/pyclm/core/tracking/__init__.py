@@ -1,4 +1,4 @@
-"""Tracking methods: stable identities for labelled regions across timepoints."""
+"""Tracking methods: stable identities for labeled regions across timepoints."""
 
 from .centroid import CentroidTracker
 from .tracking import (

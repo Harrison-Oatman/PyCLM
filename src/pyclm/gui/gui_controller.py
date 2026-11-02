@@ -14,9 +14,9 @@ layers with the time scale set to the group's ``every_t``, so they line up
 on the plan's time axis without blank frames. A cyan overlay shows the DMD
 pattern in force at each frame when the affine transform is known.
 
-Contrast is normalised automatically as frames arrive until you touch a
+Contrast is normalized automatically as frames arrive until you touch a
 layer's limits; then they stay where you put them ("Auto-contrast" in the
-dock turns it back on, "Normalise now" resets every channel once).
+dock turns it back on, "Normalize now" resets every channel once).
 """
 
 from __future__ import annotations
@@ -290,11 +290,11 @@ class ViewerControls(QtWidgets.QWidget):
         self.auto_contrast = QtWidgets.QCheckBox("Auto-contrast")
         self.auto_contrast.setChecked(True)
         self.auto_contrast.setToolTip(
-            "Normalise each channel as frames arrive; turns off when you move a "
+            "Normalize each channel as frames arrive; turns off when you move a "
             "contrast slider"
         )
         self.auto_contrast.toggled.connect(self.autoContrastChanged)
-        self.normalize = QtWidgets.QPushButton("Normalise now")
+        self.normalize = QtWidgets.QPushButton("Normalize now")
         self.normalize.setToolTip("Reset the contrast limits of every channel once")
         self.normalize.clicked.connect(self.normalizeRequested)
         self.hint = QtWidgets.QLabel("[ / ] : previous / next position")

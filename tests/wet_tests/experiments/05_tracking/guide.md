@@ -14,5 +14,5 @@ uv run wet run 05
 
 - the checks of 04 pass, and at least three tracks are seen at two or
   more timepoints (`tracks.parquet`);
-- by eye: in `imaging/tracks` of the viewer a cell keeps its colour
+- by eye: in `imaging/tracks` of the viewer a cell keeps its color
   across timepoints.

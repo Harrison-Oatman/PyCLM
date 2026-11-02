@@ -55,7 +55,7 @@ class LeaderCells(RotateCcwModel):
 
 class IntensityProgram(PatternMethod):
     """
-    A three-phase programme for every cell: no light for ``dark_min``
+    A three-phase program for every cell: no light for ``dark_min``
     minutes, full light for ``light_min`` minutes, then feedback control to
     the midpoint between the intensity each cell showed at the end of the
     dark phase and at the end of the light phase.

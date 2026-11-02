@@ -238,7 +238,7 @@ class PeriodDirectedPattern(PerCellPatternMethod):
 
     direction_vec: ClassVar[dict[str, tuple[int, int]]] = {
         # (y, x) in image rows and columns: +y is down the image, and cells
-        # move towards the lit side
+        # move toward the lit side
         "u": (-1, 0),
         "d": (1, 0),
         "r": (0, 1),
@@ -269,7 +269,7 @@ class PeriodDirectedPattern(PerCellPatternMethod):
     ):
         """
         :param sequence: the directions to step through, e.g. ``"urdl"``:
-            ``u`` up (towards row 0), ``d`` down, ``l`` left, ``r`` right,
+            ``u`` up (toward row 0), ``d`` down, ``l`` left, ``r`` right,
             ``s`` dark; it repeats
         :param step_min: minutes spent on each direction
         :param channel: the channel whose segmentation (or tracks) is lit

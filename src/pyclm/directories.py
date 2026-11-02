@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------- file names
 # ``schedule.toml`` and ``pyclm_config.toml`` may carry a qualifier between the
 # name and the suffix (``schedule.fast.toml``, ``pyclm_config.ti2.toml``) so a
-# directory can be labelled by what it was run with; exactly one of each.
+# directory can be labeled by what it was run with; exactly one of each.
 SCHEDULE_PATTERN = re.compile(r"^schedule(\..+)?\.toml$", re.IGNORECASE)
 CONFIG_PATTERN = re.compile(r"^pyclm_config(\..+)?\.toml$", re.IGNORECASE)
 

@@ -96,7 +96,7 @@ class WriterProcess(PipelineProcess):
         )
 
     def close_files(self):
-        """Finalise and close all outputs (idempotent)."""
+        """Finalize and close all outputs (idempotent)."""
         self.writer.close()
 
     def process(self):

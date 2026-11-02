@@ -8,7 +8,7 @@
 - The **camera ROI of item 11 active in MicroManager** when the grid is
   created (the ROI tool in the main window): Create Grid spaces tiles by
   the current image size.
-- A **slide with recognisable structure** at the tile scale (a grid
+- A **slide with recognizable structure** at the tile scale (a grid
   slide, scratched coverslip, a dense fixed sample).
 - **Create Grid**: Devices → Stage Position List → Create Grid, prefix
   `grid`, overlap 0, mark two opposite corners so the grid is 2 x 2,

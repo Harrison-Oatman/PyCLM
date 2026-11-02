@@ -137,7 +137,7 @@ class MicroscopeProcess(BaseProcess):
         self.current_camera_pattern = None
         self.current_dmd_ids = None
         self.current_pattern_t = None
-        # (t, experiment) whose stimulation-only visit a blank pattern cancelled
+        # (t, experiment) whose stimulation-only visit a blank pattern canceled
         self._blank_skips: set[tuple[int, str]] = set()
         # SLM replies that arrived before the event they answer was handled
         self._slm_replies: dict = {}
@@ -358,7 +358,7 @@ class MicroscopeProcess(BaseProcess):
         if allowed is None:
             # seen with a pymmcore-plus / pymmcore pair that do not belong
             # together (the real core refuses to load in that state; this is
-            # a last line of defence for other cores)
+            # a last line of defense for other cores)
             if not self.warned_binning:
                 logger.warning(
                     f"camera {camera!r} reported no allowed binnings (None); "
@@ -393,7 +393,7 @@ class MicroscopeProcess(BaseProcess):
         return (int(index["t"]), event.experiment_name)
 
     def _skipping(self, event) -> bool:
-        """Whether this event belongs to a visit a blank pattern cancelled."""
+        """Whether this event belongs to a visit a blank pattern canceled."""
         if not getattr(event, "skippable_if_blank", False):
             return False
         key = self._skip_key(event)

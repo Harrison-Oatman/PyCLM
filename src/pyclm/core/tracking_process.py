@@ -82,7 +82,7 @@ class TrackingProcess(PipelineProcess):
         )
         method = method_class(name, channel, **experiment.tracking.kwargs)
         self.methods[(name, cfg.channel_id)] = method
-        logger.info(f'{name}/{channel}: initialised tracking method "{method_name}"')
+        logger.info(f'{name}/{channel}: initialized tracking method "{method_name}"')
         return method
 
     def handle_data(self, data):

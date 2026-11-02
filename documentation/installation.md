@@ -1,5 +1,8 @@
 # Installation
 
+*A coding agent can walk you through this page with the pyclm-microscope-bringup skill; see
+[Using PyCLM skills with Claude Code](agent_skills.md).*
+
 PyCLM is published on PyPI as `closed-loop-microscopy`; the import name and
 the command are `pyclm`.
 

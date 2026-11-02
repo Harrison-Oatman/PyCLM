@@ -139,7 +139,7 @@ class BarPattern(BarPatternBase):
         :param width_um: width of each stripe, in um
         :param spacing_um: distance from one stripe to the next, in um; each
             point is lit for width_um / spacing_um of the time
-        :param speed_um_per_min: speed in um/min, towards the bottom of the
+        :param speed_um_per_min: speed in um/min, toward the bottom of the
             image (+y); negative moves the bar up, 0 holds it still
         """
         super().__init__(**kwargs)
@@ -196,7 +196,7 @@ class SawToothMethod(_StripeKwargs, PatternMethod):
         """
         :param width_um: width of each ramp, in um
         :param spacing_um: distance from one ramp to the next, in um
-        :param speed_um_per_min: speed in um/min, towards +y; negative moves it up
+        :param speed_um_per_min: speed in um/min, toward +y; negative moves it up
         :param reverse: brightest at the trailing edge instead of the leading one
         """
         super().__init__(**kwargs)

@@ -86,7 +86,7 @@ class GlobalPulsePattern(PatternMethod):
         :param phase_min: minutes from ``start_min`` to the first on-edge
         :param reference_speed_um_per_min: speed of the ``bar`` this train twins;
                                     phases the first on-edge to that bar
-                                    reaching the field centre
+                                    reaching the field center
         :param start_min: experiment minute stimulation begins
         :param stop_min: experiment minute stimulation ends (None: never)
         """
@@ -110,7 +110,7 @@ class GlobalPulsePattern(PatternMethod):
         The phase actually used, in minutes after ``start_min``.
 
         With ``reference_speed_um_per_min`` set, ``phase_min`` is added to the minute
-        at which a ``bar`` of that speed reaches the centre of the field.
+        at which a ``bar`` of that speed reaches the center of the field.
         ``bar`` lights a point ``y`` when ``(t - y / bar_speed) % period_time``
         is within its duty cycle, so that on-edge falls at ``y / bar_speed``;
         taking ``y`` from :meth:`~pyclm.core.patterns.pattern.PatternMethod.center_um`
