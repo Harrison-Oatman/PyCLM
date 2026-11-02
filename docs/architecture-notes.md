@@ -555,7 +555,7 @@ so that binning-4 configs produce the TIF shape; it never actually bins images.
 - `TrackingMethod` subclass (`track(labels, t, pixel_size_um) -> (relabelled,
   rows)`, `core/tracking/`) + `Controller.register_tracking_method` or
   `run_pyclm(tracking_methods={...})`; one instance per (experiment,
-  channel), configured by `[tracking]`. Built-in: `centroid`.
+  channel), configured by `[tracking]`. Built-in: `centroid` (gap closing with `max_gap_frames`).
 - `PipelineProcess` subclass + `Controller.add_process(proc)`: a new consumer
   or producer declares `produces`, `continuous`, `always_active`,
   `subscriptions(plan)` and implements `handle_data`; the router wires it and
@@ -598,7 +598,7 @@ router concern, invisible to producers and to the Controller.
 | `test_measure.py` | The measurement toolbox: `Regions` (ids, areas, centroids, `measure` statistics, `paint` from scalar / dict / array, `select`, `owner_of`), `Tracks` as a `Regions` in row order, `PerTrack` defaults, `nuclear_cytosolic_ratio`. |
 | `test_named_segmentation.py` | The `seg:<name>` vocabulary, `[segmentation.<name>]` parsing and `Experiment.segmentations`, requirements naming segmentations, dock slots and context accessors per name, the router serving two segmentations of one channel at their own cadences (record-only subscribers never widen production), tracking a named table, a missing named table as a `RoutingError`, the segmentation process without a router. |
 | `test_multichannel_segmentation.py` | `channels` on a `[segmentation]` table: schema rules (imaging channels, one `every_t`), routing another channel's raw frames to the segmentation, gathering a timepoint into one `(H, W, C)` image and dropping an incomplete one, the shape error, `max_channels` in `pyclm check`, Cellpose's `normalize` argument (fixed, per channel, auto percentiles). |
-| `test_tracking.py` | The centroid linker (id stability, new ids, µm gate, empty frames), `Tracks`, `TrackingProcess`, `[tracking]` parsing, router wiring for tracks, `context.tracks()`. |
+| `test_tracking.py` | The centroid linker (id stability, new ids, µm gate, empty frames, gap closing, waiting tracks shifted with the stage, a dense field, ids never reused), `Tracks`, `TrackingProcess`, `[tracking]` parsing, router wiring for tracks, `context.tracks()`. |
 | `test_storage.py` | Cadence grouping, the OME-Zarr writer end to end (layout, NGFF attrs, compact T, labels, tracks, pattern policies, chunks only for acquired frames, frames and tracks tables, routing attrs), `pyclm.io` readers for both formats, ImageJ export, the writer process delegating to the writer, HDF5 v1 dropping tracks with one warning. |
 | `test_swmr.py` | Writer init + write + `convert_hdf5s.make_tif` (HDF5 format 1). |
 | `test_base_process.py` | Poll loop, stop paths, handler error counting. |

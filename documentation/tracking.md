@@ -19,6 +19,7 @@ method = "cellpose"
 [tracking]
 method = "centroid"      # a built-in or registered tracking method
 max_distance_um = 20     # remaining keys are passed to the method
+max_gap_frames = 2       # frames an object may be missed and keep its id
 save = true              # record the tracks in the output (default true)
 # segmentation = "nuclei"  # track a named [segmentation.nuclei] table instead of the default
 
@@ -72,17 +73,53 @@ kind="tracks", n=3)` gives the last three `Tracks` (see
 
 ## Built-in tracking methods
 
-**`centroid`** links each object to the nearest object of the previous
-timepoint when its centroid moved less than `max_distance_um` (default 20),
-with at most one partner per object (a Hungarian assignment on centroid
-distance). Objects with no partner start a new track; objects that vanish
-simply end. It does not detect divisions (`parent` is always 0) and does not
-close gaps, so an object that is missed by segmentation for one frame comes
-back with a new id. It is fast enough to be invisible in the loop.
+**`centroid`** links each object to the nearest remembered track when its
+centroid moved less than `max_distance_um` (default 20), with at most one
+partner per object (one assignment for the whole frame, so two cells that
+pass close by are not both given to the same track). An object that
+segmentation misses keeps its id if it comes back within `max_gap_frames`
+frames of the channel (default 2) and within `max_distance_um` of where it
+was last seen; after that it is forgotten and comes back with a new id.
+`max_gap_frames = 0` forgets an object as soon as it is missed. Objects
+with no partner start a new track. It does not detect divisions (`parent`
+is always 0). It takes a few milliseconds a frame even for thousands of
+objects, less than measuring the label image.
 
-For divisions and gap closing, write a method that wraps a tracker of your
-choice (see below); [LapTrack](https://laptrack.readthedocs.io/), already
-used in the lab's analysis, is a natural fit.
+The tracks table has no row for a frame an object was missed in; its id is
+the same before and after the gap.
+
+### Re-tracking a finished run with divisions
+
+The live tracker has to decide every id at the moment the frame arrives,
+because a pattern has already been projected on that id. After the run,
+a global tracker can look at the whole movie, and can follow divisions.
+[LapTrack](https://laptrack.readthedocs.io/) (in the `analysis`
+dependency group) reads the tracks table directly:
+
+```python
+import pandas as pd
+from laptrack import LapTrack
+
+tracks = pd.read_parquet("experiment_dir/tracks.parquet")
+one = tracks[(tracks.experiment == "bar10.pos1") & (tracks.channel == "545")].copy()
+one = one.rename(columns={"track_id": "live_track_id"})
+one["frame"] = one["t"].rank(method="dense").astype(int) - 1  # consecutive frames of this channel
+
+lt = LapTrack(
+    cutoff=15**2,                    # squared distance, here in pixels
+    gap_closing_cutoff=15**2,
+    gap_closing_max_frame_count=2,
+    splitting_cutoff=15**2,          # divisions
+)
+retracked, splits, merges = lt.predict_dataframe(
+    one, coordinate_cols=["y", "x"], frame_col="frame", only_coordinate_cols=False
+)
+# retracked has track_id and tree_id (the lineage); splits lists parent -> child
+```
+
+Use `y`, `x` (pixels of the frame) for a run without stage moves; if a
+pattern method moved the stage, the coordinates jump with each move and the
+live ids are the better guide across it.
 
 ## Writing a tracking method
 
@@ -201,10 +238,10 @@ leaders with a seeded generator, and afterwards it blanks every region
 whose id is not a leader before handing the image to the parent's loop.
 
 Two consequences of tracking to keep in mind. A leader that the tracker
-loses, because segmentation missed it for a frame or it moved further than
-`max_distance_um`, comes back with a new id and stops being a leader; the
-built-in `centroid` tracker does no gap closing, so tune the gate to the
-motion you expect or use a tracker that does. And cells born after the
+loses comes back with a new id and stops being a leader. The built-in
+`centroid` tracker keeps the id through up to `max_gap_frames` missed
+segmentations, but not through a jump further than `max_distance_um`, so
+tune the gate to the motion you expect. And cells born after the
 first frame are never leaders, which is the intended reading of "chosen at
 the start of the movie".
 
