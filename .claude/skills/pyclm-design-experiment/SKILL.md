@@ -72,9 +72,9 @@ Get answers to these before writing anything. Ask only what is missing:
 
 ## 2. Pick the pattern method
 
-Read `documentation/method_zoo.md` (or the method zoo page on
-pyclm.readthedocs.io). Map the description to a built-in method and its
-arguments. The common ones:
+Read the method zoo page (https://pyclm.readthedocs.io/en/latest/method_zoo.html,
+or `method_zoo.html` of a local docs build). Map the description to a
+built-in method and its arguments. The common ones:
 
 | Want | `method` |
 |---|---|
@@ -105,9 +105,17 @@ Methods and arguments renamed in 2.0 (`direction`, `rotate_ccw`,
 `bar_speed`, `duty_cycle` + `period`, ...) still run with a warning;
 `pyclm check --fix <dir>` rewrites the TOMLs.
 
-The authoritative list is `known_models` in
-`src/pyclm/core/patterns/__init__.py`. Read the class's `__init__` for
-the argument names, units and defaults. `pyclm check` rejects unknown
+Each method's card on the method zoo page has a **Keywords** table: every
+argument the method takes, its default ("required" when it has none) and
+what it does, with the generic `start_min` / `stop_min` in one table at
+the top of the Methods section. Take argument names, units and defaults
+from those tables, not from the source; they are built from the code
+and its `:param` lines, and a test keeps them complete. The cards and
+tables are generated when the docs build, so `documentation/method_zoo.md`
+in a clone does not contain them; without network, build the docs
+(`uv run --group docs sphinx-build -b html documentation <out>`). A method registered
+by the lab (the `methods` key of `pyclm_config.toml`) is not in the zoo:
+read its file. `pyclm check` rejects unknown
 arguments, so never guess them.
 
 ## 3. Write the directory

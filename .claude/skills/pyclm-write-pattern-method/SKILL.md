@@ -6,7 +6,10 @@ description: Write, test and run a custom PyCLM PatternMethod (or segmentation/t
 # Write a PyCLM pattern method
 
 First confirm that no built-in method, or a `split` of two built-in
-methods, already does it (`documentation/method_zoo.md`). If one does, use
+methods, already does it: the method zoo page
+(https://pyclm.readthedocs.io/en/latest/method_zoo.html) shows each one
+with a **Keywords** table of every argument it takes, so check whether an
+argument of an existing method covers the rule. If one does, use
 `pyclm-design-experiment` instead.
 
 **Where the documentation is.** In a clone of the repository, the files
