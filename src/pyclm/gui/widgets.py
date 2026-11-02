@@ -33,6 +33,10 @@ def status_text(status: dict | None) -> str:
     if not status:
         return "no status yet"
     parts = [f"t {status.get('t')}/{status.get('timepoints')}"]
+    acquired = status.get("acquired_t")
+    if acquired is not None and acquired != status.get("t"):
+        # the run is behind: the microscope is still on an earlier timepoint
+        parts[0] += f" (acquired {acquired})"
     if status.get("done"):
         parts.append("done")
     elif status.get("paused"):

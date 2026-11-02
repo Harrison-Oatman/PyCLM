@@ -19,6 +19,84 @@
   shows how to use the agent skills. An italic line under the title of the
   installation, first-time setup, usage, experiment TOML and custom pattern
   method pages names the skill for that page and links to it.
+- **The `centroid` tracker closes gaps** (docs/tracking-gap-closing-design.md).
+  An object that segmentation misses keeps its id when it comes back within
+  `max_gap_frames` frames (default 2; 0 is the old behavior) and within
+  `max_distance_um` of where it was last seen; a stage move shifts the
+  waiting tracks too. Each frame is now one sparse assignment over nearby
+  pairs with a "no link" option, instead of a dense Hungarian over all
+  pairs: a few ms a frame for thousands of objects, and in crowded spots
+  links can differ from before. `documentation/tracking.md` has a recipe
+  for re-tracking `tracks.parquet` with LapTrack, divisions included.
+
+- **Per-frame speed-ups to try on the rig: an `[acquisition]` table in
+  `pyclm_config.toml`** (docs/acquisition-speedups-design.md). The first three options are
+  off by default; the log ends each run with a line of what they saved.
+  - `settle = "after_move"` waits `settle_time_seconds` only for the first
+    frame after a stage move.
+  - `camera_capture = "sequence"` takes each frame with a one-image
+    sequence acquisition instead of `snapImage`.
+  - `stimulation_timing = "shutter"` times a stimulation whose frame is not
+    saved and that no method reads by holding the current shutter open for
+    the exposure, without the camera (about 0.5 s a light event on the
+    lab's rig; the dose can differ, see the setup docs). `pyclm check` notes
+    experiments whose stimulations still use the camera.
+  - Exposure and binning are set only when the camera reports other values
+    (`reapply_camera_settings = true` sets them every frame).
+- **Segmentation of several channels at once, and Cellpose
+  auto-normalization** (docs/multichannel-segmentation-design.md).
+  - `channels = ["545", "638"]` in a `[segmentation]` table hands the
+    method one `(height, width, channel)` image of those imaging channels
+    per timepoint, made once all of them are acquired; the masks belong to
+    the channel the pattern method asks for. Cellpose takes up to three
+    channels as a color image; a custom method takes one unless it sets
+    `max_channels`, and `pyclm check` refuses a table that lists more.
+  - Cellpose `auto_normalize = true` scales each frame by its own
+    percentiles (`percentile_low` 1, `percentile_high` 99) instead of the
+    fixed `normlow` / `normhigh`, which may now be per-channel lists.
+  - `pyclm preview --image 545=a.tif --image 638=b.tif` gives each channel
+    its own TIF.
+  - The router adds the writer's record-only subscriptions only for data a
+    consumer demands, so recording never makes a producer run more.
+- **Fixes and speed-ups from the session 3 scope run (2026-10-27/28;
+  docs/known-issues.md 40-47).**
+  - The microscope no longer sets a config group that is already at the
+    preset a frame needs (each `setConfig` + `waitForSystem` cost 30-170 ms
+    even when nothing changed; about 0.2 s a frame on the lab's rig). A
+    frame with `[device_properties]` makes the next frame set every group
+    again. `reapply_config_groups = true` in `pyclm_config.toml` restores the
+    old behavior.
+  - The first stimulation of an experiment waits (up to 5 s) for its first
+    pattern instead of being answered with the blank placeholder, which made
+    the microscope skip it. The microscope keeps an SLM reply that arrives
+    for a later event rather than discarding it. This also fixes the six
+    dry-run HDF5 tests that failed on main.
+  - The DMD is blanked when a run starts and ends.
+  - Binned patterns land half an unbinned pixel per binning step closer to
+    where they belong: `compose_affine` now centers binned pixel `p` on
+    unbinned `binning * p + (binning - 1) / 2` (a 0.25 binned-pixel shift
+    at binning 2 before).
+  - `status.json` reports `acquired_t`, the timepoint the microscope has
+    reached (behind `t` when the run is late); the viewer's status line
+    shows it. Commands still unread when the run ends are recorded in
+    `events.parquet` as `not applied`.
+  - Each stimulation row of `frames.parquet` records `pattern_t`, the
+    timepoint the pattern in force was made for.
+  - `pyclm check`: pixel-size presets conditioned on a state device's
+    `State` now match an objective preset that sets its `Label` (and the
+    reverse); the camera-to-stage affine is printed with the pixel size,
+    and presets whose affines map the camera axes differently are a
+    warning; the suggested `camera_roi` no longer grows past the sensor
+    (`pyclm run` prints it clipped to the camera); identical warnings of
+    several experiment files print as one line, as do the run's
+    unused-table warnings.
+  - A methods file that is also installed as an entry point is one method,
+    with a note, rather than "defined twice".
+  - The console writes UTF-8, so a run whose output goes to a file on
+    Windows no longer dies on the emoji in pymmcore-plus's device table.
+  - First-time setup installs the `calibration` extra (pycromanager, for
+    `scripts/calibration.ipynb`).
+
 - Every method zoo entry ends with a table of all the keywords the method
   takes (default, what it does), and the page opens its Methods section
   with the keywords every method takes (`start_min`, `stop_min`). The

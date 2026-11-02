@@ -52,6 +52,9 @@ class MethodSet:
     segmentation: dict[str, type] = field(default_factory=dict)
     tracking: dict[str, type] = field(default_factory=dict)
     sources: dict[tuple[str, str], str] = field(default_factory=dict)
+    # the same definition reached two ways (a methods file that is also an
+    # installed entry point): kept once, with a note
+    notes: list[str] = field(default_factory=list)
 
     def kinds(self) -> dict[str, dict[str, type]]:
         return {
@@ -66,6 +69,13 @@ class MethodSet:
     def add(self, kind: str, name: str, cls: type, source: str) -> None:
         table = self.kinds()[kind]
         have = table.get(name)
+        if have is not None and have is not cls and _same_definition(have, cls):
+            self.notes.append(
+                f"{kind} method {name!r} is found both in "
+                f"{self.sources[(kind, name)]} and in {source}, the same file "
+                f"({_source_file(cls)}); using the first"
+            )
+            return
         if have is not None and have is not cls:
             raise MethodLoadError(
                 f"{kind} method {name!r} is defined twice: in "
@@ -90,6 +100,19 @@ class MethodSet:
             for kind, table in self.kinds().items()
             for name in sorted(table)
         ]
+
+
+def _source_file(cls: type) -> Path | None:
+    try:
+        return Path(inspect.getfile(cls)).resolve()
+    except (TypeError, OSError):
+        return None
+
+
+def _same_definition(a: type, b: type) -> bool:
+    """Two class objects made by importing one file twice (under two module names)."""
+    fa, fb = _source_file(a), _source_file(b)
+    return fa is not None and fa == fb and a.__qualname__ == b.__qualname__
 
 
 def _bases() -> dict[str, type]:
@@ -246,4 +269,4 @@ def discover(
                 methods.add(kind, name, cls, mine.sources[(kind, name)])
     for line in methods.summary():
         logger.info(f"custom {line}")
-    return methods, warnings
+    return methods, warnings + methods.notes

@@ -253,16 +253,42 @@ def preview(
     dry = dry_settings_from_directory(directory)
     source_binning = 1
     if image is not None:
-        frame = _load_image(Path(image))
+        # one image for every channel, or {channel: image} (a multi-channel
+        # segmentation sees each channel's own frame)
+        per_channel = (
+            {str(k): _load_image(Path(v)) for k, v in image.items()}
+            if isinstance(image, dict)
+            else None
+        )
+        frame = (
+            next(iter(per_channel.values()))
+            if per_channel
+            else _load_image(Path(image))
+        )
         # no pixel size given: the directory's dry_run.yml (or its defaults)
         # says what the TIFs are
         px = dry.pixel_size_um if pixel_size_um is None else float(pixel_size_um)
         source_binning = dry.binning
+        names_by_id = {c.channel_id: n for n, c in exp.channels.items()}
+        unknown = sorted(set(per_channel or {}) - set(exp.channels))
+        if unknown:
+            raise ValueError(
+                f"--image names channel(s) {unknown}, which {label} does not image "
+                f"(channels: {list(exp.channels)})"
+            )
 
         def get_frame(channel_cfg: ImagingConfig) -> np.ndarray:
+            if per_channel:
+                name = names_by_id.get(channel_cfg.channel_id)
+                if name in per_channel:
+                    return per_channel[name]
             return frame
 
-        source = str(image)
+        source = (
+            ", ".join(f"{k}={v}" for k, v in image.items())
+            if isinstance(image, dict)
+            else str(image)
+        )
     elif snap:
         if config is None:
             raise ConfigError(
@@ -370,29 +396,45 @@ def preview(
     objects: dict[str, int] = {}
     labels_by_channel: dict[tuple[str, str], np.ndarray] = {}
     frames: dict[str, np.ndarray] = {}
-    for req in reqs:
-        channel, channel_cfg = by_id[req.id]
+
+    def frame_data(channel: str, channel_cfg: ImagingConfig) -> AcquisitionData:
         raw = get_frame(channel_cfg)
-        frames[channel] = raw
         event = AcquisitionEvent(
             label,
             position,
-            req.id,
+            channel_cfg.channel_id,
             index={"t": t, "p": label, "c": channel},
             exposure_time_ms=channel_cfg.exposure,
             binning=channel_cfg.binning,
         )
         event.pixel_width_um = px
-        data = AcquisitionData(event, raw)
+        return AcquisitionData(event, raw)
+
+    def segment(data: AcquisitionData, channel: str, name: str):
+        """Run one [segmentation] table, on every channel it lists."""
+        if (label, name) not in seg_proc.models:
+            seg_proc.request_method(exp, name)
+        listed = exp.segmentations[name].channels
+        frames_in = None
+        if listed and len(listed) > 1:
+            frames_in = [
+                data if c == channel else frame_data(c, exp.channels[c]) for c in listed
+            ]
+        return seg_proc.run_model(label, data, name, frames_in)
+
+    for req in reqs:
+        channel, channel_cfg = by_id[req.id]
+        data = frame_data(channel, channel_cfg)
+        raw = data.data
+        frames[channel] = raw
+        event = data.event
         for kind in req.kinds:
             if kind == "raw":
                 deliveries.append(data)
             elif is_seg_kind(kind):
                 name = seg_name(kind)
-                if (label, name) not in seg_proc.models:
-                    seg_proc.request_method(exp, name)
                 started = time.perf_counter()
-                seg = seg_proc.run_model(label, data, name)
+                seg = segment(data, channel, name)
                 seg_seconds[name] = (
                     seg_seconds.get(name, 0.0) + time.perf_counter() - started
                 )
@@ -403,9 +445,7 @@ def preview(
             elif kind == "tracks":
                 tracked = exp.tracking.segmentation
                 if (channel, tracked) not in labels_by_channel:
-                    if (label, tracked) not in seg_proc.models:
-                        seg_proc.request_method(exp, tracked)
-                    seg = seg_proc.run_model(label, data, tracked)
+                    seg = segment(data, channel, tracked)
                     labels_by_channel[(channel, tracked)] = np.asarray(seg.data)
                 method = tracking_proc.request_method(exp, channel)
                 to_track.append((channel, event, tracked, method))

@@ -156,6 +156,7 @@ directory:
 | `exposure_ms`, `binning`, `pixel_size_um` | acquisition settings |
 | `x`, `y`, `z`, `pfs_offset` | stage position |
 | `pattern_id`, `pattern_index`, `dmd_index` | the pattern in force: its id, its index into `patterns/camera/0`, and into `patterns/dmd/0` |
+| `pattern_t` | the timepoint the pattern in force was made for: its inputs (frames, segmentation, tracks) are from that timepoint. Behind `t` when the method only updates at imaging timepoints or the run is behind |
 | `<device>-<property>`, `<config group>` | one extra column per setting a pattern method changed during the run: the value in force on that frame, empty before the first change (see the events table) |
 
 ### The tracks table
@@ -202,7 +203,9 @@ last acknowledged timepoint with its lateness and error count, how many
 settings were applied and refused, the experiment the microscope last
 acknowledged (`current_experiment`), whether the run is `paused` or
 `stopping`, pending and applied commands, how many planned frames were
-`skipped` (blank pattern, stimulation only; also per experiment), and
+`skipped` (blank pattern, stimulation only; also per experiment),
+`acquired_t` (the last timepoint the microscope acknowledged, behind `t`
+when the run is late), and
 process health (errors per
 process, frames nobody consumed, frames the writer dropped). The live GUI
 shows one line from it; any script can read it to watch a run.

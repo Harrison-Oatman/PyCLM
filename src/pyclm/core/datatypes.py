@@ -29,6 +29,7 @@ class EventSLMPattern:
         pattern_unique_id=0,
         camera_pattern=None,
         dmd_ids=None,
+        pattern_t=None,
     ):
         self.event_id = event_id
         # one DMD image, or a list of them (one per tile of a grid experiment)
@@ -37,6 +38,8 @@ class EventSLMPattern:
         self.camera_pattern = camera_pattern
         # the per-tile DMD image ids of a grid experiment, else None
         self.dmd_ids = dmd_ids
+        # the timepoint whose pattern request (and data) produced it
+        self.pattern_t = pattern_t
 
 
 class SkippedAcquisition:
@@ -84,6 +87,7 @@ class StimulationData(AcquisitionData):
         pattern_id,
         camera_pattern: np.ndarray | None = None,
         dmd_ids=None,
+        pattern_t: int | None = None,
     ):
         super().__init__(event, data)
         # one DMD image, or a list of them (one per tile of a grid experiment)
@@ -91,6 +95,8 @@ class StimulationData(AcquisitionData):
         self.pattern_id = pattern_id
         self.camera_pattern = camera_pattern
         self.dmd_ids = dmd_ids
+        # the timepoint the pattern was made for (its inputs are from then)
+        self.pattern_t = pattern_t
 
 
 class SegmentationData(AcquisitionData):
@@ -134,9 +140,11 @@ class TrackingData(AcquisitionData):
 class CameraPattern(GenericData):
     """A pattern in camera coordinates (0-1 floats at ``binning``) from a pattern method."""
 
-    def __init__(self, experiment_name, data: np.ndarray, binning=1):
+    def __init__(self, experiment_name, data: np.ndarray, binning=1, t_index=None):
         super().__init__(data)
 
         self.experiment = experiment_name
         self.pattern_id = uuid4()
         self.binning = binning
+        # the timepoint of the request this pattern answers
+        self.t_index = t_index

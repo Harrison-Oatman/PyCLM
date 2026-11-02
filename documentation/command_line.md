@@ -117,6 +117,14 @@ into `my_experiment/preview/<label>/`:
 | `pattern_dmd.tif` | the pattern on the DMD, through the affine of `pyclm_config.toml` |
 | `preview.json` | the method and its arguments, what it asked for, how long each step took, the fraction of the field lit, and any settings it asked to change |
 
+For a segmentation that reads several channels (`channels = [...]` in its
+`[segmentation]` table), give one TIF per channel as `CHANNEL=TIF` (a channel not named uses the
+first TIF given):
+
+```bash
+uv run pyclm preview my_experiment cells --image 545=nuclei.tif --image 638=membrane.tif
+```
+
 The experiment is a position label from the position list or a TOML stem;
 `--t N` sets the timepoint the method believes it is at (for methods that
 depend on time).
@@ -214,4 +222,7 @@ write_command("path/to/experiment_dir", {"command": "set_exposure",
 or, by hand, a file `commands/anything.json` containing
 `{"command": "pause"}`. `status.json` reports `paused`, `stopping`,
 `pending_commands` and `commands_applied`, and the viewer's status line
-shows them.
+shows them. Commands are read between timepoints, so when the run is behind
+they take effect after the timepoints already sent; `acquired_t` in
+`status.json` says where the microscope is. A command still unread when the
+run ends is recorded in `events.parquet` as `not applied`.

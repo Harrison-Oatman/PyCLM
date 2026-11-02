@@ -59,9 +59,16 @@ def test_old_form_and_subcommands_dispatch(monkeypatch, tmp_path):
     assert calls[2][1]["mm_config"] == "x.cfg"
     assert (calls[3][1]["experiment"], calls[3][1]["image"], calls[3][1]["t"]) == (
         "bar10",
-        "a.tif",
+        ["a.tif"],
         "3",
     )
+    assert cli._preview_images(["a.tif"]) == "a.tif"
+    assert cli._preview_images(["545=a.tif", "638=b.tif"]) == {
+        "545": "a.tif",
+        "638": "b.tif",
+    }
+    with pytest.raises(ValueError, match="one form"):
+        cli._preview_images(["a.tif", "638=b.tif"])
     assert calls[4][1]["channels"] == ["545", "stim"]
     assert (calls[6][1]["template"], calls[6][1]["name"]) == ("open-loop", "bar")
 
@@ -168,3 +175,24 @@ def test_demo_runs_on_the_virtual_microscope(tmp_path, capsys):
     assert (cam & cells).sum() / cam.sum() > 0.9  # the light lands on cells
     assert 0.3 < (cam & cells).sum() / cells.sum() < 0.7  # about half of each
     assert abs(dmd.mean() - cam.mean()) < 0.03  # the DMD shows the same amount
+
+
+def test_console_survives_an_emoji_on_a_cp1252_stream():
+    """Session 3: a run whose output went to a file on Windows (cp1252) died on
+    the emoji in pymmcore-plus's device table."""
+    import io
+    import sys
+
+    from pyclm.console import utf8_console
+
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252")
+    old = sys.stdout
+    sys.stdout = stream
+    try:
+        utf8_console()
+        print("\U0001f50c device table")
+        stream.flush()
+    finally:
+        sys.stdout = old
+    assert "device table" in raw.getvalue().decode("utf-8")

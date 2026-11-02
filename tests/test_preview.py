@@ -6,6 +6,7 @@ segmentation and tracking, and the outputs a user looks at.
 import json
 import shutil
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -235,3 +236,56 @@ def test_parse_timepoints():
     for bad in ("a", "5:1", "0:10:0", "1:2:3:4", "-1:3"):
         with pytest.raises(ValueError, match="start:stop"):
             parse_timepoints(bad)
+
+
+class BothChannels(SegmentationMethod):
+    name = "both_channels"
+    max_channels = 2
+    seen: ClassVar[list] = []
+
+    def segment(self, data):
+        BothChannels.seen.append(data.shape)
+        return ((data[..., 0] > 1000) & (data[..., 1] > 1000)).astype(np.uint16)
+
+
+def test_preview_segments_two_channels_from_one_tif_each(exp_dir, tif, tmp_path):
+    toml = exp_dir / "bar10.toml"
+    text = toml.read_text().replace('presets = ["545"]', 'presets = ["545", "638"]')
+    toml.write_text(
+        text[: text.index("[pattern]")]
+        + '[segmentation]\nmethod = "both_channels"\nchannels = ["545", "638"]\n\n'
+        '[pattern]\nmethod = "follow"\nchannel = "545"\n'
+    )
+    other = tifffile.imread(tif)
+    other[70:90, 100:130] = 0  # only the first object is lit in 638
+    tifffile.imwrite(tmp_path / "638.tif", other)
+
+    class FollowSeg(Follow):
+        def __init__(self, channel="545", **kwargs):
+            PatternMethod.__init__(self, **kwargs)
+            self.channel = channel
+            self.add_requirement(channel, seg=True)
+
+        def generate(self, context):
+            return (context.segmentation(self.channel) > 0).astype(np.float32)
+
+    BothChannels.seen.clear()
+    result = preview(
+        exp_dir,
+        "bar10.00",
+        image={"545": tif, "638": tmp_path / "638.tif"},
+        segmentation_methods={"both_channels": BothChannels},
+        pattern_methods={"follow": FollowSeg},
+    )
+    assert BothChannels.seen == [(120, 160, 2)]
+    assert result.pattern[20:40, 30:50].all()
+    assert result.pattern.sum() == 20 * 20
+
+    with pytest.raises(ValueError, match="561"):
+        preview(
+            exp_dir,
+            "bar10.00",
+            image={"545": tif, "561": tif},
+            segmentation_methods={"both_channels": BothChannels},
+            pattern_methods={"follow": FollowSeg},
+        )

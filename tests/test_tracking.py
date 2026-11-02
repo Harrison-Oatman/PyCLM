@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
+import pytest
 from helpers import make_experiment, make_plan, make_schedule
 
 from pyclm.core.datatypes import SegmentationData, TrackingData
@@ -86,6 +87,92 @@ def test_centroid_tracker_handles_empty_frames():
     assert labels.shape == (8, 8)
     _, rows = tracker.track(blobs([(4, 4)], shape=(8, 8), radius=1), 1, 1.0)
     assert rows[0].track_id == 1
+
+
+def test_centroid_tracker_closes_gaps_up_to_max_gap_frames():
+    tracker = CentroidTracker("exp.00", "545", max_distance_um=5.0, max_gap_frames=2)
+    tracker.track(blobs([(10, 10), (40, 40)]), 0, 1.0)
+
+    # the first blob is missed for two frames, then comes back nearby
+    tracker.track(blobs([(40, 41)]), 1, 1.0)
+    tracker.track(blobs([(40, 42)]), 2, 1.0)
+    _, rows = tracker.track(blobs([(12, 11), (40, 43)]), 3, 1.0)
+    assert ids_at(rows, (12, 11)) == [1]
+    assert ids_at(rows, (40, 43)) == [2]
+
+    # missed for three frames: forgotten, a new id
+    for t in (4, 5, 6):
+        tracker.track(blobs([(40, 43)]), t, 1.0)
+    _, rows = tracker.track(blobs([(12, 11), (40, 43)]), 7, 1.0)
+    assert ids_at(rows, (12, 11)) == [3]
+
+
+def test_centroid_tracker_without_gap_closing_forgets_at_once():
+    tracker = CentroidTracker("exp.00", "545", max_distance_um=5.0, max_gap_frames=0)
+    tracker.track(blobs([(10, 10), (40, 40)]), 0, 1.0)
+    tracker.track(blobs([(40, 40)]), 1, 1.0)
+    _, rows = tracker.track(blobs([(10, 10), (40, 40)]), 2, 1.0)
+    assert ids_at(rows, (10, 10)) == [3]
+    assert ids_at(rows, (40, 40)) == [2]
+
+
+def test_centroid_tracker_prefers_the_nearer_of_a_waiting_and_a_present_track():
+    tracker = CentroidTracker("exp.00", "545", max_distance_um=10.0)
+    tracker.track(blobs([(20, 10), (20, 30)]), 0, 1.0)
+    tracker.track(blobs([(20, 30)]), 1, 1.0)  # track 1 waits at (20, 10)
+    # one object between them, nearer to the waiting track: it takes track 1,
+    # and track 2 waits in turn
+    _, rows = tracker.track(blobs([(20, 14)]), 2, 1.0)
+    assert ids_at(rows, (20, 14)) == [1]
+    _, rows = tracker.track(blobs([(20, 15), (20, 29)]), 3, 1.0)
+    assert ids_at(rows, (20, 29)) == [2]
+
+
+def test_centroid_tracker_shifts_waiting_tracks_with_the_stage():
+    tracker = CentroidTracker("exp.00", "545", max_distance_um=5.0)
+    tracker.track(blobs([(20, 20), (20, 44)]), 0, 1.0)
+    tracker.track(blobs([(20, 44)]), 1, 1.0)  # track 1 is missed
+    # the stage moves: everything is 12 px further left
+    tracker.shift(0.0, -12.0)
+    _, rows = tracker.track(blobs([(20, 8), (20, 32)]), 2, 1.0)
+    assert ids_at(rows, (20, 8)) == [1]
+    assert ids_at(rows, (20, 32)) == [2]
+
+
+def test_centroid_tracker_follows_a_dense_field_and_never_reuses_ids():
+    rng = np.random.default_rng(0)
+    n, size = 400, 512
+    truth = rng.uniform(8, size - 8, (n, 2))
+    tracker = CentroidTracker("exp.00", "545", max_distance_um=6.0)
+    issued = set()
+    kept = links = 0
+    previous = {}
+    for t in range(8):
+        truth = np.clip(truth + rng.normal(0, 1.0, truth.shape), 2, size - 3)
+        visible = np.flatnonzero(rng.random(n) > 0.1)  # 10 % missed per frame
+        labels = np.zeros((size, size), np.uint16)
+        yx = np.round(truth[visible]).astype(int)
+        labels[yx[:, 0], yx[:, 1]] = np.arange(1, len(visible) + 1)
+        _, rows = tracker.track(labels, t, 1.0)
+        ids = {r.label: r.track_id for r in rows}
+        assert len(set(ids.values())) == len(ids)  # one id per object
+        # a new id is larger than every id issued before: ids are never reused
+        fresh = set(ids.values()) - issued
+        assert not issued or min(fresh, default=np.inf) > max(issued)
+        issued |= fresh
+        for k, obj in enumerate(visible, start=1):
+            if k not in ids:  # two objects on one pixel
+                continue
+            if obj in previous:
+                links += 1
+                kept += previous[obj] == ids[k]
+            previous[obj] = ids[k]
+    assert kept / links > 0.9
+
+
+def test_centroid_tracker_rejects_a_negative_gap():
+    with pytest.raises(ValueError, match="max_gap_frames"):
+        CentroidTracker("exp.00", "545", max_gap_frames=-1)
 
 
 # --------------------------------------------------------------- Tracks object

@@ -163,7 +163,9 @@ class PatternProcess(PipelineProcess):
         )
 
         pattern = model.render(context)
-        out = CameraPattern(experiment_name, pattern, binning=model.binning)
+        out = CameraPattern(
+            experiment_name, pattern, binning=model.binning, t_index=dockname[1]
+        )
         state.record_pattern(out.pattern_id, pattern)
         self.slm.put(out)
 

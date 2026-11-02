@@ -45,7 +45,7 @@ def test_slm_buffer_cuts_a_stitched_pattern_into_tile_images(tmp_path):
     aq = AllQueues()
     slm = SLMBuffer(aq)
     slm.initialize(SLM, AFFINE, ["g.1"], grids={"g.1": geom})
-    pid0, blank, cam, ids = slm.slm_patterns["g.1"]
+    pid0, blank, cam, ids, _t = slm.slm_patterns["g.1"]
     assert pid0 == 0
     assert len(blank) == 4
     assert cam is None
@@ -54,7 +54,7 @@ def test_slm_buffer_cuts_a_stitched_pattern_into_tile_images(tmp_path):
     stitched = np.zeros(geom.shape(1), np.float32)  # (16, 20)
     stitched[:8, 10:] = 1.0  # only tile (0, 1) lit
     slm.handle_data(CameraPattern("g.1", stitched, binning=1))
-    pid, dmd, camera, ids = slm.slm_patterns["g.1"]
+    pid, dmd, camera, ids, _t = slm.slm_patterns["g.1"]
     assert camera.shape == (16, 20)
     assert camera.max() == 255
     assert [int(d.max()) for d in dmd] == [0, 255, 0, 0]  # tiles in acquisition order
@@ -266,7 +266,10 @@ def test_dry_run_grid(tmp_path):
         assert frame[399, 399] == 4
         ids = exp.pattern_ids
         assert len(ids) % 4 == 0
-        assert ids[0] == "0:0"
+        # one DMD image per tile: "<pattern id>:<tile>"; the first stimulation
+        # waits for the first pattern instead of using the blank placeholder
+        assert ids[0].endswith(":0")
+        assert ids[0] != "0:0"
         rows = [
             r
             for r in exp.frames.to_pylist()

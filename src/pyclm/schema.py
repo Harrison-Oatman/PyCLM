@@ -22,7 +22,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .core.experiments import (
     ConfigGroup,
@@ -237,6 +244,27 @@ class MethodTable(BaseModel):
 class SegmentationTable(MethodTable):
     """``[segmentation]`` or a named ``[segmentation.<name>]``."""
 
+    channels: list[str] | None = Field(
+        None,
+        description="imaging channels the method sees together, in this order, as "
+        'one (height, width, channel) image, e.g. ["545", "638"] for a '
+        "two-color Cellpose input; the channel being segmented must be one of "
+        "them, and all must be acquired at the same timepoints. Default: only the "
+        "channel being segmented",
+    )
+
+    @field_validator("channels")
+    @classmethod
+    def _channels(cls, v):
+        if v is None:
+            return v
+        v = [str(c) for c in v]
+        if not v:
+            raise ValueError("channels must name at least one channel")
+        if len(set(v)) != len(v):
+            raise ValueError(f"channels lists a channel twice: {v}")
+        return v
+
 
 class TrackingTable(MethodTable):
     """``[tracking]``."""
@@ -317,6 +345,22 @@ class ExperimentConfig(Strict):
             raise ValueError(
                 f"[segmentation.{DEFAULT_SEGMENTATION}] is reserved for the default [segmentation] table"
             )
+        for table, seg in self._segmentation_tables():
+            if seg.channels is None:
+                continue
+            unknown = [c for c in seg.channels if c not in self.channels.presets]
+            if unknown:
+                raise ValueError(
+                    f"{table} channels {unknown} are not imaging channels "
+                    f"(presets: {self.channels.presets})"
+                )
+            cadences = {c: self.channel_every_t(c) for c in seg.channels}
+            if len(set(cadences.values())) > 1:
+                raise ValueError(
+                    f"{table} channels are acquired at different every_t "
+                    f"({cadences}); a multi-channel segmentation needs every "
+                    "channel at the same timepoints"
+                )
         if self.tracking is not None:
             name = self.tracking.segmentation
             have = self.segmentation_names
@@ -336,6 +380,19 @@ class ExperimentConfig(Strict):
     @property
     def channel_names(self) -> list[str]:
         return list(self.channels.presets)
+
+    def channel_every_t(self, preset: str) -> int:
+        """The every_t an imaging channel is acquired at (its override, else [imaging])."""
+        ov = self.channels.overrides.get(preset)
+        if ov is not None and ov.every_t is not None:
+            return int(ov.every_t)
+        return int(self.imaging.every_t)
+
+    def _segmentation_tables(self) -> list[tuple[str, SegmentationTable]]:
+        out = (
+            [] if self.segmentation is None else [("[segmentation]", self.segmentation)]
+        )
+        return out + [(f"[segmentation.{n}]", t) for n, t in self.segmentations.items()]
 
     def config_groups_used(self) -> set[tuple[str, str]]:
         """Every (group, preset) the experiment sets, including the channel group."""
@@ -405,11 +462,14 @@ class ExperimentConfig(Strict):
             else SegmentationConfig(
                 self.segmentation.method,
                 save_output=self.segmentation.save,
+                channels=self.segmentation.channels,
                 **self.segmentation.kwargs,
             )
         )
         segmentations = {
-            n: SegmentationConfig(t.method, save_output=t.save, **t.kwargs)
+            n: SegmentationConfig(
+                t.method, save_output=t.save, channels=t.channels, **t.kwargs
+            )
             for n, t in self.segmentations.items()
         }
         tracking = (
@@ -504,6 +564,38 @@ class OutputConfig(Strict):
     )
 
 
+class AcquisitionConfig(Strict):
+    """
+    ``[acquisition]`` of ``pyclm_config.toml``: how the microscope spends its
+    time per frame. ``settle``, ``camera_capture`` and ``stimulation_timing``
+    keep the old behavior by default; each is meant to be tried on the rig
+    and kept if it holds up.
+    """
+
+    settle: Literal["every_frame", "after_move"] = Field(
+        "every_frame",
+        description="when to wait settle_time_seconds: before every frame, or only "
+        "for the first frame after a stage move (a channel change at the same "
+        "position then waits only for the hardware to report ready)",
+    )
+    camera_capture: Literal["snap", "sequence"] = Field(
+        "snap",
+        description="how a frame is taken: snapImage, or a one-image sequence "
+        "acquisition, which some cameras start faster",
+    )
+    stimulation_timing: Literal["camera", "shutter"] = Field(
+        "camera",
+        description="how a stimulation is timed: by a camera exposure, or, when its "
+        "frame is not saved and no method reads it, by holding the current shutter "
+        "open for the exposure without the camera",
+    )
+    reapply_camera_settings: bool = Field(
+        False,
+        description="set exposure and binning before every frame; by default they "
+        "are set only when the camera reports other values",
+    )
+
+
 class PyclmConfig(Strict):
     """``pyclm_config.toml``: the hardware and output configuration."""
 
@@ -530,6 +622,12 @@ class PyclmConfig(Strict):
         ge=0,
         description="seconds to wait after the hardware reports ready, before each snap",
     )
+    reapply_config_groups: bool = Field(
+        False,
+        description="set every config group before every frame, as PyCLM did before "
+        "1.2; by default a group already at the wanted preset is not set again "
+        "(each setConfig + waitForSystem costs 30-170 ms even when nothing changes)",
+    )
     camera_roi: list[int] | None = Field(
         None,
         description="camera ROI [x, y, width, height] in unbinned pixels, set when a run "
@@ -542,6 +640,7 @@ class PyclmConfig(Strict):
         "files (relative to this file) or module names; each method class is "
         "registered under its name attribute",
     )
+    acquisition: AcquisitionConfig = Field(default_factory=AcquisitionConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     @model_validator(mode="after")
@@ -567,15 +666,18 @@ class PyclmConfig(Strict):
         unbinned camera pixels: the DMD rectangle mapped through the inverse
         of the camera-to-SLM affine.
         """
-        import cv2
+        return dmd_footprint(self.affine, self.slm_shape)
 
-        h, w = self.slm_shape
-        inv = cv2.invertAffineTransform(self.affine)
-        corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float32)
-        cam = corners @ inv[:, :2].T + inv[:, 2]
-        x0, y0 = np.floor(cam.min(axis=0))
-        x1, y1 = np.ceil(cam.max(axis=0))
-        return (int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+    def suggested_camera_roi(
+        self, sensor: tuple[int, int] | None = None
+    ) -> tuple[list[int], list[str]]:
+        """
+        The ``camera_roi`` that images exactly what the DMD can light: its
+        footprint clipped to the camera (to x, y >= 0 and, given the sensor's
+        ``(width, height)`` in unbinned pixels, to the sensor). Also returns
+        the sensor edges the DMD does not reach (``"left"``, ``"top"``, ...).
+        """
+        return suggest_camera_roi(self.dmd_footprint(), sensor)
 
     @property
     def affine(self) -> np.ndarray:
@@ -591,6 +693,43 @@ class PyclmConfig(Strict):
 
 
 # ------------------------------------------------------------- loading
+def dmd_footprint(affine, slm_shape) -> tuple[int, int, int, int]:
+    """The camera region ``(x, y, width, height)`` a DMD of ``slm_shape`` (h, w) reaches through ``affine``."""
+    import cv2
+
+    h, w = slm_shape
+    inv = cv2.invertAffineTransform(np.asarray(affine, dtype=np.float32))
+    corners = np.array([[0, 0], [w, 0], [0, h], [w, h]], dtype=np.float32)
+    cam = corners @ inv[:, :2].T + inv[:, 2]
+    x0, y0 = np.floor(cam.min(axis=0))
+    x1, y1 = np.ceil(cam.max(axis=0))
+    return (int(x0), int(y0), int(x1 - x0), int(y1 - y0))
+
+
+def suggest_camera_roi(
+    footprint, sensor: tuple[int, int] | None = None
+) -> tuple[list[int], list[str]]:
+    """
+    Clip a DMD footprint ``(x, y, width, height)`` to the camera; see
+    :meth:`PyclmConfig.suggested_camera_roi`.
+    """
+    fx, fy, fw, fh = (int(v) for v in footprint)
+    x0, y0, x1, y1 = max(fx, 0), max(fy, 0), fx + fw, fy + fh
+    unreached = []
+    if sensor is not None:
+        sw, sh = (int(v) for v in sensor)
+        if fx > 0:
+            unreached.append("left")
+        if fy > 0:
+            unreached.append("top")
+        if x1 < sw:
+            unreached.append("right")
+        if y1 < sh:
+            unreached.append("bottom")
+        x1, y1 = min(x1, sw), min(y1, sh)
+    return [x0, y0, max(x1 - x0, 0), max(y1 - y0, 0)], unreached
+
+
 def _groups(table: dict[str, str]) -> list[ConfigGroup]:
     return [ConfigGroup(g, p) for g, p in table.items()]
 

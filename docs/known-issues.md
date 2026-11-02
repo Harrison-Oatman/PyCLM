@@ -363,3 +363,82 @@ pixel for pixel against the old code), and
 methods swallowed through `**kwargs`; the run used the default `channel`,
 which happened to be `"545"` too. `nuc_channel` is now an old name of
 `channel`, so it takes effect, and `pyclm check --fix` renames it.
+
+### 40. Unchanged config groups were set again before every frame
+
+**Fixed 2026-10-28** (session 3 fixes PR). `MicroscopeProcess.handle_config_update`
+(`src/pyclm/core/microscope.py`) called `setConfig` for every group of
+every frame. On the lab's rig, setting a group already at its preset
+cost 32 ms (System) to 167 ms (Channel) with `waitForSystem`, about 0.35 s
+a frame (session 3 run 1, `run1_timing`). The microscope now remembers the
+preset it last set per group and skips groups already there; device
+property updates reset the memory. `reapply_config_groups = true` turns it
+off. `tests/test_microscope_process.py` covers both.
+
+### 41. The first stimulation got the blank placeholder
+
+**Fixed 2026-10-28** (same PR). `SLMBuffer` (`src/pyclm/core/manager.py`)
+answers each update-pattern handshake when the Manager dispatches it, with
+whatever pattern it holds. Before an experiment's first pattern arrives
+that is the blank placeholder (id 0), so a stimulation-only visit was
+skipped as blank. The six dry-run HDF5 tests (`tests/test_dry_run.py`)
+failed on main for this reason, since before #43: at t = 1 both bar
+experiments got id 0 while their patterns (3200 × 3200 at the dry-run
+scale) were still being made. The buffer now holds an experiment's
+handshakes until its first pattern arrives (at most
+`first_pattern_wait_s`, 5 s), and `_await_slm_pattern` keeps a reply for
+a later event instead of discarding it, since held replies can come out of
+order across experiments. A pattern made after dispatch is still used one
+timepoint late when the run is behind (the "one segmentation behind"
+Harrison accepted, 2026-10-28).
+
+### 42. The DMD kept the previous image at the start of a run
+
+**Fixed 2026-10-28** (same PR). Nothing set the DMD before the first
+stimulation; in session 3's DMD test the first frame after an all-zero
+image still showed light on a third of the field. `MicroscopeProcess`
+now blanks the SLM when it is declared and on `close`. Whether the
+Mightex adapter reports Busy while it loads an image (so `waitForSystem`
+covers it) is still to be checked on the scope.
+
+### 43. Binned patterns were shifted by (binning - 1) / 2 unbinned pixels
+
+**Fixed 2026-10-28** (same PR). `compose_affine` scaled the linear part by
+the binning, which puts binned pixel `p` at unbinned `binning * p`; its
+center is at `binning * p + (binning - 1) / 2`. Session 3 measured the
+shift at binning 2 (0.25 binned px, 0.17 um at 20x). The dry run's
+`dry_run.yml` binning scaling (`Controller.initialize`) has the same form
+and is left as it is with #35.
+
+### 44. `pyclm check` named the wrong pixel-size preset
+
+**Fixed 2026-10-28** (same PR). `MMConfig` (`src/pyclm/mmconfig.py`) did
+not read the `.cfg`'s `Label,<device>,<state>,<label>` lines, so a
+pixel-size preset conditioned on `Nosepiece-State` never matched an
+Objective preset that sets `Nosepiece-Label`; ties then sorted by name,
+and check printed the 10x preset for 20x experiments. Runs read
+`getPixelSizeUm()` and were not affected.
+
+### 45. `pyclm check` suggested a camera_roi larger than the sensor
+
+**Fixed 2026-10-28** (same PR). The suggestion clipped the footprint's
+origin to 0 but kept its full size ([0, 0, 1971, 3152] on a 2048 × 2048
+camera). `suggest_camera_roi` (`src/pyclm/schema.py`) now shrinks the size
+with the origin; check cannot see the sensor offline, so `pyclm run`
+logs the ROI clipped to the camera and names the edges the DMD does not
+reach.
+
+### 46. A methods file that is also an entry point was "defined twice"
+
+**Fixed 2026-10-28** (same PR). Importing one file by path and through an
+installed entry point makes two class objects; `MethodSet.add`
+(`src/pyclm/methods.py`) compared them by identity. Classes from the same
+source file with the same qualified name are now one method, with a note.
+
+### 47. A run died on Windows when its output went to a file
+
+**Fixed 2026-10-28** (same PR). `run_pyclm` calls pymmcore-plus's
+`core.describe()`, which prints an emoji; a redirected stdout on Windows is
+cp1252 and raised `UnicodeEncodeError` before the first frame.
+`pyclm.console.utf8_console()` reconfigures stdout and stderr to UTF-8
+(`errors="replace"`) in `pyclm` and `run_pyclm`.

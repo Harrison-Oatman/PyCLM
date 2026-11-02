@@ -124,7 +124,10 @@ Then edit:
   route light through the DMD, its `exposure` is how long the pattern is
   shown each time,
   `[pattern]` holds `method` plus its arguments, `[segmentation]` is only
-  for closed loop. `[channels]` may be omitted for a stimulation-only run.
+  for closed loop (`channels = ["545", "638"]` gives the method one color
+  image of several imaging channels; `auto_normalize = true` lets Cellpose
+  scale each frame by its own percentiles instead of fixed
+  `normlow`/`normhigh` counts). `[channels]` may be omitted for a stimulation-only run.
   Keys written after a table header belong to that table, so top-level
   keys (`t_delay`, `t_stop`) go above the first table.
 - `schedule.toml`: `[timing]` `steps`, `interval_seconds`,

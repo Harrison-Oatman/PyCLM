@@ -417,3 +417,63 @@ def test_pixel_size_preset_conditioned_on_an_unset_property(good_dir, tmp_path):
         "closest is" in str(w) and "Nosepiece-State is '3', preset wants" in str(w)
         for w in report.warnings
     )
+
+
+def test_identical_warnings_of_several_files_print_as_one_line(good_dir):
+    """A session file shared by every position gives one unused-table line, not one per file."""
+    for name in ("bar10.toml", "bar025.toml"):
+        toml = good_dir / name
+        toml.write_text(
+            toml.read_text().replace(
+                "[pattern]",
+                '[segmentation]\nmethod = "cellpose"\n\n'
+                '[tracking]\nmethod = "centroid"\n\n[pattern]',
+            )
+        )
+    report = check_directory(good_dir)
+    tracking = [w for w in report.warnings if w.where == "[tracking]"]
+    assert len(tracking) == 2
+    lines = [line for line in report.text().splitlines() if "[tracking]" in line]
+    assert len(lines) == 1
+    assert "2 files [tracking]" in lines[0]
+    assert "(bar)" in lines[0]
+
+
+def test_pixel_size_preset_set_by_label_matches_a_state_condition(tmp_path):
+    """An Objective preset that sets the nosepiece Label meets a pixel-size
+    preset conditioned on its State, through the .cfg's Label lines."""
+    from pyclm.mmconfig import MMConfig
+
+    mm_path = tmp_path / "scope.cfg"
+    mm_path.write_text(
+        MM_CFG
+        + "Label,Nosepiece,2,20x\n"
+        + "Label,Nosepiece,5,10x\n"
+        + "ConfigGroup,Objective,20x,Nosepiece,Label,20x\n"
+        + "ConfigPixelSize,10x,Nosepiece,State,5\n"
+        + "PixelSize_um,10x,0.665\n"
+        + "ConfigPixelSize,20x,Nosepiece,State,2\n"
+        + "PixelSize_um,20x,0.325\n"
+    )
+    mm = MMConfig.from_file(mm_path)
+    assert mm.pixel_size_for([("Objective", "20x")]) == ("20x", 0.325)
+
+
+def test_stage_affines_of_different_form_are_flagged(good_dir, tmp_path):
+    from pyclm.mmconfig import MMConfig
+
+    mm_path = tmp_path / "scope.cfg"
+    mm_path.write_text(
+        MM_CFG
+        + "ConfigPixelSize,px20,Core,Focus,ZDrive\n"
+        + "PixelSize_um,px20,0.325\n"
+        + "PixelSizeAffine,px20,0.0,0.325,0.0,0.325,0.0,0.0\n"
+        + "ConfigPixelSize,px10,Core,Focus,PFSOffset\n"
+        + "PixelSize_um,px10,0.665\n"
+        + "PixelSizeAffine,px10,0.665,0.0,0.0,0.0,-0.665,0.0\n"
+    )
+    mm = MMConfig.from_file(mm_path)
+    assert mm.affine_form("px20") == "x -> +y, y -> +x"
+    assert mm.affine_form("px10") == "x -> +x, y -> -y"
+    report = check_directory(good_dir, mm_config=mm_path)
+    assert any("map the camera axes differently" in str(w) for w in report.warnings)

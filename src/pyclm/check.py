@@ -55,10 +55,40 @@ class Finding:
     file: str
     where: str
     message: str
+    # findings with the same level, where and ``group`` (a message without the
+    # per-file detail) print as one line; ``tag`` is that detail (a method name)
+    group: str | None = None
+    tag: str | None = None
 
     def __str__(self) -> str:
         where = f" {self.where}" if self.where else ""
         return f"{self.level.upper():8}{self.file}{where}: {self.message}"
+
+
+def _grouped_lines(findings: list[Finding]) -> list[str]:
+    """One line per finding, except identical grouped findings of several files, which share one."""
+    groups: dict[tuple, list[Finding]] = {}
+    for f in findings:
+        if f.group is not None:
+            groups.setdefault((f.level, f.where, f.group), []).append(f)
+    lines, done = [], set()
+    for f in findings:
+        key = (f.level, f.where, f.group)
+        members = groups.get(key) if f.group is not None else None
+        if not members or len(members) == 1:
+            lines.append(str(f))
+            continue
+        if key in done:
+            continue
+        done.add(key)
+        where = f" {f.where}" if f.where else ""
+        tags = sorted({m.tag for m in members if m.tag})
+        files = ", ".join(m.file for m in members)
+        detail = f" ({', '.join(tags)})" if tags else ""
+        lines.append(
+            f"{f.level.upper():8}{len(members)} files{where}: {f.group}{detail}; {files}"
+        )
+    return lines
 
 
 @dataclass
@@ -66,16 +96,24 @@ class CheckReport:
     directory: Path
     findings: list[Finding] = field(default_factory=list)
 
-    def add(self, level: str, file: str, where: str, message: str) -> Finding:
-        f = Finding(level, file, where, message)
+    def add(
+        self,
+        level: str,
+        file: str,
+        where: str,
+        message: str,
+        group: str | None = None,
+        tag: str | None = None,
+    ) -> Finding:
+        f = Finding(level, file, where, message, group, tag)
         self.findings.append(f)
         return f
 
     def error(self, file, where, message):
         return self.add("error", file, where, message)
 
-    def warning(self, file, where, message):
-        return self.add("warning", file, where, message)
+    def warning(self, file, where, message, group=None, tag=None):
+        return self.add("warning", file, where, message, group, tag)
 
     def info(self, file, where, message):
         return self.add("info", file, where, message)
@@ -105,7 +143,7 @@ class CheckReport:
 
     def text(self) -> str:
         lines = [f"pyclm check {self.directory}"]
-        lines += [f"  {f}" for f in self.findings]
+        lines += [f"  {line}" for line in _grouped_lines(self.findings)]
         lines.append(f"  {self.summary()}")
         return "\n".join(lines)
 
@@ -182,6 +220,20 @@ def _configs_for(directory: Path, label: str) -> dict:
         return {}
 
 
+def _check_segmented_channel(report, file, cfg, seg: str, channel: str) -> None:
+    """A multi-channel segmentation segments one of the channels it lists."""
+    table = cfg.segmentation if seg == "segmentation" else cfg.segmentations.get(seg)
+    if table is None or not table.channels or channel in table.channels:
+        return
+    where = "[segmentation]" if seg == "segmentation" else f"[segmentation.{seg}]"
+    report.error(
+        file,
+        f"{where} channels",
+        f"the pattern method wants the segmentation of '{channel}', which is not "
+        f"among the channels the table reads ({table.channels}); add it to them",
+    )
+
+
 def _check_shared_config_groups(report: CheckReport, configs: dict) -> None:
     """
     The run reads the camera's pixel size once, at start, with the presets
@@ -231,7 +283,11 @@ def _check_pixel_size(report: CheckReport, file: str, cfg, mm: MMConfig) -> None
         else f"pixel-size preset '{best['name']}'"
     )
     if not best["unmet"] and not best["unknown"]:
-        report.info(file, "[config_groups]", size)
+        form = mm.affine_form(best["name"])
+        if form is None:
+            report.info(file, "[config_groups]", f"{size}; no camera-to-stage affine")
+            return
+        report.info(file, "[config_groups]", f"{size}; camera-to-stage {form}")
         return
     if not best["unmet"]:
         # the preset is conditioned on properties no config group sets;
@@ -254,6 +310,25 @@ def _check_pixel_size(report: CheckReport, file: str, cfg, mm: MMConfig) -> None
         f"but {unmet}; the run would report a pixel size of 0 "
         f"(presets: {', '.join(sorted(mm.pixel_sizes))})",
     )
+
+
+def _check_stage_affines(report: CheckReport, mm: MMConfig) -> None:
+    """
+    The camera-to-stage affines of the pixel-size presets should agree in
+    form: the camera sits on one port, so a preset whose axes are swapped or
+    flipped relative to another is almost always a calibration error.
+    """
+    forms = {name: mm.affine_form(name) for name in sorted(mm.pixel_sizes)}
+    forms = {name: form for name, form in forms.items() if form is not None}
+    if len(set(forms.values())) > 1:
+        detail = "; ".join(f"'{name}': {form}" for name, form in forms.items())
+        report.warning(
+            str(mm.path.name if mm.path else "MicroManager config"),
+            "PixelSizeAffine",
+            f"the pixel-size presets map the camera axes differently ({detail}); "
+            "recenter, drift_correct and the tracker's stage shift use these, "
+            "so recalibrate the odd one out (Devices > Pixel Size Calibration)",
+        )
 
 
 def _check_position_mover(report: CheckReport, file: str, config: PyclmConfig) -> None:
@@ -280,8 +355,9 @@ def _check_camera_roi(report: CheckReport, file: str, config: PyclmConfig) -> No
             file,
             "camera_roi",
             f"not set: the camera keeps its current ROI; the DMD covers {footprint}, "
-            f"so camera_roi = [{max(fx, 0)}, {max(fy, 0)}, {fw}, {fh}] would image "
-            "exactly the region it can light",
+            f"so camera_roi = {config.suggested_camera_roi()[0]}, clipped to your "
+            "sensor, would image exactly the region it can light (pyclm run "
+            "prints the clipped value)",
         )
         return
     x, y, w, h = roi
@@ -689,6 +765,14 @@ def check_directory(
                     seg_cls, table.kwargs, "segmentation", table.method
                 ):
                     report.error(file, f"[{name}]", problem)
+                limit = int(getattr(seg_cls, "max_channels", 1))
+                if table.channels and len(table.channels) > limit:
+                    report.error(
+                        file,
+                        f"[{name}] channels",
+                        f"'{table.method}' takes at most {limit} channel(s); "
+                        f"{len(table.channels)} are listed ({table.channels})",
+                    )
 
         if cfg.tracking is not None:
             tr_cls = trackers.get(cfg.tracking.method)
@@ -734,6 +818,26 @@ def check_directory(
                 else:
                     named_wanted.add(seg)
             needs_tracks = needs_tracks or bool(tracks)
+            tracked = [cfg.tracking.segmentation] if tracks and cfg.tracking else []
+            for seg in [*seg_names, *tracked]:
+                _check_segmented_channel(report, file, cfg, seg, channel)
+        if (
+            config is not None
+            and config.acquisition.stimulation_timing == "shutter"
+            and cfg.stimulation.exposure > 0
+            and (cfg.stimulation.save or getattr(method, "_stim_requested", False))
+        ):
+            why = (
+                "the method reads the stimulation frame"
+                if getattr(method, "_stim_requested", False)
+                else "[stimulation] save = true"
+            )
+            report.info(
+                file,
+                "[stimulation]",
+                f'stimulation_timing = "shutter", but {why}: its stimulations '
+                "are timed by the camera",
+            )
         if getattr(method, "_stim_requested", False):
             if getattr(method, "_stim_request_seg", False):
                 needs_default_seg = True
@@ -777,6 +881,8 @@ def check_directory(
                 "[segmentation]",
                 f"configured but the pattern method '{cfg.pattern.method}' does not ask for it; "
                 "it will not run",
+                group="configured but the pattern method does not ask for it; it will not run",
+                tag=cfg.pattern.method,
             )
         for seg in cfg.segmentations:
             tracked = (
@@ -788,7 +894,8 @@ def check_directory(
                 report.warning(
                     file,
                     f"[segmentation.{seg}]",
-                    f"configured but nothing asks for it; it will not run",
+                    "configured but nothing asks for it; it will not run",
+                    group="configured but nothing asks for it; it will not run",
                 )
         if cfg.tracking is not None and not needs_tracks:
             report.warning(
@@ -796,6 +903,8 @@ def check_directory(
                 "[tracking]",
                 f"configured but the pattern method '{cfg.pattern.method}' does not ask for tracks; "
                 "it will not run",
+                group="configured but the pattern method does not ask for tracks; it will not run",
+                tag=cfg.pattern.method,
             )
         try:
             requirements_by_stem[stem] = method.initialize(experiment)
@@ -840,6 +949,7 @@ def check_directory(
         )
     _check_shared_config_groups(report, configs)
     if mm is not None:
+        _check_stage_affines(report, mm)
         for stem, cfg in configs.items():
             file = f"{stem}.toml"
             _check_pixel_size(report, file, cfg, mm)

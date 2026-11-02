@@ -18,9 +18,15 @@ This guide walks through everything required to run a PyCLM experiment on a new 
 See [Installation](installation.md). On the microscope PC:
 
 ```bash
-pip install "closed-loop-microscopy[gui]"
+pip install "closed-loop-microscopy[gui,calibration]"
 mmcore use "C:\Program Files\Micro-Manager-2.0"
 ```
+
+The `calibration` extra installs pycromanager, which the DMD calibration
+notebook (`scripts/calibration.ipynb`) needs to drive the Micro-Manager
+Projector plugin. Reloading a hardware configuration in Micro-Manager resets
+the camera (binning back to 1, live mode off); a run sets binning from the
+experiment TOML, so this matters only for work in the Micro-Manager GUI.
 
 ---
 
@@ -70,6 +76,13 @@ position_mover = "pfs"
 # Default 1.0. Lower it on a fast, stable stage; it is paid once per acquisition.
 settle_time_seconds = 1.0
 
+# Optional. Default false: a config group already at the preset a frame needs
+# is not set again (each setConfig waits for the hardware, 30-170 ms even when
+# nothing moves). Set true to set every group before every frame, for a device
+# that changes state behind Micro-Manager's back. A frame with
+# [device_properties] makes the next frame set every group again.
+reapply_config_groups = false
+
 # Optional. Camera ROI [x, y, width, height] in unbinned pixels, set when a run
 # (or `pyclm preview --snap`) starts. The DMD usually lights only part of the
 # field: `pyclm check` prints the region it covers and suggests it here, so
@@ -82,6 +95,19 @@ camera_roi = [256, 128, 1536, 1792]
 # available by its `name` in the experiment TOMLs, to `pyclm run`, `check`
 # and `preview` alike. See "Custom Pattern and Segmentation Methods" below.
 methods = ["my_patterns.py"]
+
+# Optional. How the microscope spends its time per frame. The first three are
+# off by default; try them on your rig and keep the ones that hold up (the log
+# ends each run with a line of what they saved).
+[acquisition]
+settle = "every_frame"         # or "after_move": wait settle_time_seconds only for
+                               # the first frame after a stage move
+camera_capture = "snap"        # or "sequence": a one-image sequence acquisition
+                               # instead of snapImage (faster on some cameras)
+stimulation_timing = "camera"  # or "shutter": a stimulation whose frame is not saved
+                               # ([stimulation] save = false) and that no method reads
+                               # is the shutter held open for the exposure, no camera
+reapply_camera_settings = false  # true: set exposure and binning before every frame
 
 # Optional. How data is stored and exported.
 [output]
@@ -101,6 +127,17 @@ distinct pattern, and a `frames.parquet`/`frames.csv` table of every frame and
 stimulation event. Whichever format is used, `pyclm.io.open(path)` reads it
 and `pyclm export` (or the automatic export) produces ImageJ stacks. See
 [Data format and export](data_format.md) for the full description.
+
+With `stimulation_timing = "shutter"` the light is on for the exposure
+plus however long the shutter takes to open and close, whereas a camera
+exposure keeps the auto-shutter open for the camera's own overhead too, so
+the dose per stimulation can change. On the lab's rig the shutter timed
+the light much more consistently than a snap, which leaves the light on
+for as long as the camera takes. Measure the dose with a power meter (or
+compare responses) before switching an experiment series over, so its
+results stay comparable. The shutter is
+Micro-Manager's current shutter (`Core-Shutter`), the one the stimulation's
+config groups select.
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.
 
@@ -572,3 +609,9 @@ Listed in `methods` like a pattern method (or passed as
 `segmentation_methods={"my_seg": MySegmentation}` to `run_pyclm`), the
 method name is then available as `method = "my_seg"` in the `[segmentation]`
 block of any experiment TOML.
+
+`segment` gets one 2D frame. A method that can use several channels at
+once (a color image) sets the class attribute `max_channels` (for instance
+`max_channels = 2`); a `[segmentation]` table with `channels = ["545",
+"638"]` then hands it one `(height, width, channel)` array per timepoint,
+in the listed order (see [experiment TOMLs](experiment_tomls.md)).

@@ -23,6 +23,10 @@ from .queues import AllQueues
 
 logger = logging.getLogger(__name__)
 
+SETTLE_MODES = ("every_frame", "after_move")
+CAPTURE_MODES = ("snap", "sequence")
+STIMULATION_TIMINGS = ("camera", "shutter")
+
 
 def pattern_is_blank(pattern) -> bool:
     """True when nothing in the DMD image (or any tile of a list of them) is lit."""
@@ -56,7 +60,12 @@ class MicroscopeProcess(BaseProcess):
         position_mover: PositionMover | None = None,
         stop_event: Event | None = None,
         settle_time_s: float = 1.0,
+        reapply_config_groups: bool = False,
         slm_await_s: float = 5.0,
+        settle: str = "every_frame",
+        camera_capture: str = "snap",
+        stimulation_timing: str = "camera",
+        reapply_camera_settings: bool = False,
         max_consecutive_errors: int = 10,
     ):
         super().__init__(stop_event, name="microscope")
@@ -75,6 +84,39 @@ class MicroscopeProcess(BaseProcess):
 
         # seconds to wait after waitForSystem() before snapping
         self.settle_time_s = settle_time_s
+        # the preset each config group was last set to; a group already there
+        # is not set again (reapply_config_groups turns this off)
+        self.reapply_config_groups = reapply_config_groups
+        self._config_state: dict[str, str] = {}
+        self.config_sets_skipped = 0
+        # [acquisition] in pyclm_config.toml (docs/acquisition-speedups-design.md)
+        if settle not in SETTLE_MODES:
+            raise ValueError(f"settle must be one of {SETTLE_MODES}, not {settle!r}")
+        if camera_capture not in CAPTURE_MODES:
+            raise ValueError(
+                f"camera_capture must be one of {CAPTURE_MODES}, not {camera_capture!r}"
+            )
+        if stimulation_timing not in STIMULATION_TIMINGS:
+            raise ValueError(
+                f"stimulation_timing must be one of {STIMULATION_TIMINGS}, "
+                f"not {stimulation_timing!r}"
+            )
+        # "after_move": sleep settle_time_s only when the stage moved since the
+        # last frame (waitForSystem runs before every frame either way)
+        self.settle = settle
+        self._moved = True
+        # "sequence": a one-frame sequence acquisition instead of snapImage
+        self.camera_capture = camera_capture
+        self.sequence_timeout_s = 5.0
+        # "shutter": a stimulation whose frame nobody keeps or reads is the
+        # shutter held open for the exposure, without the camera
+        self.stimulation_timing = stimulation_timing
+        self._raw_demanded: set | None = None
+        self.shutter_exposures = 0
+        self._warned_no_shutter = False
+        # exposure and binning are set only when the camera has other values
+        self.reapply_camera_settings = reapply_camera_settings
+        self.camera_sets_skipped = 0
         # seconds to wait for the SLM buffer to answer an update_pattern_event
         self.slm_await_s = slm_await_s
         self.max_consecutive_errors = max_consecutive_errors
@@ -94,8 +136,12 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern_id = None
         self.current_camera_pattern = None
         self.current_dmd_ids = None
+        self.current_pattern_t = None
         # (t, experiment) whose stimulation-only visit a blank pattern canceled
         self._blank_skips: set[tuple[int, str]] = set()
+        # SLM replies that arrived before the event they answer was handled
+        self._slm_replies: dict = {}
+        self.max_early_replies = 256
         self.skipped_moves = 0
         self.skipped_acquisitions = 0
 
@@ -140,6 +186,20 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern = np.zeros((self.slm_h, self.slm_w))
 
         self.slm_initialized = True
+        # the DMD may still hold the image of whatever ran before
+        self.blank_slm()
+
+    def blank_slm(self):
+        """Put an all-dark image on the DMD (at the start and end of a run)."""
+        if not self.slm_initialized or self.slm_device in (None, "dummy"):
+            return
+        try:
+            self.core.setSLMImage(
+                self.slm_device, np.zeros((self.slm_h, self.slm_w), dtype=np.uint8)
+            )
+            logger.info("SLM blanked")
+        except Exception as e:
+            logger.warning(f"could not blank the SLM: {e!r}")
 
     def process(self, event_await_s=0, slm_await_s=None):
         logger.debug(f"started MicroscopeProcess on {self.core}")
@@ -202,6 +262,8 @@ class MicroscopeProcess(BaseProcess):
 
             case "close":
                 # no more events from the manager: end the raw stream
+                logger.info(self.summary())
+                self.blank_slm()
                 self.end_stream()
                 return True
 
@@ -210,6 +272,17 @@ class MicroscopeProcess(BaseProcess):
 
         return False
 
+    def summary(self) -> str:
+        """What the speed-ups saved, for the log at the end of a run."""
+        return (
+            f"microscope: settle {self.settle}, camera {self.camera_capture}, "
+            f"stimulation timed by the {self.stimulation_timing}; "
+            f"{self.config_sets_skipped} config group set(s) and "
+            f"{self.camera_sets_skipped} exposure/binning set(s) skipped, "
+            f"{self.shutter_exposures} stimulation(s) by shutter, "
+            f"{self.skipped_acquisitions} blank stimulation(s) skipped"
+        )
+
     def handle_config_update(self, config_groups: list[ConfigGroup]):
         if config_groups is None:
             return 0
@@ -217,16 +290,29 @@ class MicroscopeProcess(BaseProcess):
         logger.info("setting config groups:")
 
         for group, config in config_groups:
+            if (
+                not self.reapply_config_groups
+                and self._config_state.get(group) == config
+            ):
+                self.config_sets_skipped += 1
+                continue
             self.core.setConfig(group, config)
+            self._config_state[group] = config
 
             logger.info(f"{group} = {config}")
 
         return 0
 
+    def forget_config_state(self):
+        """Something other than a config group changed the hardware: set every group again."""
+        self._config_state.clear()
+
     def handle_device_update(self, devices: list[DeviceProperty]):
-        if devices is None:
+        if not devices:
             return 0
 
+        # a property may belong to a config group's preset
+        self.forget_config_state()
         logger.info("setting device properties:")
 
         for label, name, value, t in devices:
@@ -242,6 +328,24 @@ class MicroscopeProcess(BaseProcess):
             self.core.setProperty(label, name, t_func(value))
 
         return 1
+
+    def set_exposure(self, exposure_ms: float):
+        exposure_ms = float(exposure_ms)
+        if not self.reapply_camera_settings and self._camera_has(
+            lambda: abs(float(self.core.getExposure()) - exposure_ms) < 1e-6
+        ):
+            return
+        self.core.setExposure(exposure_ms)
+
+    def _camera_has(self, check) -> bool:
+        """Whether the camera already reports the wanted value (read, not remembered)."""
+        try:
+            already = bool(check())
+        except Exception:
+            return False
+        if already:
+            self.camera_sets_skipped += 1
+        return already
 
     def set_binning(self, binning: int):
         core = self.core
@@ -266,6 +370,10 @@ class MicroscopeProcess(BaseProcess):
         binning_str = f"{binning}x{binning}"
 
         if binning_str in allowed:
+            if not self.reapply_camera_settings and self._camera_has(
+                lambda: core.getProperty(camera, "Binning") == binning_str
+            ):
+                return None
             core.setProperty(camera, "Binning", binning_str)
 
         else:
@@ -305,6 +413,7 @@ class MicroscopeProcess(BaseProcess):
         tiles = getattr(position, "tiles", None)
         target = tiles[0] if tiles else position
         z_moved, z_new_position = self.position_mover.move_to(target, self.core)
+        self._moved = True
 
         if z_moved:
             old_z = position.z
@@ -321,9 +430,14 @@ class MicroscopeProcess(BaseProcess):
         """
         Wait for the SLM buffer's reply to ``event_id``.
 
-        Replies for other events (left over from an earlier timeout) are
-        discarded. Returns None if no matching reply arrives within ``timeout_s``.
+        A reply to another event is kept for that event; replies left over
+        from an earlier timeout are dropped once more than
+        ``max_early_replies`` are kept. Returns None if no matching reply arrives within ``timeout_s``.
         """
+        early = self._slm_replies.pop(event_id, None)
+        if early is not None:
+            return early
+
         deadline = time() + timeout_s
 
         while True:
@@ -343,9 +457,15 @@ class MicroscopeProcess(BaseProcess):
                 continue
 
             if pattern_data.event_id != event_id:
-                logger.warning(
-                    f"discarding stale SLM pattern for event {pattern_data.event_id}"
-                )
+                # the buffer may answer out of order (it holds an experiment's
+                # handshakes until its first pattern arrives): keep the reply
+                # for its own event; replies to events that timed out are
+                # dropped once the store is full
+                self._slm_replies[pattern_data.event_id] = pattern_data
+                while len(self._slm_replies) > self.max_early_replies:
+                    stale = next(iter(self._slm_replies))
+                    logger.warning(f"discarding stale SLM pattern for event {stale}")
+                    del self._slm_replies[stale]
                 continue
 
             return pattern_data
@@ -399,6 +519,7 @@ class MicroscopeProcess(BaseProcess):
         self.current_pattern_id = pattern_data.pattern_unique_id
         self.current_camera_pattern = pattern_data.camera_pattern
         self.current_dmd_ids = pattern_data.dmd_ids
+        self.current_pattern_t = getattr(pattern_data, "pattern_t", None)
 
         return 0
 
@@ -419,7 +540,7 @@ class MicroscopeProcess(BaseProcess):
 
         self.handle_config_update(aq_event.config_groups)
         self.handle_device_update(aq_event.devices)
-        self.core.setExposure(aq_event.exposure_time_ms)
+        self.set_exposure(aq_event.exposure_time_ms)
 
         self.set_binning(aq_event.binning)
 
@@ -441,7 +562,7 @@ class MicroscopeProcess(BaseProcess):
             logger.info(
                 f"{self.t(): .3f}| acquiring image: {aq_event.exposure_time_ms}ms"
             )
-            image = self.snap()
+            image = self.capture(aq_event)
         aq_event.completed_time = time()
         logger.info(f"{self.t(): .3f}| image acquired")
 
@@ -455,6 +576,7 @@ class MicroscopeProcess(BaseProcess):
                 self.current_pattern_id,
                 camera_pattern=self.current_camera_pattern,
                 dmd_ids=self.current_dmd_ids,
+                pattern_t=self.current_pattern_t,
             )
         else:
             data_out = AcquisitionData(aq_event, image)
@@ -468,8 +590,9 @@ class MicroscopeProcess(BaseProcess):
         wait_time = time()
         self.core.waitForSystem()
         logger.debug(f"took {time() - wait_time: .3f}s")
-        if self.settle_time_s > 0:
+        if self.settle_time_s > 0 and (self.settle == "every_frame" or self._moved):
             sleep(self.settle_time_s)
+        self._moved = False
 
     def _acquire_grid(self, aq_event: AcquisitionEvent, tiles, geometry):
         """
@@ -484,20 +607,93 @@ class MicroscopeProcess(BaseProcess):
             if per_tile and self.slm_device != "dummy":
                 self.core.setSLMImage(self.slm_device, patterns[k])
             self.position_mover.move_to(tile, self.core)
+            self._moved = True
             self._settle()
             logger.info(
                 f"{self.t(): .3f}| tile {k + 1}/{len(tiles)} of "
                 f"{aq_event.experiment_name}: {aq_event.exposure_time_ms}ms"
             )
-            frames.append(self.snap())
+            frames.append(self.capture(aq_event))
+        if any(f is None for f in frames):
+            return None  # light only: no frame to stitch
         return stitch(frames, geometry, aq_event.binning)
 
+    def capture(self, aq_event: AcquisitionEvent):
+        """
+        One exposure for ``aq_event``: a camera frame, or None when the
+        stimulation is timed by the shutter (``stimulation_timing = "shutter"``)
+        and nothing keeps or reads its frame.
+        """
+        if self._light_only(aq_event):
+            if self.expose_with_shutter(aq_event.exposure_time_ms):
+                return None
+        return self.snap()
+
+    def _light_only(self, aq_event: AcquisitionEvent) -> bool:
+        if self.stimulation_timing != "shutter" or not aq_event.needs_slm:
+            return False
+        if aq_event.save_output:
+            return False
+        if self._raw_demanded is None:
+            demanded = getattr(self.router, "demanded", None)
+            self._raw_demanded = demanded("raw") if demanded is not None else set()
+        key = (aq_event.experiment_name, (aq_event.index or {}).get("c"))
+        return key not in self._raw_demanded
+
+    def expose_with_shutter(self, exposure_ms: float) -> bool:
+        """Open the current shutter for ``exposure_ms``; False if there is none."""
+        core = self.core
+        shutter = core.getShutterDevice()
+        if not shutter:
+            if not self._warned_no_shutter:
+                logger.warning(
+                    'stimulation_timing = "shutter" but the core has no current '
+                    "shutter device (Core-Shutter); stimulations use the camera"
+                )
+                self._warned_no_shutter = True
+            return False
+        core.setShutterOpen(True)
+        try:
+            core.waitForDevice(shutter)
+            sleep(float(exposure_ms) / 1000.0)
+        finally:
+            core.setShutterOpen(False)
+            core.waitForDevice(shutter)
+        self.shutter_exposures += 1
+        return True
+
     def snap(self):
+        if self.camera_capture == "sequence":
+            return self.snap_sequence()
+
         core = self.core
 
         core.snapImage()
         image = core.getImage()
 
+        return image
+
+    def snap_sequence(self):
+        """One frame by a one-image sequence acquisition (``camera_capture = "sequence"``)."""
+        core = self.core
+        if core.getRemainingImageCount() > 0:
+            core.clearCircularBuffer()
+        core.startSequenceAcquisition(1, 0, False)
+        deadline = time() + float(core.getExposure()) / 1000.0 + self.sequence_timeout_s
+        try:
+            while core.getRemainingImageCount() == 0:
+                if time() > deadline:
+                    raise TimeoutError(
+                        "sequence acquisition gave no image within "
+                        f"{self.sequence_timeout_s}s of the exposure"
+                    )
+                sleep(0.001)
+            image = core.popNextImage()
+            while core.isSequenceRunning() and time() < deadline:
+                sleep(0.001)
+        finally:
+            if core.isSequenceRunning():
+                core.stopSequenceAcquisition()
         return image
 
     def t(self):

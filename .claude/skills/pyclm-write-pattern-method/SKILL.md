@@ -94,7 +94,10 @@ blank file.
 
 These follow the same pattern. Subclass `SegmentationMethod` and
 implement `segment(self, data) -> np.ndarray`, returning an integer label
-image (0 = background) the shape of `data`. Select it in the TOML with
+image (0 = background) the height and width of `data`. `data` is 2D,
+or `(height, width, channel)` when the table lists `channels`; a method
+that takes several channels sets `max_channels` (default 1, Cellpose 3).
+Select it in the TOML with
 `[segmentation] method = "<name>"`; extra keys in that table are its
 arguments. Subclass `TrackingMethod`, where
 `track(labels, t, pixel_size_um)` returns the relabelled image and rows.
