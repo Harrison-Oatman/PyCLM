@@ -78,6 +78,7 @@ class WriterProcess(PipelineProcess):
         core: MicroscopeCoreInterface,
         affine_transform=None,
         slm_shape=None,
+        calibrations=None,
     ):
         """Create the outputs for the plan. Returns the (path, layer) pairs for the GUI."""
         self.plan = plan
@@ -93,6 +94,7 @@ class WriterProcess(PipelineProcess):
             slm_shape,
             recorded=recorded,
             routing=routing,
+            calibrations=calibrations,
         )
 
     def close_files(self):
