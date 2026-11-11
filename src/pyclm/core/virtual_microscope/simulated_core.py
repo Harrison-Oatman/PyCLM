@@ -62,6 +62,9 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         self._slm_device = slm_device  # set None to simulate no SLM device
         self._slm_h, self._slm_w = int(slm_shape[0]), int(slm_shape[1])
         self._slm_image: np.ndarray | None = None
+        # additional SLMs ([slm.<label>] of pyclm_config.toml): shape and last image
+        self._slm_shapes: dict[str, tuple[int, int]] = {}
+        self._slm_images: dict[str, np.ndarray] = {}
 
         self._focus_device: str | None = None
         self._config_group_definitions: dict[str, dict[str, str]] = {
@@ -78,13 +81,15 @@ class SimulatedMicroscopeCore(MicroscopeCoreInterface):
         return "" if self._slm_device is None else str(self._slm_device)
 
     def getSLMHeight(self, device: str) -> int:
-        return self._slm_h
+        return self._slm_shapes.get(device, (self._slm_h, self._slm_w))[0]
 
     def getSLMWidth(self, device: str) -> int:
-        return self._slm_w
+        return self._slm_shapes.get(device, (self._slm_h, self._slm_w))[1]
 
     def setSLMImage(self, device: str, image: Any) -> None:
         self._slm_image = np.asarray(image)
+        # the last image per device, for runs with more than one SLM
+        self._slm_images[device] = self._slm_image
 
     # Config/device properties
     def setConfig(self, group: str, config: str) -> None:

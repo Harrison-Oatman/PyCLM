@@ -57,9 +57,11 @@ class HDF5WriterV1(FrameWriter):
         slm_shape=None,
         recorded=None,
         routing=None,
+        calibrations=None,
     ):
         self.plan = plan
         self.recorded = recorded
+        calibrations = calibrations or {}
         self.base_path = Path(base_path)
         schedule = plan.schedule
         metadata = schedule.as_dict()
@@ -87,10 +89,9 @@ class HDF5WriterV1(FrameWriter):
                 f.attrs["plan_format"] = PLAN_FORMAT
                 if routing is not None:
                     f.attrs["routing"] = json.dumps(routing, default=str)
-                if affine_transform is not None:
-                    f.attrs["affine_transform"] = np.asarray(
-                        affine_transform, dtype=float
-                    )
+                exp_affine = calibrations.get(exp_name, (None, affine_transform))[1]
+                if exp_affine is not None:
+                    f.attrs["affine_transform"] = np.asarray(exp_affine, dtype=float)
 
                 f.create_dataset("current_t_index", data=np.int32(-1))
 

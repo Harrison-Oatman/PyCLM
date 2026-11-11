@@ -555,7 +555,15 @@ def preview(
             result.paths["animation"] = path
     if config is not None:
         slm = SLMBuffer(AllQueues())
-        slm.initialize(config.slm_shape, config.affine, [label], roi=config.camera_roi)
+        # the experiment's own SLM ([stimulation] slm = "<label>"), else the default
+        own = config.slm_calibrations().get(getattr(exp, "slm", None))
+        slm.initialize(
+            config.slm_shape,
+            config.affine,
+            [label],
+            roi=config.camera_roi,
+            calibrations=None if own is None else {label: own},
+        )
         scale = model.binning * source_binning
 
         def to_dmd(p: np.ndarray) -> np.ndarray:
@@ -563,11 +571,11 @@ def preview(
                 # one DMD image per tile, stacked in tile order
                 return np.stack(
                     [
-                        slm.pattern_to_slm(tile, scale)
+                        slm.pattern_to_slm(tile, scale, label)
                         for tile in cut(p, geometry, scale)
                     ]
                 )
-            return slm.pattern_to_slm(p, scale)
+            return slm.pattern_to_slm(p, scale, label)
 
         dmd = np.stack([to_dmd(p) for p in patterns]) if series else to_dmd(pattern)
         path = out_dir / "pattern_dmd.tif"

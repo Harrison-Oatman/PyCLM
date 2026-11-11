@@ -181,8 +181,15 @@ class FrameWriter(ABC):
         slm_shape: tuple[int, int] | None = None,
         recorded: dict[str, set[tuple[str, str]]] | None = None,
         routing: dict | None = None,
+        calibrations: dict | None = None,
     ) -> list[tuple[str, str]]:
-        """Create the outputs. Returns ``(path, layer)`` pairs for the live GUI."""
+        """
+        Create the outputs. Returns ``(path, layer)`` pairs for the live GUI.
+
+        ``calibrations`` is ``{experiment: (slm_shape, affine)}`` for the experiments
+        whose pattern goes to another SLM than the default one; they are recorded
+        with their own shape and affine.
+        """
 
     def records(self, experiment: str, channel: str, kind: str) -> bool:
         """Whether ``kind`` for this channel will reach the writer (Router table, else config)."""

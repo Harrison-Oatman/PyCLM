@@ -127,6 +127,12 @@ class MicroscopeProcess(BaseProcess):
 
         self.slm_initialized = False
         self.slm_device = None
+        # {experiment: MicroManager SLM label} for the experiments that name
+        # their own SLM; set by the Controller before declare_slm()
+        self.slm_devices: dict[str, str] = {}
+        self._slm_sizes: dict[str, tuple[int, int]] = {}
+        # every experiment of the run (set with slm_devices); None: not known
+        self.experiment_names: list[str] | None = None
         self.slm_h = None
         self.slm_w = None
 
@@ -183,23 +189,63 @@ class MicroscopeProcess(BaseProcess):
             self.slm_h = core.getSLMHeight(dev)
             self.slm_w = core.getSLMWidth(dev)
 
+        # experiments that name their own SLM ([stimulation] slm = "<label>"):
+        # the device must exist; its size is what blanking needs
+        self._slm_sizes = {}
+        for name, label in self.slm_devices.items():
+            if label in self._slm_sizes or self.slm_device == "dummy":
+                continue
+            if label == self.slm_device and len(set(self.slm_devices)) < len(
+                self.experiment_names or self.slm_devices
+            ):
+                # MicroManager makes the SLM loaded last its default: the
+                # experiments without `slm` would share this one's DMD
+                raise RuntimeError(
+                    f"[slm.{label}] names MicroManager's default SLM device, which "
+                    "the experiments without `slm` in [stimulation] also use; set "
+                    "the default explicitly in the .cfg (Property,Core,SLM,<label> "
+                    "after the devices) so that it is the other DMD"
+                )
+            try:
+                self._slm_sizes[label] = (
+                    core.getSLMHeight(label),
+                    core.getSLMWidth(label),
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"experiment {name}: [stimulation] slm = {label!r} is not an SLM "
+                    f"device of the MicroManager configuration ({e})"
+                ) from e
+            logger.info(
+                f"SLM {label!r} ({self._slm_sizes[label]}) for experiment(s) "
+                + ", ".join(n for n, d in self.slm_devices.items() if d == label)
+            )
+
         self.current_pattern = np.zeros((self.slm_h, self.slm_w))
 
         self.slm_initialized = True
         # the DMD may still hold the image of whatever ran before
         self.blank_slm()
 
+    def _slm_for(self, experiment_name) -> str:
+        """The SLM device an experiment's pattern goes to (the core's by default)."""
+        if self.slm_device == "dummy":
+            return "dummy"
+        return self.slm_devices.get(experiment_name) or self.slm_device
+
     def blank_slm(self):
-        """Put an all-dark image on the DMD (at the start and end of a run)."""
+        """Put an all-dark image on every DMD in use (at the start and end of a run)."""
         if not self.slm_initialized or self.slm_device in (None, "dummy"):
             return
-        try:
-            self.core.setSLMImage(
-                self.slm_device, np.zeros((self.slm_h, self.slm_w), dtype=np.uint8)
-            )
-            logger.info("SLM blanked")
-        except Exception as e:
-            logger.warning(f"could not blank the SLM: {e!r}")
+        sizes = {self.slm_device: (self.slm_h, self.slm_w), **self._slm_sizes}
+        for device, (h, w) in sizes.items():
+            try:
+                self.core.setSLMImage(device, np.zeros((h, w), dtype=np.uint8))
+                logger.info(
+                    "SLM blanked" if len(sizes) == 1 else f"SLM {device!r} blanked"
+                )
+            except Exception as e:
+                logger.warning(f"could not blank the SLM {device!r}: {e!r}")
 
     def process(self, event_await_s=0, slm_await_s=None):
         logger.debug(f"started MicroscopeProcess on {self.core}")
@@ -509,11 +555,15 @@ class MicroscopeProcess(BaseProcess):
         # a grid experiment's pattern is one DMD image per tile; the first goes
         # up now, the others as the tiles are visited
         first = pattern[0] if isinstance(pattern, list | tuple) else pattern
-        if self.slm_device == "dummy":
+        device = self._slm_for(up_event.experiment_name)
+        if device == "dummy":
             logger.info(f"experiment {up_event.experiment_name}: dummy slm set image")
         else:
-            self.core.setSLMImage(self.slm_device, first)
-            logger.info(f"experiment {up_event.experiment_name}: set slm image")
+            self.core.setSLMImage(device, first)
+            logger.info(
+                f"experiment {up_event.experiment_name}: set slm image"
+                + ("" if device == self.slm_device else f" on {device!r}")
+            )
 
         self.current_pattern = pattern
         self.current_pattern_id = pattern_data.pattern_unique_id
@@ -605,7 +655,9 @@ class MicroscopeProcess(BaseProcess):
         frames = []
         for k, tile in enumerate(tiles):
             if per_tile and self.slm_device != "dummy":
-                self.core.setSLMImage(self.slm_device, patterns[k])
+                self.core.setSLMImage(
+                    self._slm_for(aq_event.experiment_name), patterns[k]
+                )
             self.position_mover.move_to(tile, self.core)
             self._moved = True
             self._settle()

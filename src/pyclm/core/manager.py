@@ -114,6 +114,7 @@ class SLMBuffer(BaseProcess):
         experiment_names: list[str],
         roi=None,
         grids: dict | None = None,
+        calibrations: dict | None = None,
     ):
         """
         :param roi: the camera ROI ``(x, y, width, height)`` in unbinned pixels
@@ -121,18 +122,28 @@ class SLMBuffer(BaseProcess):
             full frame, so the offset is composed into it
         :param grids: ``{experiment: GridGeometry}`` for grid experiments, whose
             (stitched) patterns are cut into one DMD image per tile
+        :param calibrations: ``{experiment: (slm_shape, affine)}`` for the
+            experiments whose pattern goes to another SLM than the default
+            one (``slm = "<label>"`` in ``[stimulation]``); the others use
+            ``shape`` and ``affine_transform``
         """
         self.slm_shape = shape
         self.affine_transform = np.array(affine_transform)
         self.roi_offset = (0.0, 0.0) if roi is None else (float(roi[0]), float(roi[1]))
         self.grids = dict(grids or {})
+        self.calibrations = {
+            name: (tuple(int(v) for v in s), np.array(a))
+            for name, (s, a) in (calibrations or {}).items()
+        }
 
         assert affine_transform.shape == (2, 3), "Affine transform must be a 2x3 matrix"
+        for name, (_, at) in self.calibrations.items():
+            assert at.shape == (2, 3), f"{name}: affine transform must be a 2x3 matrix"
 
         # Initialize patterns for each experiment
         for name in experiment_names:
             slm_pattern = np.zeros(
-                self.slm_shape, dtype=np.uint8
+                self._calibration(name)[0], dtype=np.uint8
             )  # Initialize a blank pattern
             # (pattern id, DMD image(s), camera-space uint8 pattern or None, DMD ids)
             geom = self.grids.get(name)
@@ -142,7 +153,10 @@ class SLMBuffer(BaseProcess):
                 n = len(geom.tiles)
                 self.slm_patterns[name] = (
                     0,
-                    [np.zeros(self.slm_shape, dtype=np.uint8) for _ in range(n)],
+                    [
+                        np.zeros(self._calibration(name)[0], dtype=np.uint8)
+                        for _ in range(n)
+                    ],
                     None,
                     [f"0:{k}" for k in range(n)],
                     None,
@@ -150,23 +164,31 @@ class SLMBuffer(BaseProcess):
 
         self.initialized = True
 
-    def pattern_to_slm(self, pattern: np.ndarray, binning=1):
+    def _calibration(self, experiment_name=None):
+        """``(slm_shape, affine)`` of the SLM an experiment's pattern goes to."""
+        own = getattr(self, "calibrations", {}).get(experiment_name)
+        return own if own is not None else (self.slm_shape, self.affine_transform)
+
+    def pattern_to_slm(self, pattern: np.ndarray, binning=1, experiment_name=None):
         """
         This function takes a pattern and applies the stored affine transformation
         :param pattern: np array of type float scaled from 0-1, in coordinates of camera
         :param binning: the camera binning the pattern is at
+        :param experiment_name: the experiment the pattern belongs to; decides the
+            SLM (shape and affine) when the experiment names its own
         :return: at_slm_pattern: np array of type uint8, transformed to SLM coordinates
         """
         assert self.initialized, (
             "SLMBuffer must be initialized before converting patterns"
         )
 
-        at = compose_affine(self.affine_transform, self.roi_offset, binning)
+        shape, affine = self._calibration(experiment_name)
+        at = compose_affine(affine, self.roi_offset, binning)
 
         return warpAffine(
             np.round(pattern * 255).astype(np.uint8),
             at,
-            (self.slm_shape[1], self.slm_shape[0]),
+            (shape[1], shape[0]),
         )
 
     def _handle_from_pattern(self, item):
@@ -187,7 +209,7 @@ class SLMBuffer(BaseProcess):
         camera = camera.astype(np.uint8)
         geom = self.grids.get(experiment_name)
         if geom is None:
-            slm_pattern = self.pattern_to_slm(pattern, data.binning)
+            slm_pattern = self.pattern_to_slm(pattern, data.binning, experiment_name)
             dmd_ids = None
         else:
             # the method returned the stitched pattern: one DMD image per tile
@@ -198,7 +220,7 @@ class SLMBuffer(BaseProcess):
                     f"is not the stitched shape {expected}; cutting what fits"
                 )
             slm_pattern = [
-                self.pattern_to_slm(tile, data.binning)
+                self.pattern_to_slm(tile, data.binning, experiment_name)
                 for tile in cut(pattern, geom, data.binning)
             ]
             dmd_ids = [f"{pattern_id}:{k}" for k in range(len(slm_pattern))]

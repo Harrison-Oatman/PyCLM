@@ -250,10 +250,12 @@ class OMEZarrWriter(FrameWriter):
         slm_shape=None,
         recorded=None,
         routing=None,
+        calibrations=None,
     ):
         self.plan = plan
         self.recorded = recorded
         self.routing = routing
+        calibrations = calibrations or {}
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
         self.frames_path = self.base_path / "frames.parquet"
@@ -270,8 +272,13 @@ class OMEZarrWriter(FrameWriter):
                 path = self.base_path / f"{exp_name}.zarr"
                 if path.exists():
                     raise FileExistsError(f"output already exists: {path}")
+                # an experiment on its own SLM is recorded with that SLM's
+                # shape and affine
+                exp_shape, exp_affine = calibrations.get(
+                    exp_name, (slm_shape, affine_transform)
+                )
                 all_layers += self._open_experiment(
-                    exp_name, path, core, affine_transform, slm_shape
+                    exp_name, path, core, exp_affine, exp_shape
                 )
         except Exception:
             self.close()

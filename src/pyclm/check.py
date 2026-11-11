@@ -30,6 +30,7 @@ from .schema import (
     ExperimentConfig,
     PyclmConfig,
     ScheduleConfig,
+    dmd_footprint,
 )
 
 logger = logging.getLogger(__name__)
@@ -371,6 +372,49 @@ def _check_camera_roi(report: CheckReport, file: str, config: PyclmConfig) -> No
             "extends beyond the region the DMD can light: part of every frame "
             "can never be stimulated (a grid stimulated with overlap 0 will have "
             "dark strips)",
+        )
+
+
+def _check_slms(report: CheckReport, cfg_file: str, config, configs: dict, mm) -> None:
+    """
+    Experiments that name their own SLM (``[stimulation] slm = "<label>"``):
+    the label needs an ``[slm.<label>]`` table in ``pyclm_config.toml`` and,
+    when the MicroManager ``.cfg`` was read, a device of that label.
+    """
+    tables = {} if config is None else config.slm
+    for label, table in tables.items():
+        fx, fy, fw, fh = dmd_footprint(table.affine, table.slm_shape)
+        report.info(
+            cfg_file,
+            f"[slm.{label}]",
+            f"SLM {table.slm_shape_h} x {table.slm_shape_w}; covers x {fx}..{fx + fw}, "
+            f"y {fy}..{fy + fh} (unbinned camera pixels)",
+        )
+        if mm is not None and not mm.has_device(label):
+            report.error(
+                cfg_file,
+                f"[slm.{label}]",
+                f"no device labeled '{label}' in the MicroManager configuration",
+            )
+    used = {}
+    for stem, cfg in configs.items():
+        label = cfg.stimulation.slm
+        if label is None:
+            continue
+        used.setdefault(label, []).append(stem)
+        if config is not None and label not in tables:
+            known = ", ".join(sorted(tables)) or "none"
+            report.error(
+                f"{stem}.toml",
+                "[stimulation] slm",
+                f"'{label}' has no [slm.{label}] table in {cfg_file} (configured: {known})",
+            )
+    for label, stems in sorted(used.items()):
+        report.info(
+            cfg_file,
+            f"[slm.{label}]",
+            f"used by {', '.join(sorted(stems))}; every other experiment uses "
+            "MicroManager's SLM device",
         )
 
 
@@ -948,6 +992,9 @@ def check_directory(
             f"MicroManager configuration not found at {mm_path}; presets and devices not checked",
         )
     _check_shared_config_groups(report, configs)
+    _check_slms(
+        report, CONFIG_NAME if cfg_path is None else cfg_path.name, config, configs, mm
+    )
     if mm is not None:
         _check_stage_affines(report, mm)
         for stem, cfg in configs.items():
