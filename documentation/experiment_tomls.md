@@ -190,7 +190,14 @@ steps = 120                   # number of timepoints
 interval_seconds = 60         # between timepoints
 setup_time_seconds = 5        # how early events are prepared before each timepoint
 time_between_positions = 10   # offset between successive experiments within a timepoint
+start_delay_seconds = 240     # optional: wait once before the first timepoint (default 0)
 ```
+
+`start_delay_seconds` shifts the whole time course once, for example to let a
+laser warm up after its power was set; the interval between timepoints is
+unchanged. `setup_time_seconds` is different: it is how early each timepoint's
+events are prepared, so raising it does not delay the start. To start one
+experiment later than the others, use `t_delay` (in timepoints) in its TOML.
 
 The plan PyCLM derives from these files is written to `plan.useq.yaml` in
 the experiment directory and embedded in every output (see

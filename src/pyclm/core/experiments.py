@@ -329,11 +329,12 @@ class PositionWithAutoFocus(MicroscopePosition):
 
 
 class TimeCourse:
-    def __init__(self, count, interval, setup, between):
+    def __init__(self, count, interval, setup, between, start_delay=0.0):
         self.count = count
         self.interval = interval
         self.setup = setup
         self.between = between
+        self.start_delay = start_delay  # once, before the first timepoint
 
     def as_dict(self):
         return {
@@ -341,6 +342,7 @@ class TimeCourse:
             "interval": self.interval,
             "setup": self.setup,
             "between": self.between,
+            "start_delay": self.start_delay,
         }
 
 
@@ -354,6 +356,7 @@ class ExperimentSchedule:
         t_setup=2.0,
         t_between=1.0,
         timecourse: TimeCourse | None = None,
+        t_delay_s: float = 0.0,
     ):
         self.experiment_names = [exp for exp in experiments]
         self.experiments = experiments
@@ -364,7 +367,7 @@ class ExperimentSchedule:
         if timecourse:
             self.times = timecourse
         else:
-            self.times = TimeCourse(t_count, t_interval, t_setup, t_between)
+            self.times = TimeCourse(t_count, t_interval, t_setup, t_between, t_delay_s)
 
     def as_dict(self):
         return {

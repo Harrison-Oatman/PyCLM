@@ -160,6 +160,32 @@ def test_wait_loop_sleeps_instead_of_spinning():
     assert cpu < 0.5 * wall
 
 
+def test_start_delay_shifts_only_the_first_timepoint():
+    exp = make_experiment("exp.00")
+    schedule = make_schedule([exp], steps=3, interval=0.2, start_delay=0.5)
+    plan = make_plan(schedule)
+    assert plan.start_delay_s == 0.5
+
+    start = perf_counter()
+    run_manager(schedule, {"exp.00": []})
+    wall = perf_counter() - start
+
+    # 0.5 s delay once + 2 intervals of 0.2 s; a per-timepoint delay would take >= 1.9 s
+    assert 0.85 <= wall < 1.5
+
+
+def test_schedule_toml_start_delay_key():
+    from pyclm.schema import ScheduleConfig
+
+    cfg = ScheduleConfig.model_validate(
+        {"timing": {"steps": 2, "interval_seconds": 1.0, "start_delay_seconds": 240}}
+    )
+    assert cfg.timing_kwargs()["t_delay_s"] == 240
+    assert ScheduleConfig.model_validate(
+        {"timing": {"steps": 2, "interval_seconds": 1.0}}
+    ).timing_kwargs()["t_delay_s"] == 0.0
+
+
 def test_stop_event_interrupts_wait():
     exp = make_experiment("exp.00")
     schedule = make_schedule([exp], steps=3, interval=5.0)

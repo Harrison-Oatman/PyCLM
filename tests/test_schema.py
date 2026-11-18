@@ -152,6 +152,7 @@ def test_lab_tomls_still_parse():
         "t_count": 4,
         "t_interval": 1.0,
         "t_setup": 0.0,
+        "t_delay_s": 0.0,
         "t_between": 0.05,
     }
 
@@ -265,6 +266,7 @@ def test_schedule_requires_steps_and_interval(tmp_path):
         "t_count": 3,
         "t_interval": 30.0,
         "t_setup": 2.0,
+        "t_delay_s": 0.0,
         "t_between": 2.0,
     }
 
