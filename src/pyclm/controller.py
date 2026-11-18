@@ -64,10 +64,13 @@ class Controller:
         reapply_config_groups: bool = False,
         pattern_policy: str = "on_change",
         acquisition: dict | None = None,
+        parallel_device_initialization: bool = True,
     ):
         if not dry:
             # Applies if config specifies that a real microscope is in use
-            self.core = RealMicroscopeCore()
+            self.core = RealMicroscopeCore(
+                parallel_device_initialization=parallel_device_initialization
+            )
         else:
             if dry_image_source is None:
                 raise ValueError("dry_image_source must be provided when dry=True.")
@@ -164,11 +167,37 @@ class Controller:
         affine_transform: np.ndarray,
         out_path: Path,
         camera_roi=None,
+        slms: dict | None = None,
     ):
         """
         :param camera_roi: ``[x, y, width, height]`` in unbinned pixels to set on
             the camera before anything is measured; None leaves the camera as it is
+        :param slms: ``{label: (slm_shape, affine)}`` for SLMs other than the
+            core's default one (``[slm.<label>]`` of ``pyclm_config.toml``); an
+            experiment with ``slm = "<label>"`` in ``[stimulation]`` sends its
+            pattern there. ``slm_shape`` / ``affine_transform`` stay the default
+            SLM's.
         """
+        # which SLM each experiment's pattern goes to
+        slms = dict(slms or {})
+        slm_devices, calibrations = {}, {}
+        for name, experiment in schedule.experiments.items():
+            label = getattr(experiment, "slm", None)
+            if not label:
+                continue
+            if label not in slms:
+                raise ValueError(
+                    f"experiment {name}: [stimulation] slm = {label!r} has no "
+                    f"[slm.{label}] table in pyclm_config.toml "
+                    f"(configured: {', '.join(slms) or 'none'})"
+                )
+            shape, affine = slms[label]
+            slm_devices[name] = label
+            calibrations[name] = (
+                (int(shape[0]), int(shape[1])),
+                np.array(affine, dtype=np.float32),
+            )
+
         # refuse to run before any models are loaded if outputs already exist
         out_path = Path(out_path)
         planned = self.writer_process.writer.planned_paths(
@@ -183,12 +212,16 @@ class Controller:
 
         if isinstance(self.core, SimulatedMicroscopeCore):
             self.core._slm_h, self.core._slm_w = int(slm_shape[0]), int(slm_shape[1])
+            for label, (shape, _) in slms.items():
+                self.core._slm_shapes[label] = (int(shape[0]), int(shape[1]))
             binning = getattr(self, "dry_binning", 1)
             if binning != 1:
                 # the TIFs are binned relative to the camera the affine was
                 # calibrated for: scale the camera -> SLM affine to match
                 affine_transform = np.array(affine_transform, dtype=np.float32)
                 affine_transform[:, :2] *= binning
+                for _, affine in calibrations.values():
+                    affine[:, :2] *= binning
                 logger.info(
                     f"dry run: affine transform scaled by the source binning {binning}"
                 )
@@ -302,11 +335,14 @@ class Controller:
             schedule.experiment_names,
             roi=camera_roi,
             grids=self.grids,
+            calibrations=calibrations,
         )
+        self.microscope.slm_devices = slm_devices
+        self.microscope.experiment_names = list(schedule.experiment_names)
         self.microscope.declare_slm()
         self.writer_process.base_path = out_path
         all_layers = self.writer_process.initialize(
-            plan, self.core, affine_transform, slm_shape
+            plan, self.core, affine_transform, slm_shape, calibrations=calibrations
         )
 
         self.all_layers = all_layers

@@ -106,7 +106,11 @@ camera frame taken during stimulation is stored) and `binning` (default:
 the imaging binning; it also sets the pattern method's pixel grid). Its
 `config_groups` normally select the DMD light path; the preset named in
 the channel group (`Channel = "DMD"` above) is how the stimulation channel
-appears in the plan and the outputs.
+appears in the plan and the outputs. On a microscope with more than one
+DMD, `slm = "<label>"` sends this experiment's pattern to the DMD of that
+MicroManager device label, which needs an `[slm.<label>]` table in
+`pyclm_config.toml` (see [First-time setup](first_time_setup.md), "More than
+one DMD"); without it the pattern goes to MicroManager's default SLM.
 
 **`[segmentation]`** (optional). `method` is a built-in name (`cellpose`,
 `embryo_resizing`) or one registered with `run_pyclm(segmentation_methods=...)`;
@@ -190,7 +194,14 @@ steps = 120                   # number of timepoints
 interval_seconds = 60         # between timepoints
 setup_time_seconds = 5        # how early events are prepared before each timepoint
 time_between_positions = 10   # offset between successive experiments within a timepoint
+start_delay_seconds = 240     # optional: wait once before the first timepoint (default 0)
 ```
+
+`start_delay_seconds` shifts the whole time course once, for example to let a
+laser warm up after its power was set; the interval between timepoints is
+unchanged. `setup_time_seconds` is different: it is how early each timepoint's
+events are prepared, so raising it does not delay the start. To start one
+experiment later than the others, use `t_delay` (in timepoints) in its TOML.
 
 The plan PyCLM derives from these files is written to `plan.useq.yaml` in
 the experiment directory and embedded in every output (see

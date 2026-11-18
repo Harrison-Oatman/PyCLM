@@ -192,11 +192,14 @@ class Experiment:
         t_stop: int = 0,
         tracking: TrackingConfig | None = None,
         segmentations: dict[str, SegmentationConfig] | None = None,
+        slm: str | None = None,
     ):
         self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
         self.stimulation = stimulation_config
+        # the MicroManager SLM device the pattern goes to; None: the core's SLM
+        self.slm = slm
         # every [segmentation] table by name, the default one ("segmentation") first
         named = dict(segmentations or {})
         default = segmentation
@@ -239,6 +242,7 @@ class Experiment:
             "experiment_name": self.experiment_name,
             "channels": {k: v.as_dict() for k, v in self.channels.items()},
             "stimulation": self.stimulation.as_dict(),
+            "slm": self.slm,
             "segmentation": self.segmentation.as_dict(),
             "segmentations": {k: v.as_dict() for k, v in self.segmentations.items()},
             "tracking": self.tracking.as_dict(),
@@ -329,11 +333,12 @@ class PositionWithAutoFocus(MicroscopePosition):
 
 
 class TimeCourse:
-    def __init__(self, count, interval, setup, between):
+    def __init__(self, count, interval, setup, between, start_delay=0.0):
         self.count = count
         self.interval = interval
         self.setup = setup
         self.between = between
+        self.start_delay = start_delay  # once, before the first timepoint
 
     def as_dict(self):
         return {
@@ -341,6 +346,7 @@ class TimeCourse:
             "interval": self.interval,
             "setup": self.setup,
             "between": self.between,
+            "start_delay": self.start_delay,
         }
 
 
@@ -354,6 +360,7 @@ class ExperimentSchedule:
         t_setup=2.0,
         t_between=1.0,
         timecourse: TimeCourse | None = None,
+        t_delay_s: float = 0.0,
     ):
         self.experiment_names = [exp for exp in experiments]
         self.experiments = experiments
@@ -364,7 +371,7 @@ class ExperimentSchedule:
         if timecourse:
             self.times = timecourse
         else:
-            self.times = TimeCourse(t_count, t_interval, t_setup, t_between)
+            self.times = TimeCourse(t_count, t_interval, t_setup, t_between, t_delay_s)
 
     def as_dict(self):
         return {
