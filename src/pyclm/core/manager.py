@@ -925,7 +925,12 @@ class Manager:
 
         plan = self.plan
         setup = plan.setup_s
-        self.start_time = time() + setup
+        delay = plan.start_delay_s
+        if delay:
+            logger.info(f"start delay: first timepoint in {delay:g} s (+ {setup:g} s setup)")
+            print(f"waiting {delay:g} s before the first timepoint (start_delay_seconds)")
+        # the delay shifts the whole time course once; later timepoints keep their interval
+        self.start_time = time() + delay + setup
 
         # time iter loop
         for t in range(plan.timepoints):

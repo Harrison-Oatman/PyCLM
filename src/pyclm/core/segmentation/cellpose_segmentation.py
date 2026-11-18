@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class CellposeResource(SharedSegmentationResource):
-    def __init__(self, pretrained_model="cpsam", gpu=True, **kwargs):
+    def __init__(self, pretrained_model="cpsam_v2", gpu=True, **kwargs):
         super().__init__()
 
         self.pretrained_model = pretrained_model
@@ -46,7 +46,7 @@ class CellposeResourceRequest(SharedSegmentationResourceRequest):
 
 class CellposeSegmentationMethod(SegmentationMethod):
     """
-    Cellpose (default Cellpose-SAM, ``cpsam``) on one channel, or on up to
+    Cellpose (default Cellpose-SAM v2, ``cpsam_v2``) on one channel, or on up to
     three listed in the table's ``channels`` (a color image).
 
     Intensities are scaled to 0-1 before inference. By default with fixed
@@ -62,7 +62,7 @@ class CellposeSegmentationMethod(SegmentationMethod):
     def __init__(
         self,
         experiment_name,
-        model="cpsam",
+        model="cpsam_v2",
         use_gpu=True,
         normlow=0,
         normhigh=5000,

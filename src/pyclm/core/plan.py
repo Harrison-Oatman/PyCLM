@@ -263,6 +263,7 @@ class AcquisitionPlan:
                     "pyclm_version": _pyclm_version(),
                     "setup_time_seconds": float(times.setup),
                     "time_between_positions": float(times.between),
+                    "start_delay_seconds": float(getattr(times, "start_delay", 0.0)),
                 }
             },
         )
@@ -387,6 +388,11 @@ class AcquisitionPlan:
     @property
     def setup_s(self) -> float:
         return float(self.sequence.metadata["pyclm"]["setup_time_seconds"])
+
+    @property
+    def start_delay_s(self) -> float:
+        """Seconds waited once before the first timepoint (0 in plans written before it existed)."""
+        return float(self.sequence.metadata["pyclm"].get("start_delay_seconds", 0.0))
 
     @property
     def between_s(self) -> float:
