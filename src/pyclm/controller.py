@@ -261,6 +261,8 @@ class Controller:
             self.t_gcd = math.gcd(*t_seen)
 
         self.pattern.initialize_models()
+        # these experiments' pattern requests go through the pattern process
+        self.microscope.render_at_stimulation = self.pattern.renders_at_stimulation()
 
         # the plan is the single description of what is acquired when
         plan = AcquisitionPlan.from_schedule(schedule, pattern_requirements)

@@ -171,6 +171,9 @@ class ExperimentState:
         self.history: dict[tuple[UUID, str], deque] = {}
         self.patterns: deque = deque(maxlen=max(1, int(pattern_history)))
         self.t: int | None = None
+        # timepoint of the newest deliveries absorbed (``t`` moves on to the
+        # stimulation's timepoint when a pattern is rendered at a stimulation)
+        self.data_t: int | None = None
         self.time_seconds: float = 0.0
         self.generations = 0
 
@@ -194,6 +197,7 @@ class ExperimentState:
         self.time_seconds = dock.time_seconds
         if t is not None:
             self.t = int(t)
+            self.data_t = int(t)
 
     def record_pattern(self, pattern_id, pattern: np.ndarray):
         self.patterns.append((pattern_id, pattern))
@@ -469,6 +473,13 @@ class PatternMethod(metaclass=_MigratingType):
     deprecated = ""
     # how many of this method's previous patterns the context keeps
     pattern_history = 2
+    # True: besides the patterns made when its inputs arrive, the method is
+    # run again each time the microscope reaches a stimulation, on the newest
+    # inputs delivered and with ``context.t`` / ``context.time`` of that
+    # stimulation. For a pattern that follows the schedule between images
+    # (a bar moving over segmented cells) or that should use the newest
+    # outlines even when the microscope is behind its schedule
+    render_at_stimulation = False
     # old keyword -> new keyword, for TOMLs written before a rename; merged
     # down the class hierarchy. Renames that convert a value override
     # migrate_kwargs instead.

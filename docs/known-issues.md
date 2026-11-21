@@ -442,3 +442,31 @@ source file with the same qualified name are now one method, with a note.
 cp1252 and raised `UnicodeEncodeError` before the first frame.
 `pyclm.console.utf8_console()` reconfigures stdout and stderr to UTF-8
 (`errors="replace"`) in `pyclm` and `run_pyclm`.
+
+### 48. A late microscope applied patterns as old as its lag
+
+**Fixed 2026-11-21.** `SLMBuffer` answered each update-pattern handshake
+when the Manager dispatched the timepoint, and the reply waited in
+`slm_to_microscope` until the microscope handled the event. The Manager
+dispatches on the planned clock whatever the microscope is doing, so a
+microscope L minutes behind applied the pattern that was current L minutes
+earlier. In a 14 h, 36-position run (mdck-mechanics session 8 run 1) the
+microscope fell up to 15.6 min behind: the per-cell patterns were made from
+images a median of 14 timepoints old (up to 23), cells had moved about
+7 um from their outlines, and cw/ccw switches were applied 15 to 20 min
+late. Choosing, for each stimulation, the newest image completed before
+its scheduled time reproduces the recorded `pattern_t` exactly for 80 % of
+stimulations and within one imaging round for 99.5 %. Even on schedule,
+the answer for the last position of a timepoint was fixed when the
+timepoint was dispatched, up to a minute before it was used.
+
+The microscope now puts the request on `microscope_to_slm_buffer` when it
+handles the event, and the buffer keeps each experiment's patterns not yet
+superseded (`max_history`, 64) and answers with the newest one made for a
+timepoint at or before the one being run. `first_pattern_wait_s` is 15 s,
+longer than the microscope's `slm_await_s`: the first stimulation of an
+image-based method cannot have a pattern, and the request after that
+timeout must still be held for the first pattern. `render_at_stimulation`
+(a `PatternMethod` attribute) sends the request through the pattern
+process, which renders from its newest inputs for that stimulation's
+timepoint and passes the request on behind the new pattern.

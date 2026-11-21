@@ -33,6 +33,7 @@ class UpdatePatternEvent:
         devices: list[DeviceProperty] | None = None,
         index: dict | None = None,
         skippable_if_blank: bool = False,
+        scheduled_time_since_start: float | None = None,
     ):
         self.id = uuid4()
 
@@ -40,6 +41,9 @@ class UpdatePatternEvent:
         self.config_groups = config_groups
         self.devices = devices
         self.index = dict(index or {})
+        # scheduled seconds since the start of the run (context.time of a
+        # pattern rendered for this stimulation)
+        self.scheduled_time_since_start = scheduled_time_since_start
         # a blank pattern may skip this position at this timepoint (see PlannedEvent)
         self.skippable_if_blank = skippable_if_blank
 

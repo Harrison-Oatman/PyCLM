@@ -921,6 +921,7 @@ class Manager:
                         cfg.get_device_properties(),
                         index=ev.index,
                         skippable_if_blank=ev.skippable,
+                        scheduled_time_since_start=since_start,
                     )
                 )
                 self.msgout["microscope"].put(upmsg)

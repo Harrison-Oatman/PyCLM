@@ -211,6 +211,7 @@ from pyclm.core.patterns.pattern import PatternMethod, PatternContext
 | `self.add_requirement(channel_name, raw=False, seg=False, tracks=False, history=1)` | declare that `generate` needs the raw frame, the segmentation and/or the tracks of a channel, and how many past deliveries to keep. `seg` is `True` for the default `[segmentation]` table, the name of a `[segmentation.<name>]` table, or a list of names |
 | `self.request_stim(raw=False, seg=False, history=1)` | same, but for the stimulation-output channel |
 | `pattern_history` (class attribute, default 2) | how many of the method's previous patterns the context keeps |
+| `render_at_stimulation` (class attribute, default False) | run the method again each time the microscope reaches a stimulation, on the newest inputs delivered, with that stimulation's `context.t` and `context.time`; for a pattern that moves with the schedule between images |
 
 The `generate` method receives a `PatternContext` and must return a `float` array with values in `[0, 1]` and shape matching `self.pattern_shape`.
 

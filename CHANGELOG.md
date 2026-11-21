@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **A stimulation's pattern is chosen when the microscope reaches it.** The
+  SLM buffer used to answer when the Manager scheduled the timepoint, and
+  the answer waited until the microscope got there. A microscope running
+  behind its schedule then lit cells with outlines as old as the lag, and
+  applied direction switches that late (docs/known-issues.md, 48). The
+  microscope now asks the buffer itself, and the buffer answers with the
+  newest pattern made for a timepoint at or before the one being run:
+  a pattern computed from the schedule alone is still the one for its own
+  timepoint, and a pattern computed from images is the newest one finished.
+- **`render_at_stimulation`** (a `PatternMethod` class attribute, default
+  False). A method that sets it is run again each time the microscope
+  reaches a stimulation, on the newest inputs delivered and with that
+  stimulation's `context.t` and `context.time`. Use it for a pattern that
+  moves with the schedule between images (a bar over segmented cells). The
+  pattern is labeled with the timepoint of its inputs, so `pattern_t` in
+  the frames table still says how old the outlines under the light were.
+
 - The README and the documentation home page open with a short overview and
   a "Start here" list that leads with the method zoo, then the demo, setup,
   experiment files, custom methods and data. The documentation contents are

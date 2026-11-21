@@ -112,3 +112,126 @@ def test_lagging_microscope_gets_the_pattern_current_when_it_arrives():
         future.result(timeout=5)
 
     assert microscope.current_pattern_t == 5
+
+
+# ---------------------------------------------------------------------------
+# render_at_stimulation: the method is run again when the microscope reaches a
+# stimulation, on the newest inputs and with that stimulation's timepoint
+# ---------------------------------------------------------------------------
+
+
+def make_latest_process():
+    from helpers import make_experiment
+    from test_pattern_process import StubPattern
+
+    from pyclm.core.pattern_process import PatternProcess
+    from pyclm.core.patterns import ROI, CameraProperties
+
+    class LatestStub(StubPattern):
+        name = "latest_stub"
+        render_at_stimulation = True
+
+    exp = make_experiment("exp.00", pattern_method="latest_stub")
+    aq = AllQueues()
+    pp = PatternProcess(aq)
+    pp.register_method(LatestStub, "latest_stub")
+    pp.initialize(CameraProperties(ROI(0, 0, 64, 48), 1.0))
+    requirements = pp.request_method(exp)
+    pp.initialize_models()
+    return exp, aq, pp, requirements
+
+
+def test_stimulation_request_renders_from_the_newest_inputs():
+    from test_pattern_process import make_raw
+
+    from pyclm.core.pattern_process import RequestPattern
+
+    exp, aq, pp, requirements = make_latest_process()
+    assert pp.renders_at_stimulation() == {"exp.00"}
+
+    pp.handle_message(RequestPattern(5, 300.0, "exp.00", requirements))
+    pp.handle_data(make_raw(exp, t_index=5))
+    assert aq.pattern_to_slm.get_nowait().t_index == 5
+
+    update = UpdatePatternEvent(
+        "exp.00", index={"t": 8, "p": "exp.00"}, scheduled_time_since_start=480.0
+    )
+    request = UpdatePatternEventMessage(update)
+    pp.handle_stimulation_request(request)
+
+    # the new pattern first, then the request: the buffer answers with it
+    made = aq.pattern_to_slm.get_nowait()
+    assert isinstance(made, CameraPattern)
+    assert made.t_index == 5  # labeled with the timepoint of its inputs
+    assert aq.pattern_to_slm.get_nowait() is request
+
+    context = pp.models["exp.00"].contexts[-1]
+    assert (context.t, context.time) == (8, 480.0)
+
+
+def test_stimulation_request_before_any_input_is_only_passed_on():
+    _exp, aq, pp, _ = make_latest_process()
+    request = UpdatePatternEventMessage(
+        UpdatePatternEvent("exp.00", index={"t": 0, "p": "exp.00"})
+    )
+    pp.handle_stimulation_request(request)
+    assert aq.pattern_to_slm.get_nowait() is request
+    assert aq.pattern_to_slm.empty()
+    assert pp.models["exp.00"].contexts == []
+
+
+def test_microscope_sends_the_request_through_the_pattern_process():
+    aq = AllQueues()
+    core = SimulatedMicroscopeCore(FakeImageSource((16, 16)))
+    microscope = MicroscopeProcess(core, aq, stop_event=Event(), settle_time_s=0.0)
+    microscope.declare_slm()
+    microscope.render_at_stimulation = {"a"}
+
+    microscope.handle_update_pattern_event(UpdatePatternEvent("a"), slm_await_s=0.01)
+    microscope.handle_update_pattern_event(UpdatePatternEvent("b"), slm_await_s=0.01)
+
+    assert aq.microscope_to_pattern.get_nowait().event.experiment_name == "a"
+    assert aq.microscope_to_slm_buffer.get_nowait().event.experiment_name == "b"
+    assert aq.microscope_to_pattern.empty()
+    assert aq.microscope_to_slm_buffer.empty()
+
+
+def test_dry_run_lights_cells_between_images(tmp_path):
+    """The demo's closed-loop experiment imaged every 2nd timepoint and
+    stimulated at every one, with a method that renders at each stimulation."""
+    import pyclm.io as pio
+    from pyclm import cli, run_pyclm
+
+    target = tmp_path / "demo"
+    assert cli.main(["new", str(target), "--demo"]) == 0
+    with open(target / "demo_methods.py", "a", encoding="utf-8") as f:
+        f.write(
+            "\n\nfrom pyclm.core.patterns.fbc_cell_movement import MoveOutModel\n\n\n"
+            "class MoveOutLatest(MoveOutModel):\n"
+            '    name = "move_out_latest"\n'
+            "    render_at_stimulation = True\n"
+        )
+    toml = (target / "cells.toml").read_text(encoding="utf-8")
+    toml = toml.replace('method = "move_out"', 'method = "move_out_latest"')
+    toml = toml.replace(
+        "every_t = 1                   # image every timepoint", "every_t = 2"
+    )
+    assert "every_t = 2" in toml
+    (target / "cells.toml").write_text(toml, encoding="utf-8")
+    (target / "schedule.toml").write_text(
+        "[timing]\nsteps = 6\ninterval_seconds = 0.5\nsetup_time_seconds = 0.0\n"
+        "time_between_positions = 0.05\n"
+    )
+    run_pyclm(target, dry=True)
+
+    with pio.open(target / "cells.00.zarr") as exp:
+        frames = exp.frames.to_pandas()
+        lit = exp.camera_pattern_at(exp.current_t) > 0
+    stim = frames[frames.kind == "stim_event"].sort_values("t")
+    assert list(stim.t) == list(range(6))  # stimulated between images too
+    assert lit.any()
+    later = stim[stim.t >= 2]
+    made_from = later.pattern_t.ffill()
+    assert made_from.notna().all()
+    assert (made_from <= later.t).all()
+    assert (made_from % 2 == 0).all()  # made from images, taken at even t

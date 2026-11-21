@@ -31,6 +31,10 @@ class AllQueues:
         # the microscope asks for an experiment's pattern when it reaches the
         # stimulation, so the answer is the pattern current at that moment
         self.microscope_to_slm_buffer = Queue()
+        # for a method with ``render_at_stimulation`` the request goes through
+        # the pattern process, which makes a pattern from its newest inputs
+        # and passes the request on to the SLM buffer behind it
+        self.microscope_to_pattern = Queue()
 
         self.all_queues = [q for q in vars(self).values() if isinstance(q, Queue)]
 
