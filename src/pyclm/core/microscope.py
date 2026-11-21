@@ -17,7 +17,12 @@ from .datatypes import (
 from .events import AcquisitionEvent, UpdatePatternEvent, UpdateStagePositionEvent
 from .experiments import ConfigGroup, DeviceProperty
 from .grid import stitch
-from .messages import EventDoneMessage, Message, UpdateZPositionMessage
+from .messages import (
+    EventDoneMessage,
+    Message,
+    UpdatePatternEventMessage,
+    UpdateZPositionMessage,
+)
 from .position_mover import BasicPositionMover, PositionMover
 from .queues import AllQueues
 
@@ -77,6 +82,8 @@ class MicroscopeProcess(BaseProcess):
         self.inbox = aq.manager_to_microscope  # receives messages/events from manager
         self.manager = aq.microscope_to_manager  # send messages to manager
         self.slm_queue = aq.slm_to_microscope  # receives SLM updates
+        # asks the SLM buffer for an experiment's pattern (see SLMBuffer)
+        self.slm_requests = aq.microscope_to_slm_buffer
 
         # set by Router.resolve(); frames are published through it
         self.router = None
@@ -484,6 +491,9 @@ class MicroscopeProcess(BaseProcess):
                 "slm not declared to microscope process, run declare_slm first"
             )
 
+        # ask now, not when the Manager scheduled the timepoint: a microscope
+        # running behind its schedule then still gets the newest pattern
+        self.slm_requests.put(UpdatePatternEventMessage(up_event))
         pattern_data = self._await_slm_pattern(event_id, slm_await_s)
 
         if pattern_data is None:

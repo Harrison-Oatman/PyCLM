@@ -28,6 +28,9 @@ class AllQueues:
         # pattern to slm buffer, slm buffer to microscope (synchronous handshake)
         self.pattern_to_slm = Queue()
         self.slm_to_microscope = Queue()
+        # the microscope asks for an experiment's pattern when it reaches the
+        # stimulation, so the answer is the pattern current at that moment
+        self.microscope_to_slm_buffer = Queue()
 
         self.all_queues = [q for q in vars(self).values() if isinstance(q, Queue)]
 

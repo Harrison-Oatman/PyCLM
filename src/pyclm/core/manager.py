@@ -12,6 +12,7 @@ Frame routing lives in ``router.py`` and persistence in ``writer_process.py``
 import datetime
 import json
 import logging
+from collections import deque
 from pathlib import Path
 from queue import Empty
 from threading import Event
@@ -74,24 +75,40 @@ def compose_affine(affine, roi_offset=(0.0, 0.0), binning=1) -> np.ndarray:
 
 class SLMBuffer(BaseProcess):
     """
-    Holds the most recent pattern per experiment in SLM coordinates and
-    answers the Manager's ``update_pattern_event`` with it (the microscope
-    waits for that reply before a stimulation frame).
+    Holds each experiment's recent patterns in SLM coordinates and answers the
+    microscope's ``update_pattern_event`` (the microscope waits for that reply
+    before a stimulation frame).
+
+    The microscope asks when it reaches the stimulation, not when the Manager
+    schedules it, and the answer is the newest pattern made for a timepoint at
+    or before the one being run. A pattern computed from the schedule alone
+    (made for its own timepoint as soon as the Manager requests it) is then
+    the one for that timepoint however late the microscope is, and a pattern
+    computed from images is the newest one finished, rather than the one that
+    was current when the timepoint was scheduled.
     """
 
     def __init__(self, aq: AllQueues, stop_event: Event | None = None):
         super().__init__(stop_event, name="slm buffer")
 
         self.from_manager = aq.manager_to_slm_buffer
+        self.from_microscope = aq.microscope_to_slm_buffer
         self.from_pattern = aq.pattern_to_slm
         self.to_microscope = aq.slm_to_microscope
 
         self.slm_patterns = {}
+        # the patterns of each experiment not yet superseded for the microscope,
+        # oldest first; the last one is ``slm_patterns[name]``
+        self._history: dict[str, deque] = {}
+        self.max_history = 64
         # until an experiment's first pattern arrives, a handshake is held back
         # rather than answered with the blank placeholder (which would make the
         # microscope skip the stimulation); after ``first_pattern_wait_s`` the
-        # buffer stops waiting for that experiment
-        self.first_pattern_wait_s = 5.0
+        # buffer stops waiting for that experiment. Longer than the microscope's
+        # own wait for a reply (``slm_await_s``, 5 s): a pattern made from the
+        # first image cannot exist at the first stimulation, and the request
+        # that follows that timeout must still be held for it
+        self.first_pattern_wait_s = 15.0
         self._held: dict[str, list] = {}
         self._held_since: dict[str, float] = {}
         self._gave_up: set[str] = set()
@@ -106,6 +123,7 @@ class SLMBuffer(BaseProcess):
 
         self.register_queue(self.from_manager, self.handle_message)
         self.register_queue(self.from_pattern, self._handle_from_pattern)
+        self.register_queue(self.from_microscope, self.handle_message)
 
     def initialize(
         self,
@@ -206,13 +224,18 @@ class SLMBuffer(BaseProcess):
         # Store the pattern in the dictionary
         if experiment_name in self.slm_patterns:
             # set the current pattern and id
-            self.slm_patterns[experiment_name] = (
+            entry = (
                 pattern_id,
                 slm_pattern,
                 camera,
                 dmd_ids,
                 getattr(data, "t_index", None),
             )
+            self.slm_patterns[experiment_name] = entry
+            history = self._history.setdefault(
+                experiment_name, deque(maxlen=self.max_history)
+            )
+            history.append(entry)
             self._release(experiment_name)
         else:
             logger.warning(
@@ -236,12 +259,13 @@ class SLMBuffer(BaseProcess):
             case "update_pattern_event":
                 event = msg.event
                 name = event.experiment_name
+                t = self._event_t(event)
                 if self._waiting_for_first(name):
-                    self._held.setdefault(name, []).append(event.id)
+                    self._held.setdefault(name, []).append((event.id, t))
                     self._held_since.setdefault(name, time())
                 else:
                     self._release(name)
-                    self._answer(event.id, name)
+                    self._answer(event.id, name, t)
 
             case _:
                 raise ValueError(f"Unexpected message: {msg}")
@@ -269,12 +293,41 @@ class SLMBuffer(BaseProcess):
 
     def _release(self, name: str):
         """Answer the handshakes held for ``name`` with its current pattern."""
-        for event_id in self._held.pop(name, []):
-            self._answer(event_id, name)
+        for event_id, t in self._held.pop(name, []):
+            self._answer(event_id, name, t)
         self._held_since.pop(name, None)
 
-    def _answer(self, event_id, name: str):
-        pattern = self.slm_patterns[name]
+    @staticmethod
+    def _event_t(event) -> int | None:
+        """The timepoint an update-pattern event belongs to, if it carries one."""
+        t = (getattr(event, "index", None) or {}).get("t")
+        return None if t is None else int(t)
+
+    def _pattern_for(self, name: str, t: int | None):
+        """
+        The newest pattern of ``name`` made for a timepoint at or before ``t``
+        (the newest of all when ``t`` or the pattern's timepoint is unknown).
+
+        One experiment's requests arrive in timepoint order, so the patterns
+        older than the answer are dropped. If every pattern kept was made for
+        a later timepoint, the oldest is the nearest and is the answer.
+        """
+        history = self._history.get(name)
+        if not history or t is None:
+            return self.slm_patterns[name]
+        chosen = 0
+        for k in range(len(history) - 1, -1, -1):
+            made_for = history[k][4]
+            if made_for is None or made_for <= t:
+                chosen = k
+                break
+        entry = history[chosen]
+        for _ in range(chosen):
+            history.popleft()
+        return entry
+
+    def _answer(self, event_id, name: str, t: int | None = None):
+        pattern = self._pattern_for(name, t)
         self.to_microscope.put(
             EventSLMPattern(
                 event_id,
@@ -870,7 +923,6 @@ class Manager:
                         skippable_if_blank=ev.skippable,
                     )
                 )
-                self.msgout["slm_buffer"].put(upmsg)
                 self.msgout["microscope"].put(upmsg)
 
             case "acquire":
