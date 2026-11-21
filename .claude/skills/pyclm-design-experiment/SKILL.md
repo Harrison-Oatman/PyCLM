@@ -139,7 +139,9 @@ Then edit:
   Keys written after a table header belong to that table, so top-level
   keys (`t_delay`, `t_stop`) go above the first table.
 - `schedule.toml`: `[timing]` `steps`, `interval_seconds`,
-  `setup_time_seconds`, `time_between_positions`. Exactly one schedule
+  `setup_time_seconds`, `time_between_positions`, and optionally
+  `start_delay_seconds` (one wait before the first timepoint, e.g. for a
+  light source to warm up). Exactly one schedule
   per directory (`schedule.<label>.toml` is allowed).
 - Positions: a Micro-Manager position list (Devices → Stage Position
   List, saved as `PositionList.pos`) or a Nikon Elements

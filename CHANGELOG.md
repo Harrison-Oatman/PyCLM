@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **`start_delay_seconds`** in `[timing]` of the schedule: wait once, after
+  start-up, before the first timepoint (for example for a light source to
+  warm up after its power is set). The intervals between timepoints are
+  unchanged. `pyclm check` shows it; plans written before it read it as 0.
+- **Cellpose now defaults to Cellpose-SAM v2** (`model = "cpsam_v2"`).
+  Configurations that do not set `model` segment with the new model;
+  `model = "cpsam"` keeps the previous one. The `cellpose` extra now needs
+  `cellpose>=4.2.0`, the first release with `cpsam_v2` (the lock moves from
+  4.1.1 to 4.2.1.1).
+
 - **A stimulation's pattern is chosen when the microscope reaches it.** The
   SLM buffer used to answer when the Manager scheduled the timepoint, and
   the answer waited until the microscope got there. A microscope running

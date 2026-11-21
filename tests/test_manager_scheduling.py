@@ -181,9 +181,12 @@ def test_schedule_toml_start_delay_key():
         {"timing": {"steps": 2, "interval_seconds": 1.0, "start_delay_seconds": 240}}
     )
     assert cfg.timing_kwargs()["t_delay_s"] == 240
-    assert ScheduleConfig.model_validate(
-        {"timing": {"steps": 2, "interval_seconds": 1.0}}
-    ).timing_kwargs()["t_delay_s"] == 0.0
+    assert (
+        ScheduleConfig.model_validate(
+            {"timing": {"steps": 2, "interval_seconds": 1.0}}
+        ).timing_kwargs()["t_delay_s"]
+        == 0.0
+    )
 
 
 def test_stop_event_interrupts_wait():

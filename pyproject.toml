@@ -62,7 +62,7 @@ gui = [
 ]
 
 cellpose = [
-    "cellpose>=4.0.6",
+    "cellpose>=4.2.0",
     "torch",
     "torchvision",
 ]

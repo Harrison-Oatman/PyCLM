@@ -147,7 +147,7 @@ says how many channels it takes (Cellpose takes up to three; a custom
 method takes one unless it sets `max_channels`), and `pyclm check` refuses
 a table that lists more.
 
-The `cellpose` method's arguments: `model` (default `"cpsam"`), `use_gpu`
+The `cellpose` method's arguments: `model` (default `"cpsam_v2"`, Cellpose-SAM v2; `"cpsam"` is the first version), `use_gpu`
 (default true), and how camera counts are scaled to 0-1 before inference.
 By default `normlow = 0` and `normhigh = 5000` are fixed counts mapped to 0
 and 1; with several channels each may be a list, one value per listed
