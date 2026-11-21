@@ -106,7 +106,11 @@ camera frame taken during stimulation is stored) and `binning` (default:
 the imaging binning; it also sets the pattern method's pixel grid). Its
 `config_groups` normally select the DMD light path; the preset named in
 the channel group (`Channel = "DMD"` above) is how the stimulation channel
-appears in the plan and the outputs.
+appears in the plan and the outputs. On a microscope with more than one
+DMD, `slm = "<label>"` sends this experiment's pattern to the DMD of that
+MicroManager device label, which needs an `[slm.<label>]` table in
+`pyclm_config.toml` (see [First-time setup](first_time_setup.md), "More than
+one DMD"); without it the pattern goes to MicroManager's default SLM.
 
 **`[segmentation]`** (optional). `method` is a built-in name (`cellpose`,
 `embryo_resizing`) or one registered with `run_pyclm(segmentation_methods=...)`;

@@ -218,6 +218,7 @@ def run_pyclm(
         acquisition=config.acquisition.model_dump(),
         storage_format=storage_format,
         pattern_policy=pattern_policy,
+        parallel_device_initialization=config.parallel_device_initialization,
     )
 
     # register any custom methods
@@ -259,7 +260,14 @@ def run_pyclm(
     slm_shape = config.slm_shape
     at = config.affine
 
-    c.initialize(schedule, slm_shape, at, base_path, camera_roi=config.camera_roi)
+    c.initialize(
+        schedule,
+        slm_shape,
+        at,
+        base_path,
+        camera_roi=config.camera_roi,
+        slms=config.slm_calibrations(),
+    )
 
     all_layers = c.all_layers
     t_gcd = c.t_gcd

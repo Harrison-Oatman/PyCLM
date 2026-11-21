@@ -123,6 +123,17 @@ Every field is documented in `documentation/first_time_setup.md`, §3.
      (§4), not by eye on the numbers.
   Keep one config per objective, as `pyclm_config.<objective>.toml`; only
   one may sit in an experiment directory.
+- **A second (third, ...) DMD** gets its own `[slm.<label>]` table, keyed
+  by its Micro-Manager device label, with its own `affine_transform`,
+  `slm_shape_h` and `slm_shape_w`, calibrated the same way. An experiment
+  picks it with `slm = "<label>"` in `[stimulation]`; the top-level keys
+  stay the default SLM's. In the `.cfg`, set `Property,Core,SLM,<label>`
+  after the devices so the default is the DMD you mean (PyCLM refuses a
+  table that names the default while other experiments use it). If both
+  DMDs share one vendor library, set `parallel_device_initialization =
+  false`. Some adapters (MightexPolygon, XCiteLed) need a second copy to
+  drive a second device, so do first light on each DMD on its own. See `documentation/first_time_setup.md`, "More than
+  one DMD".
 - `camera_roi`: `pyclm check` prints the DMD footprint and suggests it.
 - `position_mover`:
   - `"basic"`: XY then Z, no focus lock. Start here on any rig.

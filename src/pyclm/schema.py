@@ -191,6 +191,12 @@ class Stimulation(Strict):
         True, description="record the camera frame taken during stimulation"
     )
     binning: int | None = Field(None, ge=1, description="default: the imaging binning")
+    slm: str | None = Field(
+        None,
+        description="the MicroManager SLM (DMD) device this experiment's pattern goes "
+        "to, one of the [slm.<label>] tables of pyclm_config.toml; default: "
+        "MicroManager's SLM device (Core-SLM), with the top-level affine_transform",
+    )
     config_groups: dict[str, str] = Field(
         default_factory=dict, description="group = preset"
     )
@@ -498,6 +504,7 @@ class ExperimentConfig(Strict):
             t_stop=self.t_stop,
             tracking=tracking,
             segmentations=segmentations,
+            slm=self.stimulation.slm,
         )
 
     @classmethod
@@ -604,6 +611,38 @@ class AcquisitionConfig(Strict):
     )
 
 
+def _check_affine(at) -> None:
+    if len(at) != 2 or any(len(row) != 3 for row in at):
+        raise ValueError(
+            "affine_transform must be a 2 x 3 matrix [[a, b, tx], [c, d, ty]]"
+        )
+
+
+class SlmConfig(Strict):
+    """``[slm.<label>]`` of ``pyclm_config.toml``: one more SLM (DMD), by its MicroManager device label."""
+
+    affine_transform: list[list[float]] = Field(
+        ...,
+        description="2 x 3 camera-to-SLM affine matrix for this SLM, calibrated like "
+        "the top-level one (unbinned, full camera frame)",
+    )
+    slm_shape_h: int = Field(..., gt=0, description="SLM (DMD) height in pixels")
+    slm_shape_w: int = Field(..., gt=0, description="SLM (DMD) width in pixels")
+
+    @model_validator(mode="after")
+    def _shape(self):
+        _check_affine(self.affine_transform)
+        return self
+
+    @property
+    def affine(self) -> np.ndarray:
+        return np.array(self.affine_transform, dtype=np.float32)
+
+    @property
+    def slm_shape(self) -> tuple[int, int]:
+        return (self.slm_shape_h, self.slm_shape_w)
+
+
 class PyclmConfig(Strict):
     """``pyclm_config.toml``: the hardware and output configuration."""
 
@@ -616,6 +655,20 @@ class PyclmConfig(Strict):
     )
     slm_shape_h: int = Field(..., gt=0, description="SLM (DMD) height in pixels")
     slm_shape_w: int = Field(..., gt=0, description="SLM (DMD) width in pixels")
+    slm: dict[str, SlmConfig] = Field(
+        default_factory=dict,
+        description="more SLMs (DMDs) than MicroManager's default one, as "
+        "[slm.<label>] tables keyed by the MicroManager device label, each with its "
+        "own affine_transform and shape; an experiment sends its pattern there with "
+        'slm = "<label>" in [stimulation]',
+    )
+    parallel_device_initialization: bool = Field(
+        True,
+        description="MicroManager initializes device adapters in parallel threads; "
+        "false initializes the devices one at a time in the order of the .cfg, for "
+        "adapters that share a vendor library which is not thread-safe (two DMDs "
+        "of one vendor, for example)",
+    )
     focus_device: str = Field(
         "ZDrive", description="MicroManager focus (Z) device selected at start-up"
     )
@@ -654,11 +707,7 @@ class PyclmConfig(Strict):
     @model_validator(mode="after")
     def _shape(self):
         _check_version(self.format_version)
-        at = self.affine_transform
-        if len(at) != 2 or any(len(row) != 3 for row in at):
-            raise ValueError(
-                "affine_transform must be a 2 x 3 matrix [[a, b, tx], [c, d, ty]]"
-            )
+        _check_affine(self.affine_transform)
         roi = self.camera_roi
         if roi is not None:
             if len(roi) != 4 or roi[0] < 0 or roi[1] < 0 or roi[2] <= 0 or roi[3] <= 0:
@@ -694,6 +743,10 @@ class PyclmConfig(Strict):
     @property
     def slm_shape(self) -> tuple[int, int]:
         return (self.slm_shape_h, self.slm_shape_w)
+
+    def slm_calibrations(self) -> dict[str, tuple[tuple[int, int], np.ndarray]]:
+        """``{label: (slm_shape, affine)}`` of the ``[slm.<label>]`` tables."""
+        return {label: (s.slm_shape, s.affine) for label, s in self.slm.items()}
 
     @classmethod
     def from_file(cls, path: str | Path) -> PyclmConfig:
@@ -895,6 +948,7 @@ MODELS = {
     "ScheduleConfig": ScheduleConfig,
     "Timing": Timing,
     "PyclmConfig": PyclmConfig,
+    "SlmConfig": SlmConfig,
     "OutputConfig": OutputConfig,
 }
 
