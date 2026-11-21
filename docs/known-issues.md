@@ -442,3 +442,60 @@ source file with the same qualified name are now one method, with a note.
 cp1252 and raised `UnicodeEncodeError` before the first frame.
 `pyclm.console.utf8_console()` reconfigures stdout and stderr to UTF-8
 (`errors="replace"`) in `pyclm` and `run_pyclm`.
+
+### 48. A late microscope applied patterns as old as its lag
+
+**Fixed 2026-11-21.** `SLMBuffer` answered each update-pattern handshake
+when the Manager dispatched the timepoint, and the reply waited in
+`slm_to_microscope` until the microscope handled the event. The Manager
+dispatches on the planned clock whatever the microscope is doing, so a
+microscope L minutes behind applied the pattern that was current L minutes
+earlier. In a 14 h, 36-position run (mdck-mechanics session 8 run 1) the
+microscope fell up to 15.6 min behind: the per-cell patterns were made from
+images a median of 14 timepoints old (up to 23), cells had moved about
+7 um from their outlines, and cw/ccw switches were applied 15 to 20 min
+late. Choosing, for each stimulation, the newest image completed before
+its scheduled time reproduces the recorded `pattern_t` exactly for 80 % of
+stimulations and within one imaging round for 99.5 %. Even on schedule,
+the answer for the last position of a timepoint was fixed when the
+timepoint was dispatched, up to a minute before it was used.
+
+The microscope now puts the request on `microscope_to_slm_buffer` when it
+handles the event, and the buffer keeps each experiment's patterns not yet
+superseded (`max_history`, 64) and answers with the newest one made for a
+timepoint at or before the one being run. `first_pattern_wait_s` is 15 s,
+longer than the microscope's `slm_await_s`: the first stimulation of an
+image-based method cannot have a pattern, and the request after that
+timeout must still be held for the first pattern. `render_at_stimulation`
+(a `PatternMethod` attribute) sends the request through the pattern
+process, which renders from its newest inputs for that stimulation's
+timepoint and passes the request on behind the new pattern.
+
+### 49. The writer rebuilt the whole tracks table at every tracked frame
+
+**Fixed 2026-11-21.** `OMEZarrWriter.write_tracks` kept every track row of
+the run as a Python dict and, at each delivery, rebuilt the full table from
+those dicts and rewrote `tracks.parquet`; `write_frame` did the same for
+`frames.parquet` at every frame. The cost of one delivery grew with the
+rows already held: about 1.7 s per million rows, most of it Python work
+that holds the interpreter lock, which every PyCLM thread shares. In
+mdck-mechanics session 8 run 1 (27 tracked positions every 5 min, 5.64
+million rows by the end) the rewrites of one imaging round came to about
+18 s at hour 1, 142 s at hour 8 and 257 s at the end, of each 300 s. The
+microscope's steps each got tens of milliseconds slower (27 to 87 ms
+before a stimulation snap, 23 to 50 ms of snap overhead); the run started
+at 87 % of each minute busy, reached 100 % in hour 8 and fell 15.6 min
+behind. Runs with no tracking, or under 0.85 million track rows, stayed
+flat. The writer finished 1 h 48 min after the last frame.
+
+Track rows are now converted to an Arrow record batch once, as they arrive
+(a delivery costs the same whatever the table holds), and both tables are
+rewritten at most every `tracks_flush_s` (30 s) and `frames_flush_s`
+(2 s), and no sooner than `flush_duty` (20) times the last write took, so
+they never take more than about 5 % of the writer's time. `close()` writes
+every row. A run that is killed loses at most that interval of table rows
+(the frames and label images themselves are in the zarr stores). The file
+is still rewritten whole (205 MB for 5.64 million rows, 1.9 s with the
+lock released); writing parts instead would need a change of format and
+readers. `EventLog` still rebuilds `events.parquet` at every event; with
+thousands of rows that is milliseconds.

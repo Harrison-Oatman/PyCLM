@@ -507,3 +507,112 @@ def test_zarr_metadata_write_retries_on_a_windows_sharing_violation(
     assert "retrying" in caplog.text
     exp = pio.open(tmp_path / "exp.00.zarr")
     assert exp.current_t == 3  # the progress update was not lost
+
+
+# ------------------------------------------------- the tables of a long run
+def _tracked_writer(tmp_path, steps=4):
+    from pyclm.core.experiments import TrackingConfig
+
+    exp = make_experiment("exp.00", every_t=1, segmentation_method="cellpose")
+    exp.segmentation.save = True
+    exp.stimulation.save = False
+    exp.tracking = TrackingConfig("centroid")
+    plan = make_plan(make_schedule([exp], steps=steps, interval=2.0))
+    writer = OMEZarrWriter()
+    recorded = {
+        "raw": {("exp.00", "545"), ("exp.00", "DMD")},
+        "seg": {("exp.00", "545")},
+        "tracks": {("exp.00", "545")},
+    }
+    writer.open(plan, core_with(), tmp_path, AFFINE, SLM, recorded=recorded)
+    return plan, writer
+
+
+def _deliver_tracks(plan, writer, t, n_rows):
+    from pyclm.core.datatypes import TrackingData
+    from pyclm.core.tracking import TrackRow
+
+    raw = acquire(plan, "exp.00", t, "545", np.zeros((16, 16), np.uint16))
+    rows = [TrackRow(k + 1, k + 1, 1.0, float(k), 4, 0) for k in range(n_rows)]
+    writer.write_tracks(TrackingData(raw.event, np.zeros((16, 16), np.uint32), rows))
+
+
+def test_tracks_table_is_rewritten_at_most_every_flush_interval(tmp_path):
+    """The live tracks.parquet lags by at most tracks_flush_s; close() writes
+    every row."""
+    import pyarrow.parquet as pq
+
+    plan, writer = _tracked_writer(tmp_path)
+    path = tmp_path / "tracks.parquet"
+
+    _deliver_tracks(plan, writer, 0, 5)  # the first delivery is written at once
+    assert pq.read_table(path).num_rows == 5
+    _deliver_tracks(plan, writer, 1, 5)  # inside the interval: kept in memory
+    assert pq.read_table(path).num_rows == 5
+    assert writer.n_track_rows == 10
+
+    writer.tracks_flush_s = writer.flush_duty = 0.0  # every delivery is written
+    _deliver_tracks(plan, writer, 2, 5)
+    assert pq.read_table(path).num_rows == 15
+
+    writer.tracks_flush_s = 3600.0
+    _deliver_tracks(plan, writer, 3, 5)
+    writer.close()
+    table = pq.read_table(path)
+    assert table.num_rows == 20
+    assert table.column("t").to_pylist() == [t for t in range(4) for _ in range(5)]
+
+
+def test_a_tracks_delivery_does_not_get_slower_as_the_table_grows(tmp_path):
+    """A delivery converts only its own rows: with a million rows already
+    held, it takes about as long as the first one (the old writer rebuilt the
+    whole table from Python objects at every delivery, about 1.5 s here)."""
+    import pyarrow as pa
+
+    from pyclm.core.storage.ome_zarr import TRACKS_SCHEMA
+
+    plan, writer = _tracked_writer(tmp_path)
+    writer.tracks_flush_s = 3600.0
+    _deliver_tracks(plan, writer, 0, 1000)  # written at once; starts the interval
+
+    n = 1_000_000
+    held = pa.table(
+        {
+            f.name: pa.array(
+                ["x"] * n if f.type == pa.string() else np.zeros(n), type=f.type
+            )
+            for f in TRACKS_SCHEMA
+        },
+        schema=TRACKS_SCHEMA,
+    )
+    writer._track_batches.extend(held.to_batches())
+    writer.n_track_rows += n
+
+    from time import perf_counter
+
+    start = perf_counter()
+    _deliver_tracks(plan, writer, 1, 1000)
+    assert perf_counter() - start < 0.25
+    writer.close()
+    assert (tmp_path / "tracks.parquet").stat().st_size > 0
+
+
+def test_frames_table_is_rewritten_at_most_every_flush_interval(tmp_path):
+    import pyarrow.parquet as pq
+
+    exp = make_experiment("exp.00", every_t=1)
+    exp.stimulation.save = False
+    plan = make_plan(make_schedule([exp], steps=3, interval=2.0))
+    writer = OMEZarrWriter()
+    writer.frames_flush_s = 3600.0
+    writer.open(plan, core_with(), tmp_path, AFFINE, SLM)
+    path = tmp_path / "frames.parquet"
+    assert pq.read_table(path).num_rows == 0  # written at open
+
+    for t in range(3):
+        writer.write_frame(
+            acquire(plan, "exp.00", t, "545", np.full((16, 16), t, np.uint16))
+        )
+    assert pq.read_table(path).num_rows == 0  # inside the interval
+    writer.close()
+    assert pq.read_table(path).num_rows == 3

@@ -137,7 +137,8 @@ are the grid's center.
 
 ### The frames table
 
-`frames.parquet` (rewritten as the run proceeds) and `frames.csv` (written
+`frames.parquet` (rewritten as the run proceeds, at most every 2 s, so
+during a run it can be a few seconds behind) and `frames.csv` (written
 at the end) have one row per acquired frame (`kind = "frame"`), one row
 per stimulation event (`kind = "stim_event"`), and one row per planned
 frame the microscope skipped (`kind = "skipped"`: only the stimulation
@@ -163,7 +164,9 @@ directory:
 
 With a `[tracking]` table in the experiment TOML (see [Tracking](tracking.md)),
 `tracks.parquet` (and `tracks.csv` at the end of the run) holds one row per
-tracked object and timepoint, for all experiments in the directory:
+tracked object and timepoint, for all experiments in the directory. During
+a run it is rewritten at most every 30 s (less often once it is large), so
+it can be that far behind; the end of the run writes every row:
 
 | Column | Meaning |
 |---|---|

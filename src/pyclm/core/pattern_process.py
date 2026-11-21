@@ -45,6 +45,7 @@ class PatternProcess(PipelineProcess):
         self.known_models: dict[str, type[PatternMethod]] = dict(known_models)
 
         self.inbox = aq.manager_to_pattern
+        self.from_microscope = aq.microscope_to_pattern
         self.slm = aq.pattern_to_slm
         self.to_manager = aq.pattern_to_manager
         # experiment name -> MicroscopePosition, for context.position() (set by the Controller)
@@ -62,6 +63,7 @@ class PatternProcess(PipelineProcess):
         self.states: dict[str, ExperimentState] = {}
 
         self.register_queue(self.inbox, self.handle_message_wrapper)
+        self.register_queue(self.from_microscope, self.handle_stimulation_request)
 
     def initialize(self, camera_properties: CameraProperties):
         self.camera_properties = camera_properties
@@ -175,6 +177,72 @@ class PatternProcess(PipelineProcess):
             self.to_manager.put(
                 SettingsRequestMessage(experiment_name, dockname[1], context.requests)
             )
+
+    # ------------------------------------------- patterns at a stimulation
+    def renders_at_stimulation(self) -> set[str]:
+        """Experiments whose method asked to be run again at each stimulation."""
+        return {
+            name
+            for name, model in self.models.items()
+            if getattr(model, "render_at_stimulation", False)
+        }
+
+    def handle_stimulation_request(self, message) -> bool:
+        """
+        The microscope has reached a stimulation of a ``render_at_stimulation``
+        experiment: make its pattern from the newest inputs, then pass the
+        request on to the SLM buffer. The buffer reads both from one queue,
+        so it has the new pattern when it answers; if nothing could be made
+        it answers with the newest pattern it holds.
+        """
+        event = message.event
+        try:
+            self.render_latest(
+                event.experiment_name,
+                (getattr(event, "index", None) or {}).get("t"),
+                getattr(event, "scheduled_time_since_start", None),
+            )
+        except Exception:
+            self.error_count += 1
+            logger.error(
+                f"{event.experiment_name}: could not render a pattern for the "
+                "stimulation; the newest earlier pattern is used",
+                exc_info=True,
+            )
+        finally:
+            self.slm.put(message)
+        return False
+
+    def render_latest(self, experiment_name: str, t, time_seconds=None) -> bool:
+        """
+        Run the method on the inputs it already has, for timepoint ``t``.
+        Nothing is made before the method's first pattern (its inputs have
+        not all arrived). The pattern is labeled with the timepoint of the
+        newest inputs, so ``pattern_t`` in the frames table says how old the
+        outlines under the light were.
+        """
+        model = self.models.get(experiment_name)
+        state = self.states.get(experiment_name)
+        if model is None or state is None or state.generations == 0:
+            return False
+        if t is not None:
+            state.t = int(t)
+        if time_seconds is not None:
+            state.time_seconds = float(time_seconds)
+        context = PatternContext(
+            state, model._experiment_ref, position=self.positions.get(experiment_name)
+        )
+        pattern = model.render(context)
+        out = CameraPattern(
+            experiment_name, pattern, binning=model.binning, t_index=state.data_t
+        )
+        state.record_pattern(out.pattern_id, pattern)
+        self.slm.put(out)
+        if context.requests:
+            self.to_manager.put(
+                SettingsRequestMessage(experiment_name, state.t, context.requests)
+            )
+        return True
 
     def dock_key(self, experiment_name, t) -> tuple[str, int]:
         return (experiment_name, int(t))
