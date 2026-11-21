@@ -26,7 +26,7 @@ import logging
 import shutil
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
-from time import sleep
+from time import monotonic, sleep
 
 import numcodecs
 import numpy as np
@@ -222,7 +222,27 @@ class OMEZarrWriter(FrameWriter):
         self.pattern_policy = pattern_policy
         self.stores: dict[str, _ExperimentStore] = {}
         self.rows: list[dict] = []
-        self.track_rows: list[dict] = []
+        # track rows are converted to Arrow once, as they arrive: the table of
+        # a long run has millions of rows, and rebuilding it from Python
+        # objects at every tracked frame held the interpreter lock for seconds
+        # (docs/known-issues.md, 49)
+        self._track_batches: list[pa.RecordBatch] = []
+        self.n_track_rows = 0
+        # frames.parquet and tracks.parquet are whole files, rewritten as the
+        # run goes so they can be read while it runs. They are rewritten at
+        # most this often, and no sooner than ``flush_duty`` times the last
+        # write took (a 2 s write is then repeated after 40 s at the earliest,
+        # so the tables never take more than 5 % of the writer's time);
+        # close() always writes the last rows
+        self.frames_flush_s = 2.0
+        self.tracks_flush_s = 30.0
+        self.flush_duty = 20.0
+        self._frames_write_s = 0.0
+        self._tracks_write_s = 0.0
+        self._frames_dirty = False
+        self._tracks_dirty = False
+        self._frames_written_at = float("-inf")
+        self._tracks_written_at = float("-inf")
         self.dropped_frames = 0
         self.error_count = 0
         self.frames_path: Path | None = None
@@ -277,7 +297,7 @@ class OMEZarrWriter(FrameWriter):
             self.close()
             raise
 
-        self._write_frames_table()
+        self._write_frames_table(force=True)
         self.is_open = True
         return all_layers
 
@@ -748,24 +768,33 @@ class OMEZarrWriter(FrameWriter):
             px = ev.pixel_width_um
             if not px:
                 px = self._pixel_size_um * g.binning
-            for r in data.rows:
-                self.track_rows.append(
-                    {
-                        "experiment": ev.experiment_name,
-                        "t": int(ev.t_index),
-                        "channel": channel,
-                        "group": g.name,
-                        "local_index": int(i),
-                        "track_id": int(r.track_id),
-                        "label": int(r.label),
-                        "y": float(r.y),
-                        "x": float(r.x),
-                        "y_um": float(r.y) * float(px),
-                        "x_um": float(r.x) * float(px),
-                        "area": int(r.area),
-                        "parent": int(r.parent),
-                    }
+            rows = list(data.rows)
+            if rows:
+                n = len(rows)
+                y = [float(r.y) for r in rows]
+                x = [float(r.x) for r in rows]
+                self._track_batches.append(
+                    pa.record_batch(
+                        {
+                            "experiment": [ev.experiment_name] * n,
+                            "t": [int(ev.t_index)] * n,
+                            "channel": [channel] * n,
+                            "group": [g.name] * n,
+                            "local_index": [int(i)] * n,
+                            "track_id": [int(r.track_id) for r in rows],
+                            "label": [int(r.label) for r in rows],
+                            "y": y,
+                            "x": x,
+                            "y_um": [v * float(px) for v in y],
+                            "x_um": [v * float(px) for v in x],
+                            "area": [int(r.area) for r in rows],
+                            "parent": [int(r.parent) for r in rows],
+                        },
+                        schema=TRACKS_SCHEMA,
+                    )
                 )
+                self.n_track_rows += n
+                self._tracks_dirty = True
             self._write_tracks_table()
         except Exception as e:
             self.error_count += 1
@@ -819,19 +848,35 @@ class OMEZarrWriter(FrameWriter):
             table = table.append_column(key, column)
         return table
 
-    def _write_frames_table(self):
+    def _write_frames_table(self, force: bool = False):
+        """Rewrite frames.parquet, at most every ``frames_flush_s`` unless forced."""
+        self._frames_dirty = True
         if self.frames_path is None:
             return
+        wait = max(self.frames_flush_s, self.flush_duty * self._frames_write_s)
+        if not force and monotonic() - self._frames_written_at < wait:
+            return
+        start = monotonic()
         self._write_parquet(self._frames_table(), self.frames_path)
+        self._frames_written_at = monotonic()
+        self._frames_write_s = self._frames_written_at - start
+        self._frames_dirty = False
 
     def _tracks_table(self) -> pa.Table:
-        columns = {k: [r.get(k) for r in self.track_rows] for k in TRACKS_COLUMNS}
-        return pa.table(columns, schema=TRACKS_SCHEMA)
+        return pa.Table.from_batches(self._track_batches, schema=TRACKS_SCHEMA)
 
-    def _write_tracks_table(self):
+    def _write_tracks_table(self, force: bool = False):
+        """Rewrite tracks.parquet, at most every ``tracks_flush_s`` unless forced."""
         if self.tracks_path is None:
             return
+        wait = max(self.tracks_flush_s, self.flush_duty * self._tracks_write_s)
+        if not force and monotonic() - self._tracks_written_at < wait:
+            return
+        start = monotonic()
         self._write_parquet(self._tracks_table(), self.tracks_path)
+        self._tracks_written_at = monotonic()
+        self._tracks_write_s = self._tracks_written_at - start
+        self._tracks_dirty = False
 
     @staticmethod
     def _write_parquet(table: pa.Table, path: Path):
@@ -843,15 +888,15 @@ class OMEZarrWriter(FrameWriter):
     def close(self):
         if self.frames_path is not None and self.rows:
             try:
-                self._write_frames_table()
+                self._write_frames_table(force=True)
                 pacsv.write_csv(
                     self._frames_table(), self.frames_path.with_suffix(".csv")
                 )
             except Exception as e:
                 logger.error(f"failed to finalize frames table: {e}", exc_info=True)
-        if self.tracks_path is not None and self.track_rows:
+        if self.tracks_path is not None and self.n_track_rows:
             try:
-                self._write_tracks_table()
+                self._write_tracks_table(force=True)
                 pacsv.write_csv(
                     self._tracks_table(), self.tracks_path.with_suffix(".csv")
                 )

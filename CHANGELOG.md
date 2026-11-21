@@ -11,6 +11,14 @@
   newest pattern made for a timepoint at or before the one being run:
   a pattern computed from the schedule alone is still the one for its own
   timepoint, and a pattern computed from images is the newest one finished.
+- **The tracks and frames tables no longer slow a long run down.** The
+  writer rebuilt and rewrote the whole `tracks.parquet` at every tracked
+  frame (and `frames.parquet` at every frame), which held the interpreter
+  lock longer as the tables grew and slowed the microscope until a 14 h run
+  with 27 tracked positions fell 15 min behind (docs/known-issues.md, 49).
+  Rows are now converted once, and the files are rewritten at most every
+  30 s (tracks) and 2 s (frames), so the live files can lag by that much;
+  the end of the run writes every row.
 - **`render_at_stimulation`** (a `PatternMethod` class attribute, default
   False). A method that sets it is run again each time the microscope
   reaches a stimulation, on the newest inputs delivered and with that

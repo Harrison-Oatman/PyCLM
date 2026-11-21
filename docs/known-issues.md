@@ -470,3 +470,32 @@ timeout must still be held for the first pattern. `render_at_stimulation`
 (a `PatternMethod` attribute) sends the request through the pattern
 process, which renders from its newest inputs for that stimulation's
 timepoint and passes the request on behind the new pattern.
+
+### 49. The writer rebuilt the whole tracks table at every tracked frame
+
+**Fixed 2026-11-21.** `OMEZarrWriter.write_tracks` kept every track row of
+the run as a Python dict and, at each delivery, rebuilt the full table from
+those dicts and rewrote `tracks.parquet`; `write_frame` did the same for
+`frames.parquet` at every frame. The cost of one delivery grew with the
+rows already held: about 1.7 s per million rows, most of it Python work
+that holds the interpreter lock, which every PyCLM thread shares. In
+mdck-mechanics session 8 run 1 (27 tracked positions every 5 min, 5.64
+million rows by the end) the rewrites of one imaging round came to about
+18 s at hour 1, 142 s at hour 8 and 257 s at the end, of each 300 s. The
+microscope's steps each got tens of milliseconds slower (27 to 87 ms
+before a stimulation snap, 23 to 50 ms of snap overhead); the run started
+at 87 % of each minute busy, reached 100 % in hour 8 and fell 15.6 min
+behind. Runs with no tracking, or under 0.85 million track rows, stayed
+flat. The writer finished 1 h 48 min after the last frame.
+
+Track rows are now converted to an Arrow record batch once, as they arrive
+(a delivery costs the same whatever the table holds), and both tables are
+rewritten at most every `tracks_flush_s` (30 s) and `frames_flush_s`
+(2 s), and no sooner than `flush_duty` (20) times the last write took, so
+they never take more than about 5 % of the writer's time. `close()` writes
+every row. A run that is killed loses at most that interval of table rows
+(the frames and label images themselves are in the zarr stores). The file
+is still rewritten whole (205 MB for 5.64 million rows, 1.9 s with the
+lock released); writing parts instead would need a change of format and
+readers. `EventLog` still rebuilds `events.parquet` at every event; with
+thousands of rows that is milliseconds.
