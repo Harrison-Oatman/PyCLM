@@ -386,7 +386,7 @@ failed on main for this reason, since before #43: at t = 1 both bar
 experiments got id 0 while their patterns (3200 × 3200 at the dry-run
 scale) were still being made. The buffer now holds an experiment's
 handshakes until its first pattern arrives (at most
-`first_pattern_wait_s`, 5 s), and `_await_slm_pattern` keeps a reply for
+`first_pattern_wait_s`, 5 s; 15 s since #48's fix), and `_await_slm_pattern` keeps a reply for
 a later event instead of discarding it, since held replies can come out of
 order across experiments. A pattern made after dispatch is still used one
 timepoint late when the run is behind (the "one segmentation behind"
@@ -499,3 +499,27 @@ is still rewritten whole (205 MB for 5.64 million rows, 1.9 s with the
 lock released); writing parts instead would need a change of format and
 readers. `EventLog` still rebuilds `events.parquet` at every event; with
 thousands of rows that is milliseconds.
+
+### 50. Two DMDs of one vendor need patched MicroManager adapters
+
+**Hazard, outside PyCLM (open).** Found while bringing up two Mightex
+Polygon400s and two X-Cite XLED1s on one Nikon Ti2 for multi-SLM support
+(docs/multi-slm-design.md). Two stock adapters cannot drive a second device
+of their kind:
+
+- `MightexPolygon` opens device index 1 whatever the `.cfg` says, so both
+  device labels drive the same DMD.
+- `XCiteLed` keeps its serial-port state in a variable that every device of
+  the adapter shares, so the second LED's commands go to the first LED's
+  port.
+
+On the lab's rig each needed a second copy of the adapter under another
+library name. Those copies live outside the repository. Separately, MMCore's
+parallel device initialization crashed the process with both Polygons
+loaded, which is why `parallel_device_initialization = false` exists.
+`pyclm check` can only verify that a device of each `[slm.<label>]` label
+exists in the `.cfg`; it cannot tell that two labels reach the same
+hardware. The symptom is that both experiments' patterns appear on one DMD.
+First light on each DMD separately (`documentation/first_time_setup.md`,
+"More than one DMD") is the check. A fix belongs upstream in
+Micro-Manager's adapters.

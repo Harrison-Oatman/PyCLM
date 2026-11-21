@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **More than one DMD per run** (docs/multi-slm-design.md). Each DMD
+  beyond MicroManager's default SLM gets an `[slm.<label>]` table in
+  `pyclm_config.toml`, keyed by its MicroManager device label, with its own
+  `affine_transform`, `slm_shape_h` and `slm_shape_w`; an experiment sends
+  its pattern there with `slm = "<label>"` in `[stimulation]`. One
+  experiment drives one DMD, and two experiments of one run can drive two.
+  Every DMD in use is blanked at the start and end, each experiment's data
+  records its own DMD's shape and affine, and `pyclm check` and
+  `pyclm preview` use the experiment's DMD. A run refuses to start when an
+  `[slm.<label>]` table names MicroManager's default SLM while other
+  experiments rely on the default. `parallel_device_initialization = false`
+  initializes the MicroManager devices one at a time, in `.cfg` order, for
+  two adapters that share a vendor library. Nothing changes for a
+  configuration without `[slm.<label>]` tables. Tested on a Nikon Ti2 with
+  two Mightex Polygon400s (docs/known-issues.md, 50, for the adapters).
+
 - **A stimulation's pattern is chosen when the microscope reaches it.** The
   SLM buffer used to answer when the Manager scheduled the timepoint, and
   the answer waited until the microscope got there. A microscope running
@@ -11,6 +27,9 @@
   newest pattern made for a timepoint at or before the one being run:
   a pattern computed from the schedule alone is still the one for its own
   timepoint, and a pattern computed from images is the newest one finished.
+  An experiment's first stimulation now waits up to 15 s (was 5 s) for its
+  first pattern, so that the request made after the microscope's own 5 s
+  timeout is still held for it.
 - **The tracks and frames tables no longer slow a long run down.** The
   writer rebuilt and rewrote the whole `tracks.parquet` at every tracked
   frame (and `frames.parquet` at every frame), which held the interpreter
@@ -18,7 +37,8 @@
   with 27 tracked positions fell 15 min behind (docs/known-issues.md, 49).
   Rows are now converted once, and the files are rewritten at most every
   30 s (tracks) and 2 s (frames), so the live files can lag by that much;
-  the end of the run writes every row.
+  the end of the run writes every row. This is the OME-Zarr writer; the
+  HDF5 writer is unchanged.
 - **`render_at_stimulation`** (a `PatternMethod` class attribute, default
   False). A method that sets it is run again each time the microscope
   reaches a stimulation, on the newest inputs delivered and with that
@@ -91,9 +111,10 @@
     frame with `[device_properties]` makes the next frame set every group
     again. `reapply_config_groups = true` in `pyclm_config.toml` restores the
     old behavior.
-  - The first stimulation of an experiment waits (up to 5 s) for its first
-    pattern instead of being answered with the blank placeholder, which made
-    the microscope skip it. The microscope keeps an SLM reply that arrives
+  - The first stimulation of an experiment waits (up to 5 s; 15 s since
+    the pattern is chosen at use time, above) for its first pattern instead
+    of being answered with the blank placeholder, which made the microscope
+    skip it. The microscope keeps an SLM reply that arrives
     for a later event rather than discarding it. This also fixes the six
     dry-run HDF5 tests that failed on main.
   - The DMD is blanked when a run starts and ends.
