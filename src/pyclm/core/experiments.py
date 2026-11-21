@@ -192,11 +192,14 @@ class Experiment:
         t_stop: int = 0,
         tracking: TrackingConfig | None = None,
         segmentations: dict[str, SegmentationConfig] | None = None,
+        slm: str | None = None,
     ):
         self.key = uuid4()
         self.experiment_name = experiment_name
         self.channels = imaging_configs
         self.stimulation = stimulation_config
+        # the MicroManager SLM device the pattern goes to; None: the core's SLM
+        self.slm = slm
         # every [segmentation] table by name, the default one ("segmentation") first
         named = dict(segmentations or {})
         default = segmentation
@@ -239,6 +242,7 @@ class Experiment:
             "experiment_name": self.experiment_name,
             "channels": {k: v.as_dict() for k, v in self.channels.items()},
             "stimulation": self.stimulation.as_dict(),
+            "slm": self.slm,
             "segmentation": self.segmentation.as_dict(),
             "segmentations": {k: v.as_dict() for k, v in self.segmentations.items()},
             "tracking": self.tracking.as_dict(),

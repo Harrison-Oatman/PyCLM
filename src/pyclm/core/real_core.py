@@ -16,8 +16,14 @@ class RealMicroscopeCore(MicroscopeCoreInterface):
     Delegates everything to an internal CMMCorePlus.
     """
 
-    def __init__(self):
+    def __init__(self, parallel_device_initialization: bool = True):
         self._core = CMMCorePlus()
+        if not parallel_device_initialization:
+            # MMCore initializes adapter modules in parallel threads by default;
+            # serial initialization follows the order of the .cfg, which two
+            # adapters sharing one vendor library (two DMDs) can depend on
+            self._core.enableFeature("ParallelDeviceInitialization", False)
+            logger.info("MicroManager devices are initialized one at a time")
 
     def loadSystemConfiguration(self, configuration):
         try:

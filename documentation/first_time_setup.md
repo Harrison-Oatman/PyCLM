@@ -90,6 +90,12 @@ reapply_config_groups = false
 # The affine above stays calibrated in the full frame; PyCLM composes the offset.
 camera_roi = [256, 128, 1536, 1792]
 
+# Optional. Default true: MicroManager initializes device adapters in parallel
+# threads. false initializes the devices one at a time, in the order of the .cfg,
+# for adapters that share a vendor library which is not thread-safe (two DMDs of
+# one vendor, for example).
+parallel_device_initialization = true
+
 # Optional. Your own pattern / segmentation / tracking methods: Python files
 # (relative to this file) or module names. Each method class they define is
 # available by its `name` in the experiment TOMLs, to `pyclm run`, `check`
@@ -116,6 +122,15 @@ pattern_policy = "on_change" # ome-zarr only: store each distinct pattern once (
                              # only at timepoints with a saved imaging frame ("imaging"),
                              # or not at all ("none"); stored in camera and DMD coordinates
 export_imagej = true         # write ImageJ hyperstacks next to the data when the run finishes
+
+# Optional. More SLMs (DMDs) than MicroManager's default one: a table per device,
+# named by its MicroManager device label, with its own calibration. An experiment
+# sends its pattern there with `slm = "DMD2"` in [stimulation]; see "More than one
+# DMD" below.
+[slm.DMD2]
+affine_transform = [[0.55, 0.006, 188.8], [-0.015, 1.11, 81.2]]
+slm_shape_h = 684
+slm_shape_w = 608
 ```
 
 By default (`format = "ome-zarr"`) each experiment is written as an
@@ -140,6 +155,45 @@ Micro-Manager's current shutter (`Core-Shutter`), the one the stimulation's
 config groups select.
 
 If your microscope has no SLM, set the shape to the physical DMD resolution anyway — PyCLM will skip hardware calls when no SLM device is detected.
+
+### More than one DMD
+
+The top-level `affine_transform` and `slm_shape_h` / `slm_shape_w` describe
+MicroManager's default SLM device (`Core-SLM`). Every further DMD gets an
+`[slm.<label>]` table, named by its MicroManager device label, with its own
+affine and shape, calibrated the same way (unbinned, full camera frame).
+An experiment chooses its DMD in its TOML:
+
+```toml
+[stimulation]
+slm = "DMD2"        # omit for MicroManager's default SLM
+exposure = 100
+
+    [stimulation.config_groups]
+    Channel = "DMD2_405"   # the preset that routes that DMD's light source to the sample
+```
+
+One experiment drives one DMD; two experiments of one run can drive two.
+The stimulation's config groups do everything else the second light path
+needs (its light source as `Core-Shutter`, mirrors, filters), as for a single
+DMD. All DMDs in use are blanked when a run starts and ends, and each
+experiment's data records the shape and affine of its own DMD.
+
+Three things to get right in the `.cfg`:
+
+- **Name the default SLM.** MicroManager makes the SLM device loaded last
+  its default. Add `Property,Core,SLM,<label>` after the devices, so that the
+  experiments without `slm` use the DMD you mean. PyCLM refuses to start
+  when an `[slm.<label>]` table names the default SLM while other experiments
+  rely on the default.
+- **Initialization order.** If both DMDs are driven through one vendor
+  library, set `parallel_device_initialization = false` and load the devices
+  in the order the library needs.
+- **One adapter instance per device.** Some adapters can open only the first
+  device of their kind, or keep their serial port in a variable all their
+  devices share; MicroManager then needs a second copy of the adapter under
+  another library name. `pyclm check` only verifies that a device of each
+  label exists.
 
 ---
 
