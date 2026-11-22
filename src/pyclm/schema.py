@@ -525,6 +525,13 @@ class Timing(Strict):
     time_between_positions: float = Field(
         2.0, ge=0, description="seconds between successive positions within a timepoint"
     )
+    start_delay_seconds: float = Field(
+        0.0,
+        ge=0,
+        description="seconds to wait once, after start-up, before the first timepoint "
+        "(e.g. for a light source to warm up); unlike setup_time_seconds it does not "
+        "affect later timepoints",
+    )
 
 
 class ScheduleConfig(Strict):
@@ -547,6 +554,7 @@ class ScheduleConfig(Strict):
             "t_interval": self.timing.interval_seconds,
             "t_setup": self.timing.setup_time_seconds,
             "t_between": self.timing.time_between_positions,
+            "t_delay_s": self.timing.start_delay_seconds,
         }
 
     @classmethod

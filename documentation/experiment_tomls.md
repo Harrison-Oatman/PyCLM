@@ -151,7 +151,7 @@ says how many channels it takes (Cellpose takes up to three; a custom
 method takes one unless it sets `max_channels`), and `pyclm check` refuses
 a table that lists more.
 
-The `cellpose` method's arguments: `model` (default `"cpsam"`), `use_gpu`
+The `cellpose` method's arguments: `model` (default `"cpsam_v2"`, Cellpose-SAM v2; `"cpsam"` is the first version), `use_gpu`
 (default true), and how camera counts are scaled to 0-1 before inference.
 By default `normlow = 0` and `normhigh = 5000` are fixed counts mapped to 0
 and 1; with several channels each may be a list, one value per listed
@@ -194,7 +194,14 @@ steps = 120                   # number of timepoints
 interval_seconds = 60         # between timepoints
 setup_time_seconds = 5        # how early events are prepared before each timepoint
 time_between_positions = 10   # offset between successive experiments within a timepoint
+start_delay_seconds = 240     # optional: wait once before the first timepoint (default 0)
 ```
+
+`start_delay_seconds` shifts the whole time course once, for example to let a
+laser warm up after its power was set; the interval between timepoints is
+unchanged. `setup_time_seconds` is different: it is how early each timepoint's
+events are prepared, so raising it does not delay the start. To start one
+experiment later than the others, use `t_delay` (in timepoints) in its TOML.
 
 The plan PyCLM derives from these files is written to `plan.useq.yaml` in
 the experiment directory and embedded in every output (see

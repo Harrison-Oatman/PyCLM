@@ -77,7 +77,7 @@ def make_experiment(
 
 
 def make_schedule(
-    experiments, *, steps=3, interval=0.02, setup=0.0, between=0.0
+    experiments, *, steps=3, interval=0.02, setup=0.0, between=0.0, start_delay=0.0
 ) -> ExperimentSchedule:
     positions = {
         exp.experiment_name: MicroscopePosition(
@@ -92,6 +92,7 @@ def make_schedule(
         t_interval=interval,
         t_setup=setup,
         t_between=between,
+        t_delay_s=start_delay,
     )
 
 

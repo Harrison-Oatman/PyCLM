@@ -673,7 +673,12 @@ def check_directory(
             schedule_name,
             "",
             f"{t.steps} timepoints every {t.interval_seconds:g} s "
-            f"({t.steps * t.interval_seconds / 60:.1f} min)",
+            f"({t.steps * t.interval_seconds / 60:.1f} min)"
+            + (
+                f", after a {t.start_delay_seconds:g} s start delay"
+                if t.start_delay_seconds
+                else ""
+            ),
         )
     except AmbiguousFileError as e:
         report.error(SCHEDULE_NAME, "", str(e))
