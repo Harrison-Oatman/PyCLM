@@ -3,7 +3,8 @@ The ``pyclm`` command.
 
 ::
 
-    pyclm run <dir> [--config FILE] [--dry] [--gui] [--no-check | --force]
+    pyclm run <dir> [--config FILE] [--dry] [--gui | --detached] [--no-check | --force]
+    pyclm watch <dir> [--every-s S] [--once] [--images] [--on-flag CMD] [--then CMD]
     pyclm check <dir> [--config FILE] [--mm-config FILE] [--dry] [--fix]
     pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N | --t A:B[:STEP]]
     pyclm export <dir> [channels ...] [--config FILE]
@@ -21,7 +22,7 @@ import argparse
 import sys
 from pathlib import Path
 
-COMMANDS = ("run", "check", "preview", "export", "gui", "new")
+COMMANDS = ("run", "check", "preview", "export", "gui", "new", "watch")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default=None, help="path to pyclm_config.toml")
     p.add_argument("--dry", action="store_true", help="run on the virtual microscope")
     p.add_argument("--gui", action="store_true", help="open the live viewer")
+    p.add_argument(
+        "--detached",
+        action="store_true",
+        help="check, then start the run in its own process and return; closing "
+        "this terminal or agent does not stop it (output in <dir>/detached.log)",
+    )
     g = p.add_mutually_exclusive_group()
     g.add_argument("--no-check", action="store_true", help="skip the check")
     g.add_argument(
@@ -112,6 +119,55 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(func=cmd_export)
 
+    p = sub.add_parser(
+        "watch",
+        help="follow a running (or finished) experiment directory and flag problems",
+    )
+    p.add_argument("directory")
+    p.add_argument(
+        "--every-s", type=float, default=60.0, help="seconds between checks (60)"
+    )
+    p.add_argument(
+        "--once", action="store_true", help="check once, print, and exit (1 if flags)"
+    )
+    p.add_argument(
+        "--images",
+        action="store_true",
+        help="also flag brightness, saturation and focus changes from the newest frames",
+    )
+    p.add_argument(
+        "--late-s",
+        type=float,
+        default=None,
+        help="flag an experiment this many seconds behind (default: one interval)",
+    )
+    p.add_argument(
+        "--stale-min",
+        type=float,
+        default=10.0,
+        help="flag a status.json not rewritten for this many minutes (10)",
+    )
+    p.add_argument(
+        "--on-flag",
+        default=None,
+        help="a command to run when new flags appear (gets the flags file as its last argument)",
+    )
+    p.add_argument(
+        "--quiet-min",
+        type=float,
+        default=30.0,
+        help="minutes before --on-flag runs again for the same flag (30)",
+    )
+    p.add_argument(
+        "--then",
+        default=None,
+        help="a command to run once the run is done and its files have settled",
+    )
+    p.add_argument(
+        "--out", default=None, help="where flags are written (default: <dir>/watch)"
+    )
+    p.set_defaults(func=cmd_watch)
+
     p = sub.add_parser("gui", help="open the live viewer on an experiment directory")
     p.add_argument("directory")
     p.set_defaults(func=cmd_gui)
@@ -139,6 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 # --------------------------------------------------------------- commands
 def cmd_run(args) -> int:
+    if getattr(args, "detached", False):
+        return _run_detached(args)
     from .check import CheckFailed
     from .gui import GuiUnavailable
     from .methods import MethodLoadError
@@ -160,6 +218,43 @@ def cmd_run(args) -> int:
         print(f"error: {e}")
         return 1
     return 0
+
+
+def _run_detached(args) -> int:
+    from .check import check_directory
+    from .detach import launch
+
+    if args.gui:
+        print(
+            "error: --detached and --gui do not go together; open the viewer with pyclm gui"
+        )
+        return 1
+    directory = Path(args.directory)
+    if not args.no_check:
+        report = check_directory(directory, args.config)
+        print(report.text())
+        if report.errors and not args.force:
+            print("not started: fix the errors above, or add --force")
+            return 1
+    started = launch(directory, args.config, dry=args.dry)
+    print(started.text())
+    return 0
+
+
+def cmd_watch(args) -> int:
+    from .watch import WatchSettings, watch
+
+    settings = WatchSettings(
+        every_s=args.every_s,
+        images=args.images,
+        late_s=args.late_s,
+        stale_min=args.stale_min,
+        on_flag=args.on_flag,
+        quiet_min=args.quiet_min,
+        then=args.then,
+        out=Path(args.out) if args.out else None,
+    )
+    return watch(Path(args.directory), settings, once=args.once)
 
 
 def cmd_check(args) -> int:

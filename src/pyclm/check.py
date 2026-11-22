@@ -1121,7 +1121,13 @@ def _dry_rehearsal(
     tmp = Path(tempfile.mkdtemp(prefix="pyclm-check-"))
     try:
         for item in directory.iterdir():
-            if item.suffix in OUTPUT_SUFFIXES or item.name in ("preview", "log.log"):
+            if item.suffix in OUTPUT_SUFFIXES or item.name in (
+                "preview",
+                "log.log",
+                "watch",
+                "detached.json",
+                "detached.log",
+            ):
                 continue
             if item.is_dir():
                 shutil.copytree(item, tmp / item.name)
