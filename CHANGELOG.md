@@ -18,6 +18,20 @@
   `--quiet-min`), and `--then` runs a command once the run is done and its
   files have settled. It is read-only on the run and never writes
   `commands/`.
+- **`pyclm export <dir> --movies`** writes one MP4 preview movie per
+  experiment to `movies/`: channels side by side, the light pattern as a
+  cyan overlay, segmentation outlines, contrast fixed over the whole movie,
+  never cropped or rotated (`--split`, `--fps`, `--scale`, `--no-pattern`,
+  `--no-outlines`). From Python: `pyclm.io.movies.export_movies`.
+- **`pyclm pack <dir> <destination>`** copies a finished run as one
+  uncompressed zip per store plus the loose files, writes `manifest.json`
+  and verifies the copy. `--verify` checks a copy, `--unpack` unpacks and
+  checks one. It refuses an unfinished run unless forced, and skips
+  previews and the ImageJ exports unless `--keep-exports`.
+- **`pyclm stitch <dir>`** draws every experiment's newest frame where the
+  stage was (from the frames table) into `stitched/overview.png`, once or
+  every `--every-s` until the run is done; `--orientation` turns the frames
+  for microscopes whose camera is mirrored or rotated on the stage.
 
 - **More than one DMD per run** (docs/multi-slm-design.md). Each DMD
   beyond MicroManager's default SLM gets an `[slm.<label>]` table in

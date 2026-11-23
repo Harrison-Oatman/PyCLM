@@ -1125,6 +1125,8 @@ def _dry_rehearsal(
                 "preview",
                 "log.log",
                 "watch",
+                "movies",
+                "stitched",
                 "detached.json",
                 "detached.log",
             ):

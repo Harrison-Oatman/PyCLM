@@ -54,6 +54,11 @@ pattern in force at every stimulation.
 - When the run finishes, ImageJ hyperstacks are exported next to the data
   (raw channels, segmentation labels, and the pattern warped into camera
   space). Export again at any time with `pyclm export <dir>`.
+- `pyclm export <dir> --movies` writes a preview movie per position, with
+  the light pattern overlaid; `pyclm stitch <dir>` draws every position's
+  newest frame where the stage was, in one image.
+- To move a run to another computer, `pyclm pack <dir> <destination>`
+  copies it as a few zip files and checks the copy.
 - Open any output in Python with `pyclm.io.open(path)`; OME-Zarr outputs also
   open directly in Fiji, napari, and `zarr`.
 - See [Data format and export](data_format.md) for the layouts, the frames

@@ -30,6 +30,9 @@ uv run pyclm preview <dir> <experiment> --image frame.tif   # or --image 545=a.t
 uv run pyclm run <dir> [--config path/to/pyclm_config.toml] [--dry] [--gui | --detached] [--force]
 uv run pyclm watch <dir> [--once] [--images] [--on-flag CMD] [--then CMD]   # flags from status.json, log.log, frames
 uv run pyclm export <dir> [channels]      # ImageJ hyperstacks (convert_hdf5s is an alias)
+uv run pyclm export <dir> --movies        # MP4 per experiment (io/movies.py), pattern overlay + outlines
+uv run pyclm pack <dir> <dest>            # zip per store + manifest, verified (pack.py); --verify, --unpack
+uv run pyclm stitch <dir>                 # newest frames placed by stage x, y -> stitched/overview.png (stitch.py)
 uv run pyclm gui <dir>                    # the live viewer (napari; status line + minimap dock)
 ```
 

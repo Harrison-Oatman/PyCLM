@@ -1,6 +1,6 @@
 # The `pyclm` command
 
-One command with seven subcommands covers a run from the first file to the
+One command with nine subcommands covers a run from the first file to the
 exported stacks:
 
 ```
@@ -12,6 +12,9 @@ pyclm run <dir> [--dry] [--gui] check it, then run it
 pyclm run <dir> --detached      check it, then run it in its own process
 pyclm watch <dir>               follow a run and flag what needs a person
 pyclm export <dir> [channels]   write ImageJ hyperstacks for finished outputs
+pyclm export <dir> --movies     write an MP4 preview movie per position
+pyclm pack <dir> <destination>  copy a finished run as a few zip files, checked
+pyclm stitch <dir>              one image of every position's newest frame, placed by stage
 pyclm gui <dir>                 open the live viewer
 ```
 
@@ -257,6 +260,29 @@ uv run pyclm gui my_experiment
 
 See [Data format](data_format.md) for what the export contains.
 
+### Preview movies: `--movies`
+
+```bash
+uv run pyclm export my_experiment --movies
+uv run pyclm export my_experiment 545 --movies --fps 15 --scale 0.5
+uv run pyclm export my_experiment --movies --split
+```
+
+writes `movies/<experiment>.mp4`, one movie per position, instead of the
+ImageJ stacks. Each movie frame is one imaging timepoint, with the
+channels side by side in gray. The light pattern in force at that time is
+a 40 % cyan overlay (`--no-pattern` leaves it out), and segmentation
+outlines are drawn where the run saved them (`--no-outlines`). Contrast is
+fixed per channel over the whole movie, so a real change in brightness
+stays visible. Frames are never cropped or rotated.
+
+Naming channels exports only those. `--split` writes one movie per
+channel (`<experiment>_<channel>.mp4`), `--scale` resizes, `--fps` sets
+the speed (10), and `--out` writes elsewhere. Movies are H.264 when
+`ffmpeg` is on the PATH or `imageio-ffmpeg` is installed. Otherwise
+OpenCV's encoder is used, which VLC plays but some Windows players do not.
+Movies can be made while a run is going, from the frames written so far.
+
 In the viewer, positions are an axis, not layers: each channel is one layer
 stacked over (position, t), so the layer list has one entry per channel
 however many positions there are, and contrast limits are one setting per
@@ -269,6 +295,57 @@ back on; **Normalize now** resets every channel once). The dock also shows
 the status line and the minimap, refreshed from `status.json` every second.
 Experiments with the same group name at different cadences get separate
 layers (`imaging@5/545`).
+
+## `pyclm pack`
+
+```bash
+uv run pyclm pack my_experiment E:/                 # -> E:/my_experiment/
+uv run pyclm pack --verify E:/my_experiment         # check a copy
+uv run pyclm pack --unpack E:/my_experiment D:/data # -> D:/data/my_experiment/
+```
+
+copies a finished run somewhere else, such as a USB drive, a network
+share or a cloud folder. Each top-level folder (each `.zarr` store) becomes
+one uncompressed `.zip`, so the copy is a few dozen large files instead of
+thousands of chunk files. Everything else is copied as it is, and
+`movies/` always stays loose so the movies can be watched where they land.
+It writes `manifest.json` (every original file, its size, and the archive
+that holds it), then checks the copy against it.
+
+It refuses a run whose `status.json` does not say done, or whose files
+changed in the last 10 minutes (the ImageJ export may still be writing);
+`--force` copies anyway. It skips `preview/` and the ImageJ exports, which
+duplicate the stores (`--keep-exports` copies them too). `--checksums`
+also hashes every file, which takes about twice as long. `--no-zip`
+copies file by file.
+
+`--verify` checks a copy, packed or not: missing files, wrong sizes, files
+not in the manifest, and, with `--checksums`, corrupted contents.
+`--unpack` checks a packed copy, unpacks it, and checks the result.
+Nothing is ever deleted: keep the original until the copy is verified where
+it landed.
+
+## `pyclm stitch`
+
+```bash
+uv run pyclm stitch my_experiment
+uv run pyclm stitch my_experiment --channel 545 --every-s 60
+uv run pyclm stitch my_experiment --orientation flip_ud
+```
+
+draws one overview of a run: each position's newest frame, placed where
+the stage was when it was taken (from the frames table), outlined and
+labeled. It writes `stitched/overview.png`, in stage coordinates: columns
+follow stage +x and rows follow stage +y. With `--every-s` it redraws until
+the run is done, which is a quick way to see a whole plate or dish fill in
+during a scout. It draws the first channel unless given `--channel`, and
+the longest side is 3000 pixels (`--max-px`).
+
+How the camera image sits on the stage depends on the microscope. If
+neighboring fields look mirrored or turned relative to each other, pass
+`--orientation` (`identity`, `flip_ud`, `flip_lr`, `rot90`, `rot180`,
+`rot270`, `transpose`). Two overlapping positions show which one is right;
+note it in your setup notes.
 
 ## Commands to a running experiment
 

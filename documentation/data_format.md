@@ -42,6 +42,11 @@ experiment_dir/
 ├── status.json               # progress, lateness and errors, rewritten every timepoint
 ├── plan.useq.yaml            # the acquisition plan derived from your TOMLs and positions
 ├── preview/                  # (pyclm preview) what a method produced on one image
+├── movies/                   # (pyclm export --movies) one MP4 per experiment
+├── stitched/                 # (pyclm stitch) overview.png of the newest frames
+├── watch/                    # (pyclm watch) flags.json and flags_log.jsonl
+├── detached.json             # (pyclm run --detached) process id and command
+├── detached.log              # (pyclm run --detached) the run's console output
 ├── all_layers.txt            # layer list used by the live GUI
 └── log.log
 ```
@@ -269,6 +274,9 @@ A `.zarr` store is a folder of many small chunk files. Copy or move the
 whole folder as a unit, together with `frames.parquet` / `frames.csv` and
 `plan.useq.yaml` from the same directory. If a single file is required for
 archiving, zip the folder; `zarr` can read a zipped store directly.
+`pyclm pack <dir> <destination>` does this for a whole run: one zip per
+store, the rest copied as is, and a manifest that the copy is checked
+against ([The pyclm command](command_line.md)).
 
 ## The HDF5 layout (format 1)
 
@@ -340,6 +348,11 @@ with pyclm.io.open("experiment_dir/bar10.pos1.zarr") as exp:
         include_labels=True,       # add the yellow label channels
     )
 ```
+
+**Preview movies.** `pyclm export <dir> --movies` writes one MP4 per
+experiment instead, with the pattern overlaid and the segmentation
+outlined (see [The pyclm command](command_line.md));
+from Python, `pyclm.io.movies.export_movies(exp, out_dir)`.
 
 Frames that were never acquired are not part of the export: the hyperstack's
 time axis is the group's compact axis, and `finterval` carries the real
