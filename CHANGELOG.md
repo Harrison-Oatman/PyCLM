@@ -58,6 +58,20 @@
   `cellpose>=4.2.0`, the first release with `cpsam_v2` (the lock moves from
   4.1.1 to 4.2.1.1).
 
+- **`run_record.json` and one run at a time.** Every run now writes
+  `run_record.json` when it ends, however it ends: times with their UTC
+  offset, host and user, the command, the PyCLM version and git commit,
+  SHA-256 of `pyclm_config.toml` and the Micro-Manager `.cfg`, per experiment
+  the methods and their arguments and how far it got, the outcome
+  (`finished`, `stopped`, `crashed` with the error), error and dropped-frame
+  counts, flags from `pyclm watch`, and the outputs with their sizes
+  (documentation/data_format.md, "The run record"). A run on the microscope
+  also holds a lock (`microscope.lock` in `%PROGRAMDATA%\pyclm` on Windows,
+  the temporary folder elsewhere, or `PYCLM_LOCK_DIR`), so a second
+  `pyclm run` or `--detached` launch on the same computer refuses to start
+  and names the run that holds it; a lock left by a crashed run is replaced.
+  Dry runs take no lock.
+
 - **Two pattern methods for frequency responses: `spectrum` and
   `grid_pulses`.** `spectrum` switches the whole field on while a sum of
   `n_freqs` sinusoids, with periods log-spaced from `period_min_min` to

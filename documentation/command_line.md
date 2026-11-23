@@ -172,6 +172,27 @@ checks the directory, prints the report, and starts the run unless there
 are errors. `--dry` uses the virtual microscope, `--gui` opens the live
 viewer, `--config` names a `pyclm_config.toml` elsewhere.
 
+**One run at a time.** A run on the microscope (not a dry run) holds a lock
+while it runs, so a second `pyclm run` on the same computer refuses to start
+and says whose run holds the microscope, from which directory and since
+when. This covers another terminal, another person's agent and a second
+`--detached` launch. The lock is the file `microscope.lock` in
+`%PROGRAMDATA%\pyclm` on Windows, or in the system temporary folder
+elsewhere; set `PYCLM_LOCK_DIR` to put it somewhere else, for example a
+folder every user of a shared computer can write. A lock left by a run that
+crashed is replaced by the next run, with a warning in `log.log`.
+
+**The run record.** When a run ends, however it ends, it writes
+`run_record.json` into the directory: start, end and duration, host and
+user, the command, the PyCLM version (and git commit), the SHA-256 of
+`pyclm_config.toml` and of the Micro-Manager `.cfg`, per experiment the
+pattern method and its arguments, the segmentation and tracking methods and
+the last timepoint acquired, the outcome (`finished`, `stopped` or
+`crashed`, with the error), error and dropped-frame counts, flags from
+`pyclm watch`, and every output with its size. It is the file to read, or to
+copy into a project's records, to know what a run was without opening its
+data (see [data format](data_format.md)).
+
 ### Runs that outlive the terminal: `--detached`
 
 ```bash
