@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **`pyclm run --detached`** checks the directory, then starts the run in a
+  process of its own and returns. Closing the terminal, ending its process
+  tree, or restarting the coding agent that started it no longer stops the
+  run. The run's console output goes to `detached.log` and its process id
+  and command to `detached.json`. On Windows the run leaves the terminal's
+  job object where the job allows it, and says so when it cannot.
+- **`pyclm watch <dir>`** follows a run from `status.json`, `log.log`,
+  `detached.json` and (with `--images`) the newest frames, and flags a
+  missing or stale status, a stopped process, lateness, failed
+  acquisitions, process errors, dropped frames, error lines in the log,
+  and brightness, saturation and focus changes. Each check is written to
+  `watch/flags.json` and `watch/flags_log.jsonl`. `--on-flag` runs a
+  command of the user's when something new is flagged (once per
+  `--quiet-min`), and `--then` runs a command once the run is done and its
+  files have settled. It is read-only on the run and never writes
+  `commands/`.
+
 - **More than one DMD per run** (docs/multi-slm-design.md). Each DMD
   beyond MicroManager's default SLM gets an `[slm.<label>]` table in
   `pyclm_config.toml`, keyed by its MicroManager device label, with its own

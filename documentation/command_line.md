@@ -1,6 +1,6 @@
 # The `pyclm` command
 
-One command with six subcommands covers a run from the first file to the
+One command with seven subcommands covers a run from the first file to the
 exported stacks:
 
 ```
@@ -9,6 +9,8 @@ pyclm check <dir>               report what is wrong with it
 pyclm preview <dir> <experiment> --image frame.tif
                                 run the segmentation and the pattern method on one image
 pyclm run <dir> [--dry] [--gui] check it, then run it
+pyclm run <dir> --detached      check it, then run it in its own process
+pyclm watch <dir>               follow a run and flag what needs a person
 pyclm export <dir> [channels]   write ImageJ hyperstacks for finished outputs
 pyclm gui <dir>                 open the live viewer
 ```
@@ -166,6 +168,84 @@ uv run pyclm run my_experiment --dry --gui
 checks the directory, prints the report, and starts the run unless there
 are errors. `--dry` uses the virtual microscope, `--gui` opens the live
 viewer, `--config` names a `pyclm_config.toml` elsewhere.
+
+### Runs that outlive the terminal: `--detached`
+
+```bash
+uv run pyclm run my_experiment --detached
+```
+
+checks the directory in the terminal, as above, then starts the run in a
+process of its own and returns at once. Closing the terminal, ending its
+process tree, or restarting a coding agent that typed the command does not
+stop the run. Use it for any run you will not sit next to, and always when an
+agent starts the run for you.
+
+The command prints the run's process id and writes two files into the
+directory:
+
+| File | What it holds |
+| --- | --- |
+| `detached.json` | process id, the exact command, start time, where the output goes |
+| `detached.log` | the run's console output: warnings, errors, a traceback if it crashes |
+
+`log.log` is written as in any run. `--detached` cannot be combined with
+`--gui`; open the viewer on the running directory with `pyclm gui <dir>`. To
+stop a detached run, send it a `stop_run` command (below); this ends it
+cleanly and keeps everything acquired.
+
+On Windows the run is started outside the terminal's console and process
+group, and outside its job object where the job allows that. If a job does
+not allow it (some remote-desktop and agent environments), the command says
+so: the run then still survives the terminal window closing, but not the job
+being closed. For runs that must survive anything, start
+`pyclm run <dir> --detached` from a Windows scheduled task.
+
+## `pyclm watch`
+
+```bash
+uv run pyclm watch my_experiment
+uv run pyclm watch my_experiment --once
+uv run pyclm watch my_experiment --images --on-flag "notify.bat"
+uv run pyclm watch my_experiment --then "python next_step.py"
+```
+
+follows a run from the files it writes anyway and flags what needs a
+person. It checks every 60 s (`--every-s`) until the run is done; `--once`
+checks once and exits with code 1 if anything is flagged. It never writes
+into `commands/` and cannot change or stop a run, so it is safe to start,
+stop and restart at any time, from any terminal, on a run that is going or
+finished.
+
+| Flag | Raised when |
+| --- | --- |
+| `no_status` | the directory has no `status.json` yet |
+| `stale` | `status.json` was not rewritten for `--stale-min` minutes (10) and the run is not done |
+| `stopped` | the process started by `--detached` has exited, and the run is not done |
+| `late` | an experiment's last acquisition was more than `--late-s` seconds late (default: one interval) |
+| `acquisition_error` | an experiment's count of failed acquisitions rose |
+| `process_error` | a process's error count in `status.json` rose |
+| `dropped_frames` | the writer dropped frames, or some could not be delivered |
+| `log_error` | new `ERROR` or `CRITICAL` lines, or a traceback, appeared in `log.log` |
+| `brightness` | with `--images`: a channel's newest frame has under 0.5 or over 2 times the median of its first |
+| `saturation` | with `--images`: over 1 % of a frame's pixels sit at the camera's maximum |
+| `focus` | with `--images`: a channel's newest frame is under half as sharp as its first |
+
+Counts (errors, dropped frames, log lines) are flagged when they rise, so one
+old error is reported once. The image thresholds are starting points; a
+pattern that dims or brightens the field on purpose will trip them.
+
+Each check prints one line and writes `watch/flags.json` (the latest check)
+and appends to `watch/flags_log.jsonl` inside the directory (`--out` puts
+them elsewhere). `pyclm check` and dry rehearsals ignore that folder.
+
+`--on-flag COMMAND` runs a command whenever a flag appears that it has not
+run for in the last `--quiet-min` minutes (30), with the path of
+`flags.json` added as its last argument. PyCLM sends no messages itself:
+the command decides how a person is told (an email, a phone push, a chat
+message, a sound). `--then COMMAND` waits until the run says it is done and
+its files have stopped changing for 30 s, runs the command, and exits with
+its exit code; use it to start the next run or an export overnight.
 
 ## `pyclm export` and `pyclm gui`
 

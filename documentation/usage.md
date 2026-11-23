@@ -30,12 +30,17 @@ pyclm check <dir>                                # every problem in the files
 pyclm preview <dir> <experiment> --image frame.tif  # what the pattern does on an image
 pyclm run <dir> --dry --gui                      # the whole run on the virtual microscope
 pyclm run <dir> --gui                            # the real run
+pyclm run <dir> --detached                       # the real run, in its own process
+pyclm watch <dir>                                # follow it and flag problems
 ```
 
 `pyclm run` checks again and refuses to start on errors. Close other
 microscope control software before a real run. Data is saved as the run goes,
 so stopping it (Ctrl+C, or a `stop_run` command) loses nothing already
-acquired; `--gui` opens a live viewer. All the subcommands, and the commands
+acquired; `--gui` opens a live viewer. For a run you will not sit next to,
+`--detached` starts it in its own process, so closing the terminal does not
+stop it, and `pyclm watch <dir>` flags late, stalled or failing runs and can
+run a command of yours to tell you. All the subcommands, and the commands
 you can send to a running experiment, are in [The pyclm command](command_line.md).
 
 ## 3. Analyze the data
