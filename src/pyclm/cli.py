@@ -7,7 +7,10 @@ The ``pyclm`` command.
     pyclm watch <dir> [--every-s S] [--once] [--images] [--on-flag CMD] [--then CMD]
     pyclm check <dir> [--config FILE] [--mm-config FILE] [--dry] [--fix]
     pyclm preview <dir> <experiment> (--image FILE | --snap) [--config FILE] [--out DIR] [--t N | --t A:B[:STEP]]
-    pyclm export <dir> [channels ...] [--config FILE]
+    pyclm export <dir> [channels ...] [--config FILE] [--movies [--fps N] [--scale X] [--split]]
+    pyclm pack <dir> <destination> [--no-zip] [--checksums] [--force]
+    pyclm pack --verify <copy> | --unpack <copy> <destination>
+    pyclm stitch <dir> [--channel C] [--orientation O] [--every-s S]
     pyclm gui <dir>
     pyclm new <dir> [--template open-loop|closed-loop] [--name NAME] [--demo]
 
@@ -22,7 +25,17 @@ import argparse
 import sys
 from pathlib import Path
 
-COMMANDS = ("run", "check", "preview", "export", "gui", "new", "watch")
+COMMANDS = (
+    "run",
+    "check",
+    "preview",
+    "export",
+    "gui",
+    "new",
+    "watch",
+    "pack",
+    "stitch",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,6 +130,36 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--config", default=None, help="pyclm_config.toml for older HDF5 files"
     )
+    p.add_argument(
+        "--movies",
+        action="store_true",
+        help="write MP4 preview movies to <dir>/movies instead of ImageJ stacks",
+    )
+    p.add_argument(
+        "--fps", type=float, default=10.0, help="movie frames per second (10)"
+    )
+    p.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="movie size relative to the frames (1.0)",
+    )
+    p.add_argument(
+        "--split",
+        action="store_true",
+        help="one movie per channel instead of side by side",
+    )
+    p.add_argument(
+        "--no-pattern",
+        action="store_true",
+        help="leave the light pattern out of movies",
+    )
+    p.add_argument(
+        "--no-outlines",
+        action="store_true",
+        help="leave segmentation outlines out of movies",
+    )
+    p.add_argument("--out", default=None, help="movie folder (default: <dir>/movies)")
     p.set_defaults(func=cmd_export)
 
     p = sub.add_parser(
@@ -167,6 +210,78 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", default=None, help="where flags are written (default: <dir>/watch)"
     )
     p.set_defaults(func=cmd_watch)
+
+    p = sub.add_parser(
+        "pack", help="copy a finished run as a few zip files, with a checked manifest"
+    )
+    p.add_argument("directory", help="the run, or the copy with --verify / --unpack")
+    p.add_argument("destination", nargs="?", default=None)
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--verify", action="store_true", help="check a copy against its manifest"
+    )
+    mode.add_argument(
+        "--unpack",
+        action="store_true",
+        help="check a packed copy, then unpack it into <destination>/<run>",
+    )
+    p.add_argument(
+        "--no-zip",
+        action="store_true",
+        help="copy file by file instead of zipping folders",
+    )
+    p.add_argument(
+        "--checksums",
+        action="store_true",
+        help="also hash every file (about twice as slow)",
+    )
+    p.add_argument(
+        "--keep-exports",
+        action="store_true",
+        help="also copy the ImageJ exports (they duplicate the stores)",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="copy even if the run does not say done or its files are still changing",
+    )
+    p.set_defaults(func=cmd_pack)
+
+    p = sub.add_parser(
+        "stitch",
+        help="draw every position's newest frame where the stage was, in one image",
+    )
+    p.add_argument("directory")
+    p.add_argument(
+        "--channel", default=None, help="channel to draw (default: the first)"
+    )
+    p.add_argument(
+        "--orientation",
+        default="identity",
+        choices=(
+            "identity",
+            "flip_ud",
+            "flip_lr",
+            "rot90",
+            "rot180",
+            "rot270",
+            "transpose",
+        ),
+        help="how each camera frame is turned before it is placed (identity)",
+    )
+    p.add_argument(
+        "--every-s",
+        type=float,
+        default=None,
+        help="redraw this often until the run is done (default: once)",
+    )
+    p.add_argument(
+        "--max-px", type=int, default=3000, help="longest side of the image (3000)"
+    )
+    p.add_argument(
+        "--out", default=None, help="output folder (default: <dir>/stitched)"
+    )
+    p.set_defaults(func=cmd_stitch)
 
     p = sub.add_parser("gui", help="open the live viewer on an experiment directory")
     p.add_argument("directory")
@@ -319,6 +434,8 @@ def cmd_export(args) -> int:
 
     directory = Path(args.directory)
     wanted = set(args.channels)
+    if getattr(args, "movies", False):
+        return _export_movies(directory, list(args.channels), args)
     fallback = find_affine_transform(directory, args.config)
     written = []
     for path in pyclm_io.find_experiments(directory):
@@ -340,6 +457,73 @@ def cmd_export(args) -> int:
     for path in written:
         print(f"  {path}")
     return 0
+
+
+def _export_movies(directory: Path, channels: list[str], args) -> int:
+    from . import io as pyclm_io
+    from .io.movies import export_movies
+
+    out = Path(args.out) if args.out else directory / "movies"
+    written = []
+    for path in pyclm_io.find_experiments(directory):
+        with pyclm_io.open(path) as exp:
+            made = export_movies(
+                exp,
+                out,
+                channels=channels or None,
+                scale=args.scale,
+                fps=args.fps,
+                pattern=not args.no_pattern,
+                outlines=not args.no_outlines,
+                split=args.split,
+            )
+            if not made:
+                print(f"  {exp.name}: nothing imaged, no movie")
+            written += made
+    print(f"wrote {len(written)} movie(s)")
+    for path in written:
+        print(f"  {path}")
+    return 0
+
+
+def cmd_pack(args) -> int:
+    from .pack import pack, unpack, verify
+
+    if args.verify:
+        problems = verify(Path(args.directory), hashes=args.checksums)
+        if problems:
+            print("COPY IS NOT GOOD:\n  " + "\n  ".join(problems[:50]))
+            return 1
+        print(f"copy verified: {args.directory}")
+        return 0
+    if args.destination is None:
+        print("error: give a destination folder")
+        return 2
+    if args.unpack:
+        return unpack(
+            Path(args.directory), Path(args.destination), checksums=args.checksums
+        )
+    return pack(
+        Path(args.directory),
+        Path(args.destination),
+        zip_folders=not args.no_zip,
+        checksums=args.checksums,
+        force=args.force,
+        skip_exports=not args.keep_exports,
+    )
+
+
+def cmd_stitch(args) -> int:
+    from .stitch import stitch
+
+    return stitch(
+        Path(args.directory),
+        every_s=args.every_s,
+        out=Path(args.out) if args.out else None,
+        channel=args.channel,
+        orientation=args.orientation,
+        max_px=args.max_px,
+    )
 
 
 def cmd_gui(args) -> int:
