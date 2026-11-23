@@ -80,8 +80,9 @@ built-in method and its arguments. The common ones:
 |---|---|
 | A fixed shape or image | `circle`, `rectangle`, `full_on`, `image_mask` (a TIF) |
 | Several doses in one field (quadrants, a spot array) | `dose_grid` |
+| Several periods in one field (each square of a grid pulsed at its own period) | `grid_pulses` (or `dose_grid` with a `period_min` list and `dose_mode = "duty"`) |
 | Field of moving stripes (negative speed reverses) | `bar`, `sawtooth`, `bar_bounce`, `spokes`, `rings` |
-| Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar`, `chirp` (a period that sweeps) |
+| Whole field (or still stripes) pulsed on a schedule | `global_pulse`, `pulse_schedule`, `blinking_bar`, `chirp` (a period that sweeps), `spectrum` (a sum of sinusoids: many frequencies in one run) |
 | Any method pulsed on and off | `pulsed` with `[pattern.inner]` |
 | Light whole cells: all, a random fraction, or chosen by area / intensity / position; a band at the colony edge | `all_cells` (`invert` for the background), `random_cells` (needs tracks), `select_cells` |
 | Light one side of each cell (cells move toward the light) | `move_out`, `move_in`, `move_rotate`, `move_sequence` (a sequence of `u`, `d`, `l`, `r`, `s`) |

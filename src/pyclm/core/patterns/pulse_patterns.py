@@ -5,7 +5,9 @@ Open-loop pulse trains: stimulation that varies in time but never moves.
 it on an explicit list of intervals; ``blinking_bar`` gates the stationary
 bar's stripes with the same temporal gate as ``global_pulse``; ``pulsed``
 gates any other method with it; ``chirp`` pulses the whole field with a
-period that changes over the run.
+period that changes over the run; ``spectrum`` switches the whole field on
+and off by the sign of a sum of sinusoids, many frequencies in one run;
+``grid_pulses`` pulses each square of a grid at its own period.
 """
 
 from typing import ClassVar
@@ -15,6 +17,7 @@ import numpy as np
 from .bar_patterns import _check_stripes, _stripe_is_on
 from .composite import WrappingPattern
 from .pattern import PatternMethod
+from .static_patterns import DoseGridPattern
 from .zoo import ZooMeta
 
 
@@ -447,3 +450,148 @@ class ChirpPattern(PatternMethod):
         return np.full(
             (int(h), int(w)), self.is_on(context.time / 60), dtype=np.float16
         )
+
+
+class SpectrumPattern(PatternMethod):
+    """
+    The whole field fully on or fully off: on while the sum of ``n_freqs``
+    unit sinusoids, ``sin(2 pi t / P_k + phase_k)``, is above zero. The
+    periods ``P_k`` are log-spaced from ``period_min_min`` to
+    ``period_max_min``; each phase is drawn once from ``seed``, so a run is
+    reproducible. The light is on about half the time, and its on/off
+    switching carries power at every one of the periods, so one run probes
+    the response at many frequencies. Time counts from ``start_min``.
+    """
+
+    name = "spectrum"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={"period_min_min": 4, "period_max_min": 240, "n_freqs": 12, "seed": 0},
+        title="Spectrum",
+        description="The whole field on while a sum of sinusoids at log-spaced periods is above zero: many frequencies in one run.",
+        group="timed",
+        timeline=(0, 14400),
+    )
+
+    def __init__(
+        self, period_min_min=4.0, period_max_min=240.0, n_freqs=12, seed=0, **kwargs
+    ):
+        """
+        :param period_min_min: the shortest period, in minutes
+        :param period_max_min: the longest period, in minutes
+        :param n_freqs: how many periods, log-spaced between the two
+        :param seed: random seed of the phases (the same seed, the same run)
+        """
+        super().__init__(**kwargs)
+        if period_min_min is None or not 0 < period_min_min < period_max_min:
+            raise ValueError(
+                f"{self.name}: need 0 < period_min_min < period_max_min, "
+                f"got {period_min_min} and {period_max_min}"
+            )
+        if int(n_freqs) < 1:
+            raise ValueError(f"{self.name}: n_freqs must be at least 1, got {n_freqs}")
+        self.periods_min = np.geomspace(
+            float(period_min_min), float(period_max_min), int(n_freqs)
+        )
+        self.phases = np.random.default_rng(int(seed)).uniform(
+            0, 2 * np.pi, int(n_freqs)
+        )
+
+    def signal(self, t_rel_min) -> np.ndarray:
+        """The sum of the sinusoids ``t_rel_min`` after ``start_min``."""
+        t = np.asarray(t_rel_min, dtype=float)[..., None]
+        return np.sin(2 * np.pi * t / self.periods_min + self.phases).sum(axis=-1)
+
+    def is_on(self, t_minutes) -> bool:
+        if t_minutes < self.start_min:
+            return False
+        return bool(self.signal(t_minutes - self.start_min) > 0)
+
+    def generate(self, context):
+        h, w = self.pattern_shape
+        return np.full(
+            (int(h), int(w)), self.is_on(context.time / 60), dtype=np.float16
+        )
+
+
+class GridPulsesPattern(DoseGridPattern):
+    """
+    The field cut into an ``n_side`` x ``n_side`` grid of squares, each
+    pulsed on and off at its own period, on for the first ``duty`` fraction
+    of every period, all turning on together at ``start_min``. The periods
+    are evenly spaced from ``period_min_min`` to ``period_max_min``;
+    ``layout_seed`` shuffles which square gets which (negative: the shortest
+    top left, row by row), so period is not tied to place in the field.
+    This is ``dose_grid`` with ``dose_mode = "duty"``, one dose and a
+    per-block ``period_min`` list, timed from ``start_min``.
+    """
+
+    name = "grid_pulses"
+    zoo_meta = ZooMeta(
+        source="mdck",
+        kwargs={
+            "period_min_min": 30,
+            "period_max_min": 270,
+            "n_side": 3,
+            "duty": 0.5,
+            "gap_um": 20,
+        },
+        title="Grid Pulses",
+        description="A grid of squares, each pulsed at its own period: a frequency response side by side in one field.",
+        group="timed",
+        times=(0, 1500, 3000, 4500, 6000, 7500),
+    )
+
+    def __init__(
+        self,
+        period_min_min=30.0,
+        period_max_min=270.0,
+        n_side=3,
+        duty=0.5,
+        layout_seed=0,
+        gap_um=0.0,
+        **kwargs,
+    ):
+        """
+        :param period_min_min: the shortest period, in minutes
+        :param period_max_min: the longest period, in minutes
+        :param n_side: squares down and across the field
+        :param duty: the fraction of each period a square is on (0-1)
+        :param layout_seed: seed of the period-to-square shuffle (negative: in order)
+        :param gap_um: dark gap between neighboring squares, in um
+        """
+        for key in ("rows", "cols", "doses", "dose_mode", "period_min"):
+            if key in kwargs:
+                raise ValueError(
+                    f"grid_pulses: {key} is set by the method; use dose_grid "
+                    "for a grid of your own"
+                )
+        if period_min_min is None or not 0 < period_min_min <= period_max_min:
+            raise ValueError(
+                "grid_pulses: need 0 < period_min_min <= period_max_min, "
+                f"got {period_min_min} and {period_max_min}"
+            )
+        if not 0 < duty < 1:
+            raise ValueError(f"grid_pulses: duty must be in (0, 1), got {duty}")
+        n = int(n_side)
+        if n < 1:
+            raise ValueError(f"grid_pulses: n_side must be at least 1, got {n_side}")
+        periods = np.linspace(float(period_min_min), float(period_max_min), n * n)
+        layout = np.arange(n * n)
+        if int(layout_seed) >= 0:
+            layout = np.random.default_rng(int(layout_seed)).permutation(layout)
+        super().__init__(
+            rows=n,
+            cols=n,
+            doses=[float(duty)],
+            gap_um=gap_um,
+            dose_mode="duty",
+            period_min=[float(periods[k]) for k in layout],
+            **kwargs,
+        )
+        self.n_side = n
+        self.duty = float(duty)
+        self.layout = layout.reshape(n, n)
+
+    def duty_time_min(self, context) -> float:
+        return context.time / 60 - self.start_min

@@ -27,6 +27,19 @@
   `cellpose>=4.2.0`, the first release with `cpsam_v2` (the lock moves from
   4.1.1 to 4.2.1.1).
 
+- **Two pattern methods for frequency responses: `spectrum` and
+  `grid_pulses`.** `spectrum` switches the whole field on while a sum of
+  `n_freqs` sinusoids, with periods log-spaced from `period_min_min` to
+  `period_max_min` and phases drawn from `seed`, is above zero: about half
+  the time on, with power at every period, in one reproducible run.
+  `grid_pulses` cuts the field into an `n_side` x `n_side` grid and pulses
+  each square at its own period (evenly spaced from `period_min_min` to
+  `period_max_min`, placed by `layout_seed`), on for the first `duty` of
+  each period. Both count time from `start_min` and have method-zoo cards
+  that show their time course. `dose_grid` now takes a list for
+  `period_min` with `dose_mode = "duty"`, one period per block
+  (`grid_pulses` is that case, with the periods and layout filled in).
+
 - **A stimulation's pattern is chosen when the microscope reaches it.** The
   SLM buffer used to answer when the Manager scheduled the timepoint, and
   the answer waited until the microscope got there. A microscope running

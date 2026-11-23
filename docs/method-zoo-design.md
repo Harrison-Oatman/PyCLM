@@ -171,6 +171,16 @@ family it would join.
 `embryo_pole` / `embryo_band`. See
 [pattern-methods-expansion-design.md](pattern-methods-expansion-design.md).
 
+**Added after 2.0 (frequency responses for the preprint):** `spectrum`
+(the whole field on while a seeded sum of sinusoids at log-spaced
+periods is above zero; the deterministic, reproducible form of the
+system-identification ask behind `random_pulses`) and `grid_pulses`
+(each square of an `n_side` x `n_side` grid pulsed at its own period).
+`grid_pulses` is a named preset of `dose_grid`, whose `period_min` now
+takes a per-block list with `dose_mode = "duty"`; it adds evenly spaced
+periods, a seeded layout and timing from `start_min`. Both cards show
+time courses (a timeline for `spectrum`, a filmstrip for `grid_pulses`).
+
 Graded intensities on a binary DMD need spatial dithering or a duty
 cycle across timepoints; one shared helper (`dither(pattern, rng)`)
 would serve `gradient`, `spot_array` and `nucleus_proportional`.
