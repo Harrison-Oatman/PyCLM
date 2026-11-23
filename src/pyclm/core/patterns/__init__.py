@@ -43,8 +43,10 @@ from .pulse_patterns import (
     BlinkingBarPattern,
     ChirpPattern,
     GlobalPulsePattern,
+    GridPulsesPattern,
     PulsedPattern,
     PulseSchedulePattern,
+    SpectrumPattern,
 )
 from .static_patterns import (
     CirclePattern,
@@ -81,6 +83,8 @@ known_models = {
     "image_mask": ImageMaskPattern,
     "pulsed": PulsedPattern,
     "chirp": ChirpPattern,
+    "spectrum": SpectrumPattern,
+    "grid_pulses": GridPulsesPattern,
     "all_cells": AllCellsPattern,
     "random_cells": RandomCellsPattern,
     "select_cells": SelectCellsPattern,

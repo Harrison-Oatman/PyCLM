@@ -139,7 +139,10 @@ class DoseGridPattern(PatternMethod):
     (row-major) gets ``doses[i]``, the list cycled. ``spot_um`` lights a
     centered disc of that diameter in each block instead of the whole block.
     A dose between 0 and 1 is delivered by ``dose_mode`` (``"gray"``,
-    ``"dither"``, or ``"duty"`` over ``period_min``).
+    ``"dither"``, or ``"duty"`` over ``period_min``). With ``"duty"``,
+    ``period_min`` may be a list: block ``i`` then pulses with period
+    ``period_min[i]`` (row-major, cycled), so blocks can differ in frequency
+    as well as in dose (``grid_pulses`` is that case).
     """
 
     name = "dose_grid"
@@ -174,7 +177,8 @@ class DoseGridPattern(PatternMethod):
         :param gap_um: dark gap between neighboring blocks, in um
         :param spot_um: diameter of a disc lit in each block (None: the whole block)
         :param dose_mode: "gray", "dither" or "duty"
-        :param period_min: the period of a "duty" dose, in minutes
+        :param period_min: the period of a "duty" dose, in minutes; with
+            "duty", a list gives each block its own period (row-major, cycled)
         """
         super().__init__(**kwargs)
         from .dose import check_dose_mode
@@ -188,17 +192,24 @@ class DoseGridPattern(PatternMethod):
             raise ValueError(f"{self.name}: gap_um must not be negative")
         if spot_um is not None and spot_um <= 0:
             raise ValueError(f"{self.name}: spot_um must be positive")
-        check_dose_mode(self.name, dose_mode, period_min)
+        periods = [float(p) for p in np.atleast_1d(period_min)]
+        if len(periods) > 1 and dose_mode != "duty":
+            raise ValueError(
+                f"{self.name}: a list of period_min needs dose_mode = 'duty'"
+            )
+        for p in periods or [None]:
+            check_dose_mode(self.name, dose_mode, p)
         self.rows = int(rows)
         self.cols = int(cols)
         self.doses = doses
         self.gap_um = float(gap_um)
         self.spot_um = None if spot_um is None else float(spot_um)
         self.dose_mode = dose_mode
-        self.period_min = float(period_min)
+        self.periods_min = periods
+        self.period_min = periods[0]
 
-    def dose_map(self) -> np.ndarray:
-        """Every pixel's dose, before ``dose_mode``."""
+    def block_map(self) -> np.ndarray:
+        """Every pixel's block index (row-major), -1 outside the blocks."""
         xx, yy = self.get_um_meshgrid()
         h, w = self.pattern_shape
         block_w = w * self.pixel_size_um / self.cols
@@ -216,18 +227,37 @@ class DoseGridPattern(PatternMethod):
             )
         else:
             inside = lx**2 + ly**2 <= (self.spot_um / 2) ** 2
+        return np.where(inside, row * self.cols + col, -1)
+
+    def dose_map(self) -> np.ndarray:
+        """Every pixel's dose, before ``dose_mode``."""
+        blocks = self.block_map()
         doses = np.array(
             [self.doses[i % len(self.doses)] for i in range(self.rows * self.cols)],
             dtype=np.float32,
         )
-        return np.where(inside, doses[row * self.cols + col], 0.0).astype(np.float32)
+        return np.where(blocks >= 0, doses[np.maximum(blocks, 0)], 0.0).astype(
+            np.float32
+        )
+
+    def duty_time_min(self, context) -> float:
+        """The minute the duty cycle is measured from (the run's start)."""
+        return context.time / 60
 
     def generate(self, context):
-        from .dose import deliver
+        from .dose import deliver, duty
 
-        return deliver(
-            self.dose_map(), self.dose_mode, context.time / 60, self.period_min
-        )
+        t = self.duty_time_min(context)
+        if len(self.periods_min) == 1:
+            return deliver(self.dose_map(), self.dose_mode, t, self.period_min)
+        blocks = self.block_map()
+        dose = np.clip(self.dose_map(), 0.0, 1.0)
+        out = np.zeros(dose.shape, np.float32)
+        for i in range(self.rows * self.cols):
+            here = blocks == i
+            period = self.periods_min[i % len(self.periods_min)]
+            out[here] = duty(dose[here], t, period)
+        return out
 
 
 class ImageMaskPattern(PatternMethod):

@@ -751,3 +751,84 @@ def test_the_controller_reads_the_pixel_size_affine():
     )
     assert camera_to_stage_matrix(Core((0, 0, 0, 0, 0, 0))) is None
     assert camera_to_stage_matrix(object()) is None
+
+
+def test_dose_grid_takes_a_period_per_block():
+    m = make(
+        "dose_grid",
+        shape=(100, 100),
+        gap_um=0,
+        doses=[0.5],
+        dose_mode="duty",
+        period_min=[10, 20, 40, 80],
+    )
+    # minute 7: block 0 (period 10) is in its off half, the others on
+    p = lit(m, Context(time=7 * 60))
+    assert p[25, 25] == 0
+    assert p[25, 75] == p[75, 25] == p[75, 75] == 1
+    # minute 12: block 0 on again, block 1 (period 20) off
+    p = lit(m, Context(time=12 * 60))
+    assert p[25, 25] == 1
+    assert p[25, 75] == 0
+    with pytest.raises(ValueError, match="duty"):
+        known_models["dose_grid"](period_min=[10, 20])
+
+
+def test_spectrum_follows_the_sign_of_the_sum():
+    m = make("spectrum", period_min_min=4, period_max_min=240, n_freqs=12, seed=3)
+    assert np.allclose(np.log(m.periods_min), np.linspace(np.log(4), np.log(240), 12))
+    same = make("spectrum", period_min_min=4, period_max_min=240, n_freqs=12, seed=3)
+    assert np.array_equal(m.phases, same.phases)
+    minutes = np.arange(0, 600, 1.0)
+    for t in minutes[::37]:
+        p = lit(m, Context(time=t * 60))
+        assert set(np.unique(p)) <= {0.0, 1.0}  # the whole field, on or off
+        expected = np.sin(2 * np.pi * t / m.periods_min + m.phases).sum() > 0
+        assert p.all() == expected
+        assert p.any() == expected
+    on = np.mean([m.is_on(t) for t in minutes])
+    assert 0.3 < on < 0.7
+    late = make("spectrum", seed=3, n_freqs=12, start_min=60)
+    assert not late.is_on(30)
+    assert late.is_on(60 + 5) == m.is_on(5)
+    with pytest.raises(ValueError, match="period_min_min"):
+        known_models["spectrum"](period_min_min=10, period_max_min=5)
+    with pytest.raises(ValueError, match="n_freqs"):
+        known_models["spectrum"](n_freqs=0)
+
+
+def test_grid_pulses_is_dose_grid_with_a_period_per_square():
+    kw = {"period_min_min": 30, "period_max_min": 270, "n_side": 3, "duty": 0.5}
+    m = make("grid_pulses", shape=(90, 90), layout_seed=-1, **kw)
+    # in order: square k has period 30 + 30 k, on for the first half of it
+    for t in (0, 20, 40, 100, 200):
+        p = lit(m, Context(time=t * 60))
+        for k in range(9):
+            r, c = divmod(k, 3)
+            period = 30 + 30 * k
+            assert p[r * 30 + 15, c * 30 + 15] == ((t % period) < period / 2)
+    shuffled = make("grid_pulses", shape=(90, 90), layout_seed=0, **kw)
+    assert sorted(shuffled.layout.ravel()) == list(range(9))
+    assert not np.array_equal(shuffled.layout.ravel(), np.arange(9))
+    same = make(
+        "dose_grid",
+        shape=(90, 90),
+        rows=3,
+        cols=3,
+        gap_um=0,
+        doses=[0.5],
+        dose_mode="duty",
+        period_min=[30 + 30 * k for k in shuffled.layout.ravel()],
+    )
+    for t in (0, 25, 70, 140):
+        ctx = Context(time=t * 60)
+        assert np.array_equal(lit(shuffled, ctx), lit(same, ctx))
+    # timed from start_min
+    late = make("grid_pulses", shape=(90, 90), layout_seed=-1, start_min=10, **kw)
+    assert lit(late, Context(time=5 * 60)).sum() == 0
+    assert lit(late, Context(time=(10 + 20) * 60))[15, 15] == 0  # 20 of 30: off
+    assert lit(late, Context(time=(10 + 10) * 60))[15, 15] == 1
+    with pytest.raises(ValueError, match="duty"):
+        known_models["grid_pulses"](duty=1.5)
+    with pytest.raises(ValueError, match="set by the method"):
+        known_models["grid_pulses"](rows=2)
