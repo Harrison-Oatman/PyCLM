@@ -457,6 +457,8 @@ def preview(
     # one state across the timepoints, as the pattern process keeps it
     state = ExperimentState(reqs, pattern_history=getattr(model, "pattern_history", 2))
     stim_every = max(1, int(exp.stimulation.every_t))
+    # [stimulation] exposure = 0 plans no light event at all (core/plan.py)
+    stim_on = exp.stimulation.exposure > 0
     patterns: list[np.ndarray] = []
     rows: list[dict] = []
     requests: list[str] = []
@@ -495,7 +497,7 @@ def preview(
                 "t": t_now,
                 "time_s": t_now * interval_s,
                 "active": active,
-                "stimulated": relative % stim_every == 0,
+                "stimulated": stim_on and relative % stim_every == 0,
                 "lit_fraction": float((pattern > 0).mean()) if pattern.size else 0.0,
                 "mean_intensity": float(np.clip(pattern, 0, 1).mean()),
             }

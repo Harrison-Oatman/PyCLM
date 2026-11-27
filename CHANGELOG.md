@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **`pyclm preview`** no longer reports `stimulated: true` for an experiment
+  with `[stimulation] exposure = 0` (an unlit control); the run never lit it.
+  The design skill and `documentation/experiment_tomls.md` now say how to
+  make an unlit control, that `preview --t` counts timepoints, and how to dry
+  run with no microscope yet (the demo's config, `dry_run.yml` and TIFs).
+
 - **`pyclm run --detached`** checks the directory, then starts the run in a
   process of its own and returns. Closing the terminal, ending its process
   tree, or restarting the coding agent that started it no longer stops the

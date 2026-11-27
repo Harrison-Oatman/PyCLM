@@ -52,10 +52,10 @@ Get answers to these before writing anything. Ask only what is missing:
   method (`pyclm-write-pattern-method`, last section).
 - **How many conditions, and how many positions each?** Each condition is
   one experiment TOML. Each position names its TOML by its label.
-  Suggest unstimulated control positions imaged the same way. PyCLM has
-  no built-in "no light" method: a dark control is a condition whose
-  pattern method returns zeros, a few lines written with
-  `pyclm-write-pattern-method`.
+  Suggest unstimulated control positions imaged the same way. An unlit
+  control is a condition with `[stimulation] exposure = 0`: the run plans
+  no light event for it. Its TOML still needs a `[pattern]` table (any
+  method; `full_on` is the plainest), which is never shown.
 - **Duration and cadence.** The interval between timepoints in seconds
   (`interval_seconds`), the number of timepoints (`steps`), and, counted
   in timepoints, how often to image (`[imaging] every_t`, or per channel)
@@ -152,8 +152,11 @@ Then edit:
   Create Grid are supported (`documentation/first_time_setup.md`, §5).
 - `pyclm_config.toml`: copy the scope's working one. Do not invent
   `affine_transform` or `slm_shape_*`, and never copy them from another
-  rig or from an example; they come from that scope's calibration. A dry
-  run works with the template's values.
+  rig or from an example; they come from that scope's calibration. For a
+  dry run with no scope yet, `pyclm new <dir> --demo` makes a directory
+  whose `pyclm_config.toml`, `dry_run.yml` and synthetic TIFs work
+  together; copy those three, with the experiments' `binning` set as in
+  the demo.
 
 `documentation/experiment_tomls.md` has every key.
 
@@ -172,7 +175,8 @@ pyclm run <dir> --dry --gui
 - `preview` writes the pattern for one image. Open it with the researcher
   and confirm it is what they meant before going to the scope.
 - `preview --t START:STOP[:STEP]` runs the method over a stretch of the
-  schedule in seconds (the end is included). Read `pattern_montage.png`
+  schedule, counted in timepoints, not seconds (the end is included;
+  `0:9` is the first ten). Read `pattern_montage.png`
   yourself (timepoints and minutes are captioned on each panel) and check
   it against what the researcher described: the bar's direction and
   speed, a dark baseline from `t_delay`, pulses at the right times. Then
@@ -182,7 +186,11 @@ pyclm run <dir> --dry --gui
   checks its timing, not its response to moving cells; that needs the
   dry run.
 - A dry run needs TIFs in the directory, named by position label or
-  condition stem, or mapped in `dry_run.yml`. Set `pixel_size_um` and
+  condition stem, or mapped in `dry_run.yml`. With no position list from
+  a microscope yet, `dry_run.yml` can list the positions itself (`name`,
+  `x`, `y`, `source`; `documentation/first_time_setup.md`, the dry run
+  notes). With no image of the sample, the demo's synthetic TIFs stand
+  in; say that the dry run then tests timing and files, not the biology. Set `pixel_size_um` and
   `binning` there if the TIFs are not full-resolution camera frames.
   Without them the DMD pattern lands off the field.
 - The one-timepoint delay: a pattern generated from the data of
