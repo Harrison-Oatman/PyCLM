@@ -11,6 +11,24 @@ may go ahead: the lab's rule for that is in `lab.md` ("Approval before
 running on cells"). Follow that rule. With no lab context, the person
 asking for the run is the approval.
 
+## Which PyCLM is this?
+
+First, `pyclm --version` and `pyclm run --help`. This skill needs PyCLM
+1.2 or later (`run --detached`, `watch`, the run lock and the run record).
+With an older PyCLM:
+
+- Tell the person which version you found and where (the full path of
+  the `pyclm` you ran), and that it has no `--detached` or `watch`.
+- Recommend installing 1.2 or later in its own folder
+  (`pyclm-microscope-bringup`, step 1), not over an environment another
+  project uses. Do not upgrade an install you did not make.
+- Do not start a run as a hidden background process to make up for a
+  missing `--detached`. If the person wants to run on the old version
+  anyway, run it in a terminal they can see, with
+  `PYTHONUNBUFFERED=1` and its output in a log file. Follow it by reading
+  `status.json` and `log.log` in the directory, not its printed output.
+  Tell them that closing that terminal stops the run.
+
 ## 0. A plan made ahead of time
 
 People often design on their own computer and run on the scope later. A
