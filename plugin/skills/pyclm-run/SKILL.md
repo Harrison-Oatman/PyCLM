@@ -6,10 +6,30 @@ description: Start a PyCLM run on the microscope, follow it, tell the person abo
 # Run an experiment and follow it
 
 This skill starts from an experiment directory that `pyclm check` passes
-(`pyclm-design-experiment` makes one). It does not decide whether the run
+(`pyclm-design-experiment` makes one, here or ahead of time). It does not decide whether the run
 may go ahead: the lab's rule for that is in `lab.md` ("Approval before
 running on cells"). Follow that rule. With no lab context, the person
 asking for the run is the approval.
+
+## 0. A plan made ahead of time
+
+People often design on their own computer and run on the scope later. A
+plan is a folder: the experiment directory (or several), with its TOMLs,
+and optionally a short plan note and a `pyclm_project.md` pointer. When a
+session on the microscope PC starts in such a folder, or the person says
+"run the plan in this folder":
+
+1. Read the plan note and the pointer, and say in two lines what the plan
+   is and which directories it runs, in what order.
+2. Replace what only the scope can know: `pyclm_config.toml` from this
+   microscope (its note says where), and `multipoints.xml` from today's
+   positions in Micro-Manager. A plan's own copies of these are
+   placeholders; never run with them.
+3. `pyclm check` each directory against this scope (`--mm-config` if the
+   `.cfg` is not the config's). Presets and pixel size are the usual
+   mismatches between a plan and a scope.
+4. Then step 1 below. Anything the check changed from the plan goes into
+   the summary, so the go-ahead covers it.
 
 ## 1. Before light goes on cells
 
@@ -27,9 +47,12 @@ If the lab context has a microscope note, read its "Check at session
 start" list out first; a known fault (a light source not firing, a stage
 error) changes the plan.
 
-Then rehearse on the virtual microscope if nobody has yet:
-`pyclm run <dir> --dry`. It catches method errors and timing overruns in
-a minute.
+Then rehearse on the virtual microscope if nobody has yet. A dry run
+takes as long as the real one and writes into the directory, so rehearse
+on a copy: copy the directory, set `steps` to 3 and `interval_seconds` to
+a few seconds in the copy's schedule, and `pyclm run <copy> --dry`. It
+catches method errors and files the run cannot read in a minute; timing
+is checked by `pyclm check`'s timing budget, not by the short copy.
 
 ## 2. Start it detached
 
@@ -57,7 +80,8 @@ pyclm watch <dir> --once
 ```
 
 `no_status` right after the start is normal during setup
-(`setup_time_seconds`); a `stopped` flag means the process exited: read
+(`setup_time_seconds`), and `status.json` shows no acquired timepoint
+until the first one ends. A `stopped` flag means the process exited: read
 the end of `detached.log` and `log.log` and tell the person.
 
 Offer the live viewer: `pyclm gui <dir>` opens it on the running
@@ -136,7 +160,8 @@ pyclm watch <dir_1> --images --then "pyclm run <dir_2> --detached"
 
 ## 6. When it ends
 
-- `pyclm watch` prints that the run is done; `status.json` says so too.
+- `status.json` says the run is done; `pyclm watch` says so at its next
+  check, up to `--every-s` (60 s) later.
 - Tell the person: timepoints acquired of planned, any flags, where the
   data are.
 - Offer a preview movie: `pyclm export <dir> --movies` (one MP4 per

@@ -155,13 +155,23 @@ def note(cwd: Path | None = None, host: str | None = None) -> str:
         )
     if pointer:
         lines.append(f"- {pointer} (this project)")
+    if role == "admin":
+        edit_rule = (
+            "- Edit lab.md, lab.toml or a microscope note only when this "
+            "person asks; otherwise write a proposal in "
+            f"{root / 'proposals'}, and say so."
+        )
+    else:
+        edit_rule = (
+            "- Never edit lab.md, lab.toml or a microscope note directly; write a "
+            f"proposal in {root / 'proposals'} (or a pull request if this person "
+            "can push), and say so."
+        )
     lines += [
         "Rules:",
-        "- Never edit lab.md, lab.toml or a microscope note directly; write a "
-        f"proposal in {root / 'proposals'} (or a pull request if this person "
-        "can push), and say so.",
-        "- Every run writes run_record.json; at the end of a session, use the "
-        "pyclm-close-session skill.",
+        edit_rule,
+        "- At the end of a session, use the pyclm-close-session skill (runs "
+        "leave run_record.json from PyCLM 1.2 on).",
     ]
     if role == "user":
         lines.append(

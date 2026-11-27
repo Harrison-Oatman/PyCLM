@@ -50,7 +50,10 @@ person has no opinion, and write "<not decided>" rather than inventing one.
 ## 3. Create the folder
 
 Copy `templates/lab_context/` to where the person chose. Fill `lab.md` and
-`lab.toml` from the answers, dated today. For each microscope, copy
+`lab.toml` from the answers, dated today. Replace the template's example
+`[microscopes.my-scope]` table, or delete it if no microscope is known
+yet (setting up on a laptop first is fine: add the microscope later, from
+its PC). For each microscope, copy
 `microscopes/_template/` to `microscopes/<name>/` and add a
 `[microscopes.<name>]` table with its hosts to `lab.toml`; the note itself
 is filled by the owner, with what `pyclm-microscope-bringup` found. If it is a git

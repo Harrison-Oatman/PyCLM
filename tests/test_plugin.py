@@ -106,6 +106,7 @@ def test_a_user_on_a_known_microscope(hook, lab, tmp_path, monkeypatch):
     assert str(lab / "microscopes" / "scope-a" / "note.md") in out
     assert "pyclm_project.md" in out
     assert "refer them to Ada" in out
+    assert "Never edit lab.md" in out
     assert len(out.splitlines()) <= 20
 
 
@@ -117,6 +118,7 @@ def test_an_admin_elsewhere(hook, lab, tmp_path):
     assert "role: admin" in out
     assert "no microscope note for this computer" in out
     assert "refer them" not in out
+    assert "only when this person asks" in out
 
 
 def test_the_hook_never_fails(tmp_path):
