@@ -101,7 +101,8 @@ empty or omits the table: the DMD frame is then its only image (saved when
 uses the stimulation frame as its probe.
 
 **`[stimulation]`**. The light-delivery event: `exposure` (ms; `0` means no
-stimulation), `every_t` (default 1), `save` (default true: whether the
+stimulation, which is how an unlit control is made; its TOML still needs a
+`[pattern]` table, which is then never shown), `every_t` (default 1), `save` (default true: whether the
 camera frame taken during stimulation is stored) and `binning` (default:
 the imaging binning; it also sets the pattern method's pixel grid). Its
 `config_groups` normally select the DMD light path; the preset named in

@@ -192,6 +192,20 @@ def test_series_preview_is_dark_outside_t_delay_and_t_stop(exp_dir, tif):
         assert (camera[i].max() > 0) == on
 
 
+def test_an_unlit_control_is_not_stimulated(exp_dir, tif):
+    """[stimulation] exposure = 0 plans no light event, and the preview says so."""
+    toml = exp_dir / "bar10.toml"
+    text = toml.read_text().replace(
+        "every_t = 1\nexposure = 50", "every_t = 1\nexposure = 0"
+    )
+    assert "exposure = 0" in text
+    toml.write_text(text)
+    result = preview(exp_dir, "bar10", image=tif, t=range(0, 3), pixel_size_um=0.5)
+
+    info = json.loads(result.paths["summary"].read_text())
+    assert not any(row["stimulated"] for row in info["timepoints"])
+
+
 def test_series_preview_keeps_state_between_timepoints(exp_dir, tif):
     """A closed loop sees its own previous pattern and the tracker keeps its ids."""
     toml = exp_dir / "bar10.toml"
