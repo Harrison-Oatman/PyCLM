@@ -3,8 +3,26 @@
   "claude_exe": "C:\\Users\\<login>\\.local\\bin\\claude.exe",
   "profiles_dir": "C:\\Users\\<login>\\.pyclm\\profiles",
   "projects_dir": "D:\\pyclm-projects",
-  "extra_dirs": ["D:\\data"],
+  "extra_dirs": [
+    "D:\\data"
+  ],
   "plugin_marketplace": "Harrison-Oatman/PyCLM@plugin",
   "plugin": "pyclm@pyclm-plugins",
-  "allow_guest": false
+  "allow_guest": false,
+  "micromanager": [
+    {
+      "name": "Micro-Manager (DMD scope config)",
+      "dir": "C:\\Program Files\\Micro-Manager-2.0",
+      "exe": "ImageJ.exe",
+      "before": [
+        "start \"\" \"C:\\Program Files\\Vendor\\ControllerServer.exe\""
+      ],
+      "wait_seconds": 5,
+      "env": {
+        "EXAMPLE_VAR": "value"
+      },
+      "note": "In the startup dialog choose ham_cam1.cfg."
+    }
+  ],
+  "_comment_micromanager": "Start-MicroManager.bat: one entry or several (a menu). before = cmd commands run first, in order; a failing one stops the start; use start \"\" <program> for one that keeps running. Every key but dir is optional."
 }

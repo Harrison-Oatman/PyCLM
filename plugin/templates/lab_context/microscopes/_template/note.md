@@ -36,6 +36,9 @@ see the eyepiece; positions with z come from the person.
 - How positions are made: <for example "the person focuses each well in
   Micro-Manager, adds it to the Stage Position List and saves it as
   PositionList.pos; the agent never opens the Micro-Manager GUI">. (<date>)
+- Starting Micro-Manager: `launcher\Start-MicroManager.bat` (its steps
+  are in `launcher\local.json`, "micromanager"); which `.cfg` to pick in
+  its start-up dialog: <...>. (<date>)
 - Micro-Manager and PyCLM cannot both hold the hardware: close the
   Micro-Manager GUI before a run starts. (<date>)
 

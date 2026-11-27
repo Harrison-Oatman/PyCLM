@@ -76,7 +76,12 @@ launcher instead: a desktop shortcut to the lab context's
 `launcher\Start-PyCLM.bat` gives each person their own Claude sign-in,
 session history and plugin install, and sets both variables
 (`templates/lab_context/README.md`, "Several people on one microscope
-PC"). Windows only. The next Claude Code session starts with a short note naming
+PC"). Windows only. Ask how Micro-Manager is started on that PC (anything
+that must run or be switched on first, which `.cfg` to pick) and write it
+into `launcher\local.json` under `"micromanager"`, with a desktop shortcut
+to `launcher\Start-MicroManager.bat` beside the PyCLM one, so the GUI
+always starts the same way (`templates/lab_context/README.md`, "Starting
+Micro-Manager"). The next Claude Code session starts with a short note naming
 the files to read and the person's role. Tell the person to start a new
 session to check it.
 

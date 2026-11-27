@@ -12,7 +12,7 @@ Nothing else here is loaded at the start of a session.
 | `microscopes/<name>/note.md` | how to start PyCLM there, data paths, quirks, measured timings, dated temporary issues | the microscope owner, from proposals |
 | `microscopes/<name>/pyclm_config.toml` | the calibrated configuration in use | the microscope owner |
 | `proposals/` | proposed changes from sessions, one file each | sessions add; the admin or owner reviews |
-| `launcher/` | `Start-PyCLM.bat`: the start file for a microscope PC that several people share (below) | the lab admin |
+| `launcher/` | `Start-PyCLM.bat`: the start file for a microscope PC that several people share; `Start-MicroManager.bat`: the Micro-Manager GUI with this scope's start-up steps (below) | the lab admin |
 
 Project pointers (`pyclm_project.md`) live in each project's own folder,
 not here (template in `projects/_template/`).
@@ -47,6 +47,18 @@ every session may read. A lab that wants the same Claude Code settings in
 every profile (permissions, environment variables) puts a
 `launcher\profile_settings.json` here; new profiles start from it. The
 plugin ships none.
+
+## Starting Micro-Manager
+
+Put a shortcut to `launcher\Start-MicroManager.bat` next to the PyCLM one.
+It starts the Micro-Manager GUI the way this microscope needs it, so
+nobody has to remember the order. Steps that must come first (a
+controller program, a device server, an environment variable, a wait) go
+under `"micromanager"` in `launcher\local.json`. A PC with several
+set-ups (one `.cfg` per camera, say) lists several entries and gets a menu.
+It will not start while a PyCLM run holds the microscope unless you type
+`open anyway`. Close Micro-Manager before a PyCLM run starts: the GUI and
+a run cannot share the hardware.
 
 This folder can be a git repository (recommended: changes are pull
 requests) or a plain shared folder (changes come through `proposals/`).
