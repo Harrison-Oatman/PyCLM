@@ -201,6 +201,11 @@ pyclm run <dir> --dry --gui
 
 ## 5. Hand over
 
+Before asking the researcher to approve the design, make the Design page
+if the `pyclm-session-pages` skill is available (it comes with the PyCLM
+plugin) and give its path. The approval is still typed in the
+conversation; the page only shows the design.
+
 Tell the researcher:
 
 - what each file sets;

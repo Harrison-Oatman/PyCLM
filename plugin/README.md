@@ -63,6 +63,7 @@ plugin follows `lab.md` and sets no rule of its own.
 | `skills/pyclm-lab-setup/` | set up a lab or core facility: the interview, the lab context folder, connecting a person |
 | `skills/pyclm-first-day/` | the order of a first day on a new microscope, what to do before it, what to cut |
 | `skills/pyclm-run/` | start a run detached, follow it with `pyclm watch`, report flags, pause or stop on request, chain runs with `--then` |
+| `skills/pyclm-session-pages/` | read-only HTML pages in the session folder (Design, Positions, Running, others as needed), built from files with one style (`template.html`); nothing on a page controls the run |
 | `skills/pyclm-close-session/` | run records to the project (or a summary from `status.json` without one); learnings to proposals |
 | `skills/pyclm-design-experiment/`, `pyclm-microscope-bringup/`, `pyclm-write-pattern-method/` | copies of the repository's skills (`.claude/skills/`, edited there; `python plugin/sync_skills.py` copies them) |
 | `templates/lab_context/` | the lab context folder: `lab.md`, `lab.toml`, a microscope note, a project pointer, the proposals inbox, and `launcher/` (`Start-PyCLM.bat`, the desktop start file for a microscope PC several people share: own Claude sign-in, sessions and plugin per person; new, continue or resume) |

@@ -41,6 +41,11 @@ Done remotely or the day before, these save the first hour:
 | 5. The run | `pyclm-run` | as designed | `pyclm watch` says done, data open |
 | 6. Close | `pyclm-close-session` | 15 min | run records copied, proposals written |
 
+At steps 4 and 5, make the Design, Positions and Running pages
+(`pyclm-session-pages`) for the person to look at beside the conversation.
+They are views built from files; every approval is still typed in the
+conversation.
+
 Steps 1 and 4 can overlap with the hardware steps: the person who knows
 the biology can answer the design questions while the calibration slide
 is on the stage.

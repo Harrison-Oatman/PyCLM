@@ -87,6 +87,11 @@ the end of `detached.log` and `log.log` and tell the person.
 Offer the live viewer: `pyclm gui <dir>` opens it on the running
 directory, read-only.
 
+Make the Running page (`pyclm-session-pages`) once it is acquiring, and
+rebuild it at each check. When positions are picked for a run, make the
+Positions page before asking for them to be approved. Pages only show the
+run; nothing on a page controls it.
+
 ## 3. Follow it
 
 Start one watcher per run, in the background, and leave it running:
@@ -99,7 +104,7 @@ It writes `watch/flags.json` every minute and appends to
 `watch/flags_log.jsonl`. When the person asks how the run is going, read
 `status.json` (timepoint, lateness, errors) and `watch/flags.json`, and
 answer in two or three lines: timepoint of total, on time or how late, any
-flags since the last answer.
+flags since the last answer. Rebuild the Running page with the same check.
 
 How the person hears about a flag while they are away is the lab's
 choice (`lab.md`, "Notifications"); it is usually a command for

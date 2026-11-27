@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Running pages only: <meta http-equiv="refresh" content="300"> -->
+<title>run1 · running</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+<style>
+/* PyCLM session page style. Copy this block unchanged; a lab may override the tokens in lab.md ("Page style"). */
+:root {
+  --bg: #f2ede3; --surface: #fbf9f4; --surface-2: #ebe5d8; --white: #fff;
+  --ink: #33302a; --ink-2: #5c574d; --muted: #787164;
+  --line: #d9d0bf; --grid: #e3dccd;
+  --accent: #9a4f2c; --accent-soft: #f1dfd0;
+  --warn-bg: #f4e3b8; --warn-ink: #6b4a0c;
+  --light-band: rgba(70, 175, 215, 0.27); --light-edge: #38a9d1;
+  /* data colors, in this order, by condition; no-light control is --dark */
+  --d1: #1e66f5; --d2: #e0661a; --d3: #0a9199; --d4: #b98300;
+  --d5: #d85fb0; --d6: #d20f39; --d7: #8839ef; --d8: #40a02b; --dark: #a59d8e;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --serif: "IBM Plex Serif", Georgia, serif;
+  --mono: "IBM Plex Mono", Consolas, ui-monospace, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); padding: 18px max(16px, 3vw) 40px; }
+main { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+img { max-width: 100%; display: block; }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+
+/* title line: what, which run, state */
+.ptitle { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.ptitle h1 { font: 600 19px var(--serif); margin: 0; }
+.ptitle .sub { color: var(--muted); font: 12.5px var(--mono); }
+.pill { font: 500 11.5px var(--sans); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); background: var(--surface); white-space: nowrap; }
+.pill.ok { color: #2d6e1f; border-color: #b9d8ae; background: #eef6ea; }
+.pill.run { color: #1d6f8f; border-color: #a9d6e8; background: #e9f5fa; }
+.pill.warn { color: var(--warn-ink); border-color: #e4cc8c; background: var(--warn-bg); }
+.pill.prop { color: var(--accent); border-color: #e3c4ad; background: var(--accent-soft); }
+
+/* blocks */
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.figure img { width: 100%; height: auto; border-radius: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 10px; }
+.tiles.six { --cols: 6; }
+@media (max-width: 600px) { .tiles { --cols: 2; } .tiles.six { --cols: 3; } }
+.tile { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.tile img, .tile .ph { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; background: #0b0b0b; }
+.tile.flag img, .tile.flag .ph { outline: 2.5px solid #d9a521; outline-offset: -2.5px; }
+.tile .lab { font: 12px var(--mono); color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--white); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: 13px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font: 12.5px var(--mono); }
+.check { font: 12px/1.55 var(--mono); background: var(--surface-2); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; margin: 0; }
+
+/* light program strip: one .on per light interval, left/width in percent of the run */
+.strip { position: relative; height: 22px; background: var(--white); border: 1px solid var(--line); border-radius: 3px; }
+.strip .on { position: absolute; top: 0; bottom: 0; background: var(--light-band); border-left: 1px solid var(--light-edge); border-right: 1px solid var(--light-edge); }
+.axis { position: relative; height: 16px; font: 11px var(--mono); color: var(--muted); }
+.axis span { position: absolute; top: 2px; transform: translateX(-50%); } .axis span:first-child { transform: none; } .axis span:last-child { transform: translateX(-100%); }
+
+/* closed panels, always named Details / Sources / About */
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+summary { cursor: pointer; padding: 9px 14px; font: 600 13px var(--sans); color: var(--ink-2); }
+details > div { padding: 0 14px 14px; font-size: 13px; }
+
+/* figure view: white ground, no chrome, for slides and papers */
+body.figmode { background: #fff; } body.figmode details, body.figmode .noprint { display: none; }
+.tbtn { font: 500 12px var(--sans); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); padding: 4px 10px; border-radius: 999px; cursor: pointer; margin-left: auto; }
+</style>
+</head>
+<body>
+<main>
+
+<!-- ===== RUNNING page (example). Title line: what, run, state, flags. ===== -->
+<div class="ptitle">
+  <h1>Run 1 · dose survey</h1>
+  <span class="pill run">running · 71 of 90 min</span>
+  <span class="pill warn">1 flag</span>
+  <span class="sub">ends 14:51 · updated 14:32</span>
+  <button class="tbtn noprint" onclick="document.body.classList.toggle('figmode')">Figure view</button>
+</div>
+<div class="sheet">
+  <!-- live-analysis figure first -->
+  <div class="figure"><div class="ph" style="aspect-ratio:2.6;background:var(--white);border:1px dashed var(--line);border-radius:4px"></div><!-- <img src="img/run1_live.png" alt="Translocation by dose"> --></div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--dark)"></i>no light</span>
+    <span><i class="sw" style="background:var(--d1)"></i>10%</span>
+    <span><i class="sw" style="background:var(--d2)"></i>25%</span>
+    <span><i class="sw" style="background:var(--d3)"></i>50%</span>
+    <span><i class="sw" style="background:var(--light-band)"></i>light on</span>
+  </div>
+  <!-- newest frame per position; .flag marks a flagged position -->
+  <div class="tiles six">
+    <div class="tile"><div class="ph"></div><span class="lab"><i class="sw" style="background:var(--d1)"></i>pos 1</span></div>
+    <div class="tile flag"><div class="ph"></div><span class="lab"><i class="sw" style="background:var(--d2)"></i>pos 7 · focus</span></div>
+    <!-- <div class="tile"><img src="img/run1_pos03.png" alt=""><span class="lab">…</span></div> -->
+  </div>
+</div>
+
+<!-- ===== DESIGN page (example): one tile per condition + light program + check ===== -->
+<div class="ptitle"><h1>Run 1 · design</h1><span class="pill prop">awaiting approval</span><span class="sub">4 conditions · 12 positions · 90 min</span></div>
+<div class="sheet">
+  <div class="tiles">
+    <div class="tile"><div class="ph"></div><span class="lab"><i class="sw" style="background:var(--dark)"></i>no light · B3</span></div>
+    <div class="tile"><div class="ph"></div><span class="lab"><i class="sw" style="background:var(--d1)"></i>10% · B4</span></div>
+    <!-- <img src="img/design_bar_preview.png"> from `pyclm preview` -->
+  </div>
+  <div>
+    <div class="strip"><span class="on" style="left:11.1%;width:2.2%"></span><span class="on" style="left:33.3%;width:2.2%"></span><span class="on" style="left:55.6%;width:2.2%"></span><span class="on" style="left:77.8%;width:2.2%"></span></div>
+    <div class="axis"><span style="left:0">0</span><span style="left:33.3%">30</span><span style="left:66.7%">60</span><span style="left:100%">90 min</span></div><!-- place ticks at their true percent -->
+  </div>
+  <pre class="check">pyclm check run1_dose
+  4 experiments · 12 positions · 90 timepoints every 60 s
+  timing 41 s of 60 s · 0 errors, 0 warnings</pre>
+</div>
+
+<!-- ===== POSITIONS page (example): overview with picks outlined, how they were picked ===== -->
+<div class="ptitle"><h1>Run 1 · positions</h1><span class="pill prop">awaiting approval</span><span class="sub">12 of 81 fields · well B3</span></div>
+<div class="sheet">
+  <div class="figure"><div class="ph" style="aspect-ratio:1.6;background:#0b0b0b;border-radius:4px"></div><!-- <img src="img/scout_B3_picks.png"> stitched overview, picks outlined in condition colors and numbered --></div>
+  <div class="card"><dl class="kv"><dt>Picked by</dt><dd>reporter brightness, evenly spread, 3 per condition</dd><dt>Left out</dt><dd>edge fields, 2 out of focus</dd></dl></div>
+</div>
+
+<details><summary>Details</summary><div>Settings, per-position table, anything a person looks up only sometimes.</div></details>
+<details><summary>Sources</summary><div><code>run1_dose/status.json</code>, <code>run1_dose/frames.parquet</code>, <code>pyclm stitch</code> image, live figure script.</div></details>
+<details><summary>About</summary><div>What the page shows and when it was made.</div></details>
+
+</main>
+</body>
+</html>
