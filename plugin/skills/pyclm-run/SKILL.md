@@ -13,7 +13,9 @@ asking for the run is the approval.
 
 ## Which PyCLM is this?
 
-First, `pyclm --version` and `pyclm run --help`. This skill needs PyCLM
+First, `pyclm --version` (PyCLM before 1.2 has no `--version`; then
+`python -c "import importlib.metadata as m; print(m.version('closed-loop-microscopy'))"`
+with that environment's Python) and `pyclm run --help`. This skill needs PyCLM
 1.2 or later (`run --detached`, `watch`, the run lock and the run record).
 With an older PyCLM:
 
