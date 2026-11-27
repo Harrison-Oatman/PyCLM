@@ -64,8 +64,9 @@ is on the stage.
   and timing problems that the dry run cannot.
 - **Positions come from the person.** The agent cannot focus by eye. The
   person focuses each position in Micro-Manager (engaging the focus lock
-  if there is one), saves the Stage Position List as `multipoints.xml`
-  (it carries x, y, z and the lock offset), and closes the Micro-Manager
+  if there is one), saves the Stage Position List as `PositionList.pos`
+  (it carries x, y, z and the lock offset; `multipoints.xml` is the Nikon
+  Elements equivalent), and closes the Micro-Manager
   GUI before the run. Write the typical z and lock offset into the
   microscope note's "Finding focus" section.
 - **Focus.** With no hardware focus lock, use `position_mover = "basic"`

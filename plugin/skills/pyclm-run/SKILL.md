@@ -42,8 +42,9 @@ session on the microscope PC starts in such a folder, or the person says
 1. Read the plan note and the pointer, and say in two lines what the plan
    is and which directories it runs, in what order.
 2. Replace what only the scope can know: `pyclm_config.toml` from this
-   microscope (its note says where), and `multipoints.xml` from today's
-   positions in Micro-Manager. A plan's own copies of these are
+   microscope (its note says where), and today's position list
+   (`PositionList.pos` from Micro-Manager, or `multipoints.xml` from
+   Nikon Elements). A plan's own copies of these are
    placeholders; never run with them.
 3. `pyclm check` each directory against this scope (`--mm-config` if the
    `.cfg` is not the config's). Presets and pixel size are the usual

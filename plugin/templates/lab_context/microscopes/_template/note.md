@@ -35,7 +35,7 @@ see the eyepiece; positions with z come from the person.
   bottom: z 4640-4750, PFS offset ~10000">. (<date>)
 - How positions are made: <for example "the person focuses each well in
   Micro-Manager, adds it to the Stage Position List and saves it as
-  multipoints.xml; the agent never opens the Micro-Manager GUI">. (<date>)
+  PositionList.pos; the agent never opens the Micro-Manager GUI">. (<date>)
 - Micro-Manager and PyCLM cannot both hold the hardware: close the
   Micro-Manager GUI before a run starts. (<date>)
 
