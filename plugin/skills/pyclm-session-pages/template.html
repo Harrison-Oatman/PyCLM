@@ -68,8 +68,11 @@ details { background: var(--surface); border: 1px solid var(--line); border-radi
 summary { cursor: pointer; padding: 9px 14px; font: 600 13px var(--sans); color: var(--ink-2); }
 details > div { padding: 0 14px 14px; font-size: 13px; }
 
-/* figure view: white ground, no chrome, for slides and papers */
-body.figmode { background: #fff; } body.figmode details, body.figmode .noprint { display: none; }
+/* figure view: white ground, no panels, borders or status, for slides and screenshots */
+body.figmode { background: #fff; }
+body.figmode .sheet, body.figmode .card { background: #fff; border-color: transparent; }
+body.figmode details, body.figmode .pill, body.figmode .ptitle .sub { display: none; }
+@media print { .noprint { display: none; } }
 .tbtn { font: 500 12px var(--sans); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); padding: 4px 10px; border-radius: 999px; cursor: pointer; margin-left: auto; }
 </style>
 </head>
@@ -82,7 +85,7 @@ body.figmode { background: #fff; } body.figmode details, body.figmode .noprint {
   <span class="pill run">running · 71 of 90 min</span>
   <span class="pill warn">1 flag</span>
   <span class="sub">ends 14:51 · updated 14:32</span>
-  <button class="tbtn noprint" onclick="document.body.classList.toggle('figmode')">Figure view</button>
+  <button class="tbtn noprint" id="figbtn" title="White background, no panels: for slides and screenshots">Figure view</button>
 </div>
 <div class="sheet">
   <!-- live-analysis figure first -->
@@ -131,5 +134,15 @@ body.figmode { background: #fff; } body.figmode details, body.figmode .noprint {
 <details><summary>About</summary><div>What the page shows and when it was made.</div></details>
 
 </main>
+<script>
+// Figure view: the only script a page may have; it changes how the page looks, nothing else.
+(function () {
+  var b = document.getElementById('figbtn');
+  if (!b) return;
+  function set(on) { document.body.classList.toggle('figmode', on); b.textContent = on ? 'Page view' : 'Figure view'; }
+  b.addEventListener('click', function () { set(!document.body.classList.contains('figmode')); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
+})();
+</script>
 </body>
 </html>

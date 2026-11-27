@@ -64,6 +64,12 @@ Get answers to these before writing anything. Ask only what is missing:
   `every_t = 1` images every 5 min and updates the light every minute.
   All positions are visited within one interval, so the interval must be
   long enough for every position's channels (`pyclm check` estimates it).
+- **What to watch while it runs?** The one figure the researcher wants
+  to see during the run (for example reporter intensity against
+  position relative to the light, or a ratio per condition over time).
+  Write its script with the design and try it on the dry run's output,
+  so it is ready before light goes on (with the PyCLM plugin:
+  `pyclm-session-pages`, "The live figure").
 - **Which microscope.** An existing `pyclm_config.toml` for that scope?
   If there is none and the scope has never run PyCLM, stop and use
   `pyclm-microscope-bringup` first. A dry run needs no microscope.

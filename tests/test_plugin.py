@@ -157,5 +157,38 @@ def test_launcher_sets_what_the_hook_reads():
         assert f"$env:{name} =" in launcher
     assert "microscope.lock" in launcher  # pyclm.lock.LOCK_NAME
     bat = (TEMPLATE / "launcher" / "Start-PyCLM.bat").read_bytes()
-    assert b"\r\n" in bat and b"launch.ps1" in bat
+    assert b"\r\n" in bat
+    assert b"launch.ps1" in bat
     json.loads((TEMPLATE / "launcher" / "local.example.json").read_text())
+
+
+def test_svgplot_draws_a_well_formed_chart():
+    import sys
+    import xml.etree.ElementTree as ET
+
+    sys.path.insert(0, str(PLUGIN / "skills" / "pyclm-session-pages"))
+    try:
+        from svgplot import line_chart, nice_ticks
+    finally:
+        sys.path.pop(0)
+
+    svg = line_chart(
+        [
+            {"label": "lit & <bar>", "x": [0, 1, 2], "y": [1.0, 1.01, 1.02]},
+            {
+                "label": "unlit",
+                "x": [0, 1, 2],
+                "y": [1.0, 1.0, float("nan")],
+                "color": "dark",
+            },
+        ],
+        x_label="time (min)",
+        y_label="ratio",
+        light=[(0, 2)],
+        hline=1.0,
+    )
+    root = ET.fromstring(svg)
+    texts = [t.text for t in root.iter("{http://www.w3.org/2000/svg}text")]
+    assert "lit & <bar>" in texts
+    assert "time (min)" in texts
+    assert nice_ticks(0, 1) == [0.0, 0.25, 0.5, 0.75, 1.0]

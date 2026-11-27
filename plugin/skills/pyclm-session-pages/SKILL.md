@@ -35,11 +35,59 @@ browser loses nothing.
 - Images go in `pages/img/`, referenced relatively, so the page opens from the file
   system (`file://`) with no server. Copy them there instead of linking into the
   run's data. Use PNG, at most about 1600 px wide.
-- After writing a page, give the person its full path once (they open it
-  in a browser, or in the desktop app's preview pane). After that, say
-  "page updated".
+- After writing a page, open it for the person (on Windows
+  `Start-Process "<full path>"` opens it in their default browser) and give
+  its full path once, before asking anything about it. A path alone is easy
+  to miss. After that, say "page updated".
 - Never write pages inside an experiment directory that is running; `pyclm`
   owns that folder.
+
+## The live figure
+
+The Running page leads with a figure that shows the biology while the run
+goes on, for example reporter intensity against position relative to the
+bar, or a ratio over time per condition. People ask for it once they see
+the page, so ask with the design questions: "What do you want to watch
+while it runs?" Then:
+
+1. Write its script in `pages/work/` (never in the experiment directory)
+   and try it on the rehearsal's output before light goes on.
+2. Read the run read-only with `pyclm.io` (safe while the run writes; a
+   frame being written is simply not listed yet):
+
+   ```python
+   import pyclm.io
+   exp = pyclm.io.open(r"<dir>\<position label>.zarr")
+   g = exp.groups["imaging"]           # a cadence group; see exp.groups
+   for i in g.acquired():              # slots written so far
+       t = g.global_t(i)               # slot -> plan timepoint
+       img = g.frame(i, "<channel>")   # 2D array
+       light = exp.camera_pattern_at(t)  # pattern shown at t (uint8 0/255, camera pixels at the stimulation binning), None if unlit
+   ```
+
+   `exp.frames` is the frames table (pyarrow), `exp.current_t` the newest
+   complete timepoint, `g.pixel_size_um` the pixel size. Light at t comes
+   before the frame at t at the same position, and the pattern shown at t
+   was made from data of t - 1: take it from `camera_pattern_at(t)`, not
+   from the method's formula and the clock. An unlit control has no
+   pattern; to put it on the same axis, use a lit position's pattern at
+   the same t and say so.
+3. Draw it as SVG inside the page, so it stays sharp and needs nothing
+   else. `svgplot.py` next to this file draws line charts in this style
+   with the standard library only (`line_chart(series, x_label=, y_label=,
+   light=, hline=)`). If matplotlib is installed, `savefig(format="svg")`
+   with `svg.fonttype: "none"` and the style below, inlined, works too.
+   Do not install plotting libraries into the PyCLM environment without
+   the lab's say; it usually has numpy, pyarrow, zarr, tifffile and
+   Pillow, and no pandas or matplotlib.
+4. Keep it live: a background loop every 5 minutes runs the figure script
+   and the page build (and `pyclm stitch` if the page shows an overview),
+   and stops when `status.json` says the run has ended. `pyclm watch`
+   does not run commands on a timer.
+5. Every choice that changes what the figure seems to show (normalization,
+   background subtraction, bin width, sign convention, which frames are
+   compared) goes in the page's About panel and is said in the
+   conversation. They are the researcher's to change.
 
 ## Rules for what is on a page
 
@@ -59,7 +107,12 @@ browser loses nothing.
 5. **Flags never hide.** A flag is a pill in the title line and a mark on
    that position's tile; the run keeps going.
 6. **No controls that act.** No buttons that write files, call commands or
-   send messages. A "Figure view" toggle (white ground, no chrome) is allowed.
+   send messages. The one allowed control is the template's "Figure view"
+   button (and its script): it turns the page white and hides panels,
+   pills and borders, so a figure can go on a slide or into a paper; it
+   reads "Page view" while on, and Esc also leaves it. Put it on Design
+   and Positions pages and on any page made for a figure; a Running page
+   does not need it.
 7. **Self-contained.** One HTML file plus `img/`. No external scripts.
    Fonts from Google Fonts with system fallbacks are fine; the page still
    works offline.
@@ -80,8 +133,10 @@ The lab may override the tokens in `lab.md` ("Page style"); otherwise keep these
   their condition color.
 - IBM Plex Sans for text, IBM Plex Serif for titles, IBM Plex Mono for numbers, paths
   and commands.
-- matplotlib figures for a page: facecolor `#fbf9f4`, grid `#e3dccd`, text
-  `#33302a`, the data colors above as the cycle, light-on as `axvspan`.
+- Charts: `svgplot.py` uses this style. matplotlib figures for a page:
+  facecolor `#fbf9f4`, grid `#e3dccd`, text `#33302a`, the data colors
+  above as the cycle, light-on as `axvspan`, saved as SVG with
+  `svg.fonttype: "none"` and inlined.
 
 Components in the template: title line with pills (`ok`, `run`, `warn`,
 `prop` for awaiting approval), tile grid (4 or 6 across, image + label with a
@@ -90,6 +145,12 @@ strip, closed panels. Copy the ones you need; don't invent new ones for
 the three main pages.
 
 ## Checklist before telling the person
+
+- On Windows, files the page build or a script reads (TOMLs especially)
+  are written without a byte-order mark: PowerShell 5.1's
+  `Set-Content -Encoding utf8` adds one, and `pyclm check` then rejects
+  the TOML. Write them from Python, or with
+  `[IO.File]::WriteAllText(path, text)`.
 
 - Opens from the file system; images load; nothing scrolls sideways at 400 px.
 - Every condition color matches the legend and the other pages of this
