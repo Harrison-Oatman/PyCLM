@@ -23,7 +23,8 @@ update pyclm-plugins` picks up later changes to the branch.
 The start-of-session note needs `python` (3.11 or later; 3.8 to 3.10 also
 work) on the `PATH` of the shell Claude Code uses: check `python
 --version` there. On Windows, the Python from python.org with "Add to
-PATH" ticked is the simplest; the Microsoft Store alias is not enough.
+PATH" ticked is the simplest. Python from the Microsoft Store works too;
+the Store's placeholder alias, with no Python installed behind it, does not.
 Without it, the skills still work, but sessions start without the note.
 
 PyCLM itself is installed separately, by the bring-up skill or by hand:
