@@ -158,6 +158,13 @@ if (-not $hasPlugin) {
     Write-Host "Installing the PyCLM plugin for $($prof.name)..."
     & $claudeExe plugin marketplace add $marketplace 2>&1 | Out-Host
     & $claudeExe plugin install $plugin 2>&1 | Out-Host
+} else {
+    # keep the plugin current; offline, the installed copy is used
+    Write-Host "Checking for plugin updates..."
+    try {
+        & $claudeExe plugin marketplace update ($plugin -split '@')[1] 2>&1 | Out-Null
+        & $claudeExe plugin update $plugin 2>&1 | Out-Host
+    } catch { Write-Host "  update check failed; using the installed plugin." }
 }
 if ($newProfile -or $guest) {
     Write-Host ""
