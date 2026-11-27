@@ -196,3 +196,12 @@ def test_console_survives_an_emoji_on_a_cp1252_stream():
     finally:
         sys.stdout = old
     assert "device table" in raw.getvalue().decode("utf-8")
+
+
+def test_version_prints_the_installed_version(capsys):
+    from pyclm import __version__
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.build_parser().parse_args(["--version"])
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.strip() == f"pyclm {__version__}"
