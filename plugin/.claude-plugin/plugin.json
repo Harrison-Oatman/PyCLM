@@ -1,6 +1,6 @@
 {
   "name": "pyclm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run closed-loop optogenetic microscopy with PyCLM from Claude Code: lab and microscope context, experiment design, runs, and session records.",
   "author": {
     "name": "PyCLM contributors"
