@@ -58,6 +58,8 @@ $projectsDir = Setting $local 'projects_dir' (Join-Path $env:PUBLIC 'pyclm-proje
 $extraDirs = @(Setting $local 'extra_dirs' @())
 $marketplace = Setting $local 'plugin_marketplace' 'Harrison-Oatman/PyCLM@plugin'
 $plugin = Setting $local 'plugin' 'pyclm@pyclm-plugins'
+# guests: one-off visitors; their profile is deleted when Claude closes
+$allowGuest = [bool](Setting $local 'allow_guest' $false)
 
 # --- bring the lab context up to date ------------------------------------------
 if (Test-Path (Join-Path $LabRoot '.git')) {
@@ -86,7 +88,12 @@ if (Test-Path $lockFile) {
 
 # --- who are you ----------------------------------------------------------------
 if (-not (Test-Path $profilesDir)) { New-Item -ItemType Directory -Force -Path $profilesDir | Out-Null }
-$profiles = @(Get-ChildItem $profilesDir -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'pyclm_profile.json') })
+# guest profiles left behind by a window that was closed early
+Get-ChildItem $profilesDir -Directory -Filter '_guest-*' |
+    Where-Object { $_.LastWriteTime -lt (Get-Date).AddHours(-12) } |
+    ForEach-Object { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue }
+$profiles = @(Get-ChildItem $profilesDir -Directory | Where-Object {
+    $_.Name -notlike '_guest-*' -and (Test-Path (Join-Path $_.FullName 'pyclm_profile.json')) })
 
 Write-Host ""
 Write-Host "Who are you?"
@@ -95,11 +102,27 @@ for ($i = 0; $i -lt $profiles.Count; $i++) {
     Write-Host "  $($i + 1). $($p.name)"
 }
 Write-Host "  a. Add me"
-$c = Ask-Choice "Choice" (@('a') + (Num-Range $profiles.Count))
+$valid = @('a') + (Num-Range $profiles.Count)
+if ($allowGuest) {
+    Write-Host "  g. Guest (sign in for this session only; nothing about you is kept)"
+    $valid += 'g'
+}
+$c = Ask-Choice "Choice" $valid
 
 $newProfile = $false
-if ($c -eq 'a') {
-    $name = (Read-Host "Your name, as the lab writes it (for example in lab.toml)").Trim()
+$guest = $false
+if ($c -eq 'g') {
+    $name = (Read-Host "Your name (for this session)").Trim()
+    if (-not $name) { $name = 'guest' }
+    $pdir = Join-Path $profilesDir ("_guest-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    New-Item -ItemType Directory -Force -Path $pdir | Out-Null
+    $labSettings = Join-Path $LauncherDir 'profile_settings.json'
+    if (Test-Path $labSettings) { Copy-Item $labSettings (Join-Path $pdir 'settings.json') }
+    @{ name = "$name (guest)"; git_name = ''; git_email = '' } | ConvertTo-Json |
+        Set-Content -Encoding UTF8 (Join-Path $pdir 'pyclm_profile.json')
+    $guest = $true
+} elseif ($c -eq 'a') {
+    $name = (Read-Host "Your preferred username").Trim()
     $short = Safe-Name $name
     if (-not $short) { Write-Host "A name is needed."; exit 1 }
     $gitName = (Read-Host "Name for git commits (Enter to skip)").Trim()
@@ -136,7 +159,7 @@ if (-not $hasPlugin) {
     & $claudeExe plugin marketplace add $marketplace 2>&1 | Out-Host
     & $claudeExe plugin install $plugin 2>&1 | Out-Host
 }
-if ($newProfile) {
+if ($newProfile -or $guest) {
     Write-Host ""
     Write-Host "Profile made. Claude will ask you to sign in with your own account the first time."
 }
@@ -168,9 +191,13 @@ if ($c -eq 'n') {
 Write-Host ""
 Write-Host "Session:"
 Write-Host "  n. New session"
-Write-Host "  c. Continue my last session here"
-Write-Host "  r. Pick one of my earlier sessions here"
-$c = Ask-Choice "Choice" @('n', 'c', 'r')
+$valid = @('n')
+if (-not $guest) {
+    Write-Host "  c. Continue my last session here"
+    Write-Host "  r. Pick one of my earlier sessions here"
+    $valid += @('c', 'r')
+}
+$c = Ask-Choice "Choice" $valid
 
 $claudeArgs = @('--add-dir', $LabRoot)
 foreach ($d in $extraDirs) { if ($d) { $claudeArgs += @('--add-dir', $d) } }
@@ -181,4 +208,12 @@ Write-Host ""
 Write-Host "Starting Claude Code for $($prof.name) in $projDir"
 Set-Location $projDir
 & $claudeExe @claudeArgs
-exit $LASTEXITCODE
+$code = $LASTEXITCODE
+if ($guest) {
+    # the guest's sign-in, settings and session history go with the profile;
+    # data and files written in the project folder stay
+    Set-Location $env:TEMP
+    Remove-Item -Recurse -Force $pdir -ErrorAction SilentlyContinue
+    Write-Host "Guest profile removed. Your files in $projDir are still there."
+}
+exit $code

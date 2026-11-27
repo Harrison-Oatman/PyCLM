@@ -34,6 +34,11 @@ Claude Code command line (not the desktop app) for that person:
 - the session's start note names that person and their role
   (`PYCLM_PERSON`), and git commits carry their name if they gave one;
 - it says when a PyCLM run holds the microscope (PyCLM 1.2 and later).
+- with `"allow_guest": true` in `launcher\local.json` (an admin's choice),
+  it also offers "Guest": a visitor signs in with their own Claude account
+  for one session, has the role of a user, and their profile (sign-in,
+  settings, session history) is deleted when Claude closes; files they wrote
+  in the project folder stay.
 
 Project folders go in `C:\Users\Public\pyclm-projects` unless
 `launcher\local.json` (copied from `local.example.json`) names another
