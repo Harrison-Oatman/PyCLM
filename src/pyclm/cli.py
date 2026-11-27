@@ -314,6 +314,7 @@ def cmd_run(args) -> int:
         return _run_detached(args)
     from .check import CheckFailed
     from .gui import GuiUnavailable
+    from .lock import RunLocked
     from .methods import MethodLoadError
     from .run_pyclm import run_pyclm
 
@@ -329,7 +330,7 @@ def cmd_run(args) -> int:
     except CheckFailed as e:
         print(str(e))
         return 1
-    except (GuiUnavailable, MethodLoadError) as e:
+    except (GuiUnavailable, MethodLoadError, RunLocked) as e:
         print(f"error: {e}")
         return 1
     return 0
@@ -345,6 +346,13 @@ def _run_detached(args) -> int:
         )
         return 1
     directory = Path(args.directory)
+    if not args.dry:
+        from .lock import RunLocked, holder, lock_path
+
+        current = holder()
+        if current is not None:
+            print(f"error: {RunLocked(current, lock_path())}")
+            return 1
     if not args.no_check:
         report = check_directory(directory, args.config)
         print(report.text())

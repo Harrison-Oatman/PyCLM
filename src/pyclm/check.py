@@ -1129,6 +1129,7 @@ def _dry_rehearsal(
                 "stitched",
                 "detached.json",
                 "detached.log",
+                "run_record.json",
             ):
                 continue
             if item.is_dir():

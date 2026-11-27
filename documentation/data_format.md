@@ -40,6 +40,7 @@ experiment_dir/
 ├── events.parquet            # settings changed, commands, late timepoints, acquisition errors
 ├── commands/                 # commands to the running experiment (done/ holds the processed ones)
 ├── status.json               # progress, lateness and errors, rewritten every timepoint
+├── run_record.json           # what was run and how it ended, written when the run ends
 ├── plan.useq.yaml            # the acquisition plan derived from your TOMLs and positions
 ├── preview/                  # (pyclm preview) what a method produced on one image
 ├── movies/                   # (pyclm export --movies) one MP4 per experiment
@@ -217,6 +218,29 @@ when the run is late), and
 process health (errors per
 process, frames nobody consumed, frames the writer dropped). The live GUI
 shows one line from it; any script can read it to watch a run.
+
+### The run record
+
+`run_record.json` is written once, when the run ends (finished, stopped,
+or crashed), by `pyclm run` itself. It summarizes the run in one small file
+that needs neither PyCLM nor the data to read:
+
+| Key | What it holds |
+| --- | --- |
+| `started`, `ended`, `duration_s` | local times with their UTC offset |
+| `outcome`, `error` | `finished`, `stopped`, `crashed` (or `unknown`), and a crash's error |
+| `dry`, `host`, `user`, `platform`, `command` | where and how the run was started |
+| `pyclm` | `version`, and `commit` and `dirty` when PyCLM runs from a git checkout |
+| `config` | the paths and SHA-256 of `pyclm_config.toml` and the Micro-Manager `.cfg` |
+| `timepoints` | `planned` and `last_acquired` |
+| `errors` | errors per process, their `total`, `dropped_frames`, `undeliverable` |
+| `watch_flags` | flags `pyclm watch` raised during the run, by kind |
+| `experiments` | per position label: its TOML, pattern method and arguments, segmentation and tracking methods, channels, last timepoint, errors |
+| `outputs` | per experiment, the output path and its size in bytes |
+
+The record is small text, so it is the file to keep with a project's notes
+or in its git repository when the data live elsewhere. `format_version` (1)
+changes if its keys do.
 
 ### Opening OME-Zarr data
 

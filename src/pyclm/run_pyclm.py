@@ -167,131 +167,156 @@ def run_pyclm(
         if report.errors and not force:
             raise CheckFailed(report)
 
-    config = PyclmConfig.from_file(config_path)
-    logger.info(f"loaded config from {config_path}")
+    # one run at a time on the microscope (pyclm.lock); dry runs take no lock
+    from .lock import MicroscopeLock
+    from .run_record import now, write_run_record
 
-    # custom methods: installed entry points and the configuration's `methods`;
-    # the ones passed in code win
-    from .methods import discover
+    lock = None if dry else MicroscopeLock(experiment_directory).acquire()
+    if lock is not None and lock.replaced is not None:
+        logger.warning(f"replaced a stale microscope lock: {lock.replaced}")
+    started = now()
+    record = {"config_path": config_path}
+    error = None
+    try:
+        config = PyclmConfig.from_file(config_path)
+        logger.info(f"loaded config from {config_path}")
+        record["mm_config_path"] = config.config_path
 
-    found, ep_warnings = discover(config, config_path)
-    for warning in ep_warnings:
-        logger.warning(warning)
-    pattern_methods, segmentation_methods, tracking_methods = found.merged_with(
-        pattern_methods, segmentation_methods, tracking_methods
-    )
+        # custom methods: installed entry points and the configuration's `methods`;
+        # the ones passed in code win
+        from .methods import discover
 
-    focus_device = config.focus_device
-    if position_mover is None:
-        # the command line (and any caller that does not pass one) takes the
-        # mover from pyclm_config.toml; a mover passed in code wins
-        from .core.position_mover import resolve_mover
-
-        position_mover = resolve_mover(config.position_mover)()
-        logger.info(
-            f"position mover: {type(position_mover).__name__} "
-            f"(pyclm_config.toml position_mover = {config.position_mover!r})"
+        found, ep_warnings = discover(config, config_path)
+        for warning in ep_warnings:
+            logger.warning(warning)
+        pattern_methods, segmentation_methods, tracking_methods = found.merged_with(
+            pattern_methods, segmentation_methods, tracking_methods
         )
-    settle_time_s = config.settle_time_seconds
-    storage_format = config.output.format
-    pattern_policy = config.output.pattern_policy
-    export_imagej = config.output.export_imagej
-    logger.info(f"output format {storage_format}, pattern policy {pattern_policy}")
-    logger.info(f"[acquisition] {config.acquisition.model_dump()}")
 
-    base_path = experiment_directory
+        focus_device = config.focus_device
+        if position_mover is None:
+            # the command line (and any caller that does not pass one) takes the
+            # mover from pyclm_config.toml; a mover passed in code wins
+            from .core.position_mover import resolve_mover
 
-    # For dry runs without an explicit image source, discover the schedule and
-    # image source together from the directory before creating the Controller.
-    if dry and dry_image_source is None:
-        schedule, dry_image_source = dry_schedule_from_directory(base_path)
-    else:
-        schedule = schedule_from_directory(base_path)
+            position_mover = resolve_mover(config.position_mover)()
+            logger.info(
+                f"position mover: {type(position_mover).__name__} "
+                f"(pyclm_config.toml position_mover = {config.position_mover!r})"
+            )
+        settle_time_s = config.settle_time_seconds
+        storage_format = config.output.format
+        pattern_policy = config.output.pattern_policy
+        export_imagej = config.output.export_imagej
+        logger.info(f"output format {storage_format}, pattern policy {pattern_policy}")
+        logger.info(f"[acquisition] {config.acquisition.model_dump()}")
 
-    c = Controller(
-        config.config_path,
-        dry,
-        position_mover=position_mover,
-        dry_image_source=dry_image_source,
-        settle_time_s=settle_time_s,
-        reapply_config_groups=config.reapply_config_groups,
-        acquisition=config.acquisition.model_dump(),
-        storage_format=storage_format,
-        pattern_policy=pattern_policy,
-        parallel_device_initialization=config.parallel_device_initialization,
-    )
+        base_path = experiment_directory
 
-    # register any custom methods
-    if segmentation_methods is not None:
-        for name, method in segmentation_methods.items():
-            c.register_segmentation_method(name, method)
+        # For dry runs without an explicit image source, discover the schedule and
+        # image source together from the directory before creating the Controller.
+        if dry and dry_image_source is None:
+            schedule, dry_image_source = dry_schedule_from_directory(base_path)
+        else:
+            schedule = schedule_from_directory(base_path)
+        record["schedule"] = schedule
 
-    if pattern_methods is not None:
-        for name, method in pattern_methods.items():
-            c.register_pattern_method(name, method)
-
-    if tracking_methods is not None:
-        for name, method in tracking_methods.items():
-            c.register_tracking_method(name, method)
-
-    core = c.core
-    utf8_console()
-    core.describe()
-
-    if focus_device:
-        core.setFocusDevice(focus_device)
-        logger.info(f"focus device set to '{focus_device}'")
-
-    print("---listing available config groups---")
-    groups = core.getAvailableConfigGroups()
-    if not groups:
-        # an empty tuple means no configuration is loaded; None has been seen
-        # with a pymmcore-plus / pymmcore pair that do not belong together
-        logger.warning(
-            "no config groups reported by the core "
-            f"(getAvailableConfigGroups returned {groups!r}); "
-            "is the MicroManager configuration loaded, and do the installed "
-            "pymmcore and pymmcore-plus match (see pyproject.toml, [tool.uv])?"
+        c = Controller(
+            config.config_path,
+            dry,
+            position_mover=position_mover,
+            dry_image_source=dry_image_source,
+            settle_time_s=settle_time_s,
+            reapply_config_groups=config.reapply_config_groups,
+            acquisition=config.acquisition.model_dump(),
+            storage_format=storage_format,
+            pattern_policy=pattern_policy,
+            parallel_device_initialization=config.parallel_device_initialization,
         )
-    for group in groups or ():
-        cg = core.getConfigGroupObject(group, False)
-        print(cg.name, list(cg.items()))
 
-    slm_shape = config.slm_shape
-    at = config.affine
+        # register any custom methods
+        if segmentation_methods is not None:
+            for name, method in segmentation_methods.items():
+                c.register_segmentation_method(name, method)
 
-    c.initialize(
-        schedule,
-        slm_shape,
-        at,
-        base_path,
-        camera_roi=config.camera_roi,
-        slms=config.slm_calibrations(),
-    )
+        if pattern_methods is not None:
+            for name, method in pattern_methods.items():
+                c.register_pattern_method(name, method)
 
-    all_layers = c.all_layers
-    t_gcd = c.t_gcd
+        if tracking_methods is not None:
+            for name, method in tracking_methods.items():
+                c.register_tracking_method(name, method)
 
-    all_layers_output = {
-        "t": t_gcd,
-        "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers],
-    }
+        core = c.core
+        utf8_console()
+        core.describe()
 
-    with open(f"{base_path}/all_layers.txt", "w") as file:
-        json.dump(all_layers_output, file, indent=4)
+        if focus_device:
+            core.setFocusDevice(focus_device)
+            logger.info(f"focus device set to '{focus_device}'")
 
-    gui_proc = None
-    if gui:
-        print(all_layers)
-        gui_proc = launch_gui_process(
-            all_layers, cwd=base_path, experiment_dir=base_path
+        print("---listing available config groups---")
+        groups = core.getAvailableConfigGroups()
+        if not groups:
+            # an empty tuple means no configuration is loaded; None has been seen
+            # with a pymmcore-plus / pymmcore pair that do not belong together
+            logger.warning(
+                "no config groups reported by the core "
+                f"(getAvailableConfigGroups returned {groups!r}); "
+                "is the MicroManager configuration loaded, and do the installed "
+                "pymmcore and pymmcore-plus match (see pyproject.toml, [tool.uv])?"
+            )
+        for group in groups or ():
+            cg = core.getConfigGroupObject(group, False)
+            print(cg.name, list(cg.items()))
+
+        slm_shape = config.slm_shape
+        at = config.affine
+
+        c.initialize(
+            schedule,
+            slm_shape,
+            at,
+            base_path,
+            camera_roi=config.camera_roi,
+            slms=config.slm_calibrations(),
         )
-        logger.info(f"Started GUI process (pid={gui_proc.pid})")
 
-    c.run()
+        all_layers = c.all_layers
+        t_gcd = c.t_gcd
 
-    if export_imagej:
-        export_outputs(c.outbox.writer.output_paths().values())
+        all_layers_output = {
+            "t": t_gcd,
+            "all_layers": [f"{filepath}:{channel}" for filepath, channel in all_layers],
+        }
+
+        with open(f"{base_path}/all_layers.txt", "w") as file:
+            json.dump(all_layers_output, file, indent=4)
+
+        gui_proc = None
+        if gui:
+            print(all_layers)
+            gui_proc = launch_gui_process(
+                all_layers, cwd=base_path, experiment_dir=base_path
+            )
+            logger.info(f"Started GUI process (pid={gui_proc.pid})")
+
+        c.run()
+        record["outputs"] = c.outbox.writer.output_paths()
+
+        if export_imagej:
+            export_outputs(c.outbox.writer.output_paths().values())
+    except BaseException as e:
+        error = e
+        raise
+    finally:
+        try:
+            write_run_record(
+                experiment_directory, started=started, dry=dry, error=error, **record
+            )
+        finally:
+            if lock is not None:
+                lock.release()
 
 
 def export_outputs(paths) -> list[Path]:
