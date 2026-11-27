@@ -180,7 +180,9 @@ when. This covers another terminal, another person's agent and a second
 `%PROGRAMDATA%\pyclm` on Windows, or in the system temporary folder
 elsewhere; set `PYCLM_LOCK_DIR` to put it somewhere else, for example a
 folder every user of a shared computer can write. A lock left by a run that
-crashed is replaced by the next run, with a warning in `log.log`.
+crashed is replaced by the next run, with a warning in `log.log`. The lock
+and the run record name the person as `PYCLM_PERSON` gives it, when it is
+set (several people on one Windows login), and the login name otherwise.
 
 **The run record.** When a run ends, however it ends, it writes
 `run_record.json` into the directory: start, end and duration, host and

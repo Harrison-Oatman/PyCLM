@@ -60,7 +60,7 @@
 
 - **`run_record.json` and one run at a time.** Every run now writes
   `run_record.json` when it ends, however it ends: times with their UTC
-  offset, host and user, the command, the PyCLM version and git commit,
+  offset, host and user (`PYCLM_PERSON` when set), the command, the PyCLM version and git commit,
   SHA-256 of `pyclm_config.toml` and the Micro-Manager `.cfg`, per experiment
   the methods and their arguments and how far it got, the outcome
   (`finished`, `stopped`, `crashed` with the error), error and dropped-frame

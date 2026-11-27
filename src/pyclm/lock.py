@@ -61,6 +61,12 @@ def lock_path() -> Path:
 
 
 def _user() -> str:
+    """The person running: ``PYCLM_PERSON`` when set (several people sharing
+    one Windows login, for example through the plugin's launcher), else the
+    login name."""
+    person = os.environ.get("PYCLM_PERSON", "").strip()
+    if person:
+        return person
     try:
         return getpass.getuser()
     except Exception:

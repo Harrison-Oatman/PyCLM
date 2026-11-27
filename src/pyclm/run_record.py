@@ -26,7 +26,6 @@ the run was started by a person, a script or an agent.
 from __future__ import annotations
 
 import datetime
-import getpass
 import hashlib
 import json
 import logging
@@ -258,7 +257,6 @@ def write_run_record(directory, **kwargs) -> Path | None:
 
 
 def _user() -> str:
-    try:
-        return getpass.getuser()
-    except Exception:
-        return "?"
+    from .lock import _user as person
+
+    return person()

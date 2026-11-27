@@ -44,6 +44,13 @@ def test_lock_is_exclusive_and_released(lock_dir, tmp_path):
         pass
 
 
+def test_the_lock_names_the_person(lock_dir, tmp_path, monkeypatch):
+    """On a shared login the launcher sets PYCLM_PERSON; the lock names them."""
+    monkeypatch.setenv("PYCLM_PERSON", "Ada")
+    with MicroscopeLock(tmp_path):
+        assert holder()["user"] == "Ada"
+
+
 def test_a_stale_lock_is_replaced(lock_dir, tmp_path):
     lock_dir.mkdir()
     stale = {"pid": _dead_pid(), "host": platform.node(), "directory": "old"}
