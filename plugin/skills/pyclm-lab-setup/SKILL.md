@@ -71,7 +71,12 @@ name = "<the person's name, as written in lab.toml>"
 ```
 
 (`PYCLM_LAB_CONTEXT` and `PYCLM_PERSON` override it, for example on a
-shared login.) The next Claude Code session starts with a short note naming
+shared login.) On a microscope PC that several people use, offer the
+launcher instead: a desktop shortcut to the lab context's
+`launcher\Start-PyCLM.bat` gives each person their own Claude sign-in,
+session history and plugin install, and sets both variables
+(`templates/lab_context/README.md`, "Several people on one microscope
+PC"). Windows only. The next Claude Code session starts with a short note naming
 the files to read and the person's role. Tell the person to start a new
 session to check it.
 

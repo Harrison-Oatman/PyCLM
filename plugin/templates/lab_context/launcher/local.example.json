@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to local.json on each microscope PC (local.json is not shared). Every key is optional.",
+  "claude_exe": "C:\\Users\\<login>\\.local\\bin\\claude.exe",
+  "profiles_dir": "C:\\Users\\<login>\\.pyclm\\profiles",
+  "projects_dir": "D:\\pyclm-projects",
+  "extra_dirs": ["D:\\data"],
+  "plugin_marketplace": "Harrison-Oatman/PyCLM@plugin",
+  "plugin": "pyclm@pyclm-plugins"
+}

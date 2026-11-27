@@ -149,3 +149,13 @@ def test_mini_toml_reads_the_lab_files(hook, lab):
     assert hook._mini_toml(template) == tomllib.loads(template)
     user = 'path = "C:/Lab Context"\nname = "Ada"  # comment\n'
     assert hook._mini_toml(user) == {"path": "C:/Lab Context", "name": "Ada"}
+
+
+def test_launcher_sets_what_the_hook_reads():
+    launcher = (TEMPLATE / "launcher" / "launch.ps1").read_text(encoding="utf-8")
+    for name in ("CLAUDE_CONFIG_DIR", "PYCLM_PERSON", "PYCLM_LAB_CONTEXT"):
+        assert f"$env:{name} =" in launcher
+    assert "microscope.lock" in launcher  # pyclm.lock.LOCK_NAME
+    bat = (TEMPLATE / "launcher" / "Start-PyCLM.bat").read_bytes()
+    assert b"\r\n" in bat and b"launch.ps1" in bat
+    json.loads((TEMPLATE / "launcher" / "local.example.json").read_text())

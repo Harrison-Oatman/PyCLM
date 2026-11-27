@@ -12,6 +12,7 @@ Nothing else here is loaded at the start of a session.
 | `microscopes/<name>/note.md` | how to start PyCLM there, data paths, quirks, measured timings, dated temporary issues | the microscope owner, from proposals |
 | `microscopes/<name>/pyclm_config.toml` | the calibrated configuration in use | the microscope owner |
 | `proposals/` | proposed changes from sessions, one file each | sessions add; the admin or owner reviews |
+| `launcher/` | `Start-PyCLM.bat`: the start file for a microscope PC that several people share (below) | the lab admin |
 
 Project pointers (`pyclm_project.md`) live in each project's own folder,
 not here (template in `projects/_template/`).
@@ -19,6 +20,28 @@ not here (template in `projects/_template/`).
 Keep each note to about one page. Replace old lines instead of adding
 history; the date on each line says when it was last confirmed. Never put
 credentials, raw data or analysis code here.
+
+## Several people on one microscope PC
+
+Copy a shortcut to `launcher\Start-PyCLM.bat` onto the microscope PC's
+desktop. It asks who you are, then which project, then whether to start a
+new session, continue the last one or pick an earlier one, and starts the
+Claude Code command line (not the desktop app) for that person:
+
+- each person gets a profile (`CLAUDE_CONFIG_DIR`): their own Claude
+  sign-in, settings, session history, and the PyCLM plugin, installed the
+  first time;
+- the session's start note names that person and their role
+  (`PYCLM_PERSON`), and git commits carry their name if they gave one;
+- it says when a PyCLM run holds the microscope (PyCLM 1.2 and later).
+
+Project folders go in `C:\Users\Public\pyclm-projects` unless
+`launcher\local.json` (copied from `local.example.json`) names another
+place; it can also name `claude.exe`, the profiles folder and extra folders
+every session may read. A lab that wants the same Claude Code settings in
+every profile (permissions, environment variables) puts a
+`launcher\profile_settings.json` here; new profiles start from it. The
+plugin ships none.
 
 This folder can be a git repository (recommended: changes are pull
 requests) or a plain shared folder (changes come through `proposals/`).

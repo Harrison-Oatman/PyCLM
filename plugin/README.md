@@ -32,6 +32,10 @@ PyCLM itself is installed separately, by the bring-up skill or by hand:
 pip install "closed-loop-microscopy[gui]>=1.2"
 ```
 
+On a microscope PC that several people share, the lab context's
+`launcher\Start-PyCLM.bat` does the plugin install for each person's
+profile the first time they use it (`templates/lab_context/README.md`).
+
 ## Where to start
 
 Say what you want in plain words; the skills match on it. For a new
@@ -60,7 +64,7 @@ plugin follows `lab.md` and sets no rule of its own.
 | `skills/pyclm-run/` | start a run detached, follow it with `pyclm watch`, report flags, pause or stop on request, chain runs with `--then` |
 | `skills/pyclm-close-session/` | run records to the project (or a summary from `status.json` without one); learnings to proposals |
 | `skills/pyclm-design-experiment/`, `pyclm-microscope-bringup/`, `pyclm-write-pattern-method/` | copies of the repository's skills (`.claude/skills/`, edited there; `python plugin/sync_skills.py` copies them) |
-| `templates/lab_context/` | the lab context folder: `lab.md`, `lab.toml`, a microscope note, a project pointer, the proposals inbox |
+| `templates/lab_context/` | the lab context folder: `lab.md`, `lab.toml`, a microscope note, a project pointer, the proposals inbox, and `launcher/` (`Start-PyCLM.bat`, the desktop start file for a microscope PC several people share: own Claude sign-in, sessions and plugin per person; new, continue or resume) |
 
 ## Still to come
 
