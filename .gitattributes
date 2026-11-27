@@ -2,5 +2,6 @@
 * text=auto
 *.ipynb text eol=lf
 *.ipynb filter=nbstripout
-*.ipynb linguist-vendored*.bat text eol=crlf
+*.ipynb linguist-vendored
+*.bat text eol=crlf
 *.ps1 text eol=crlf
