@@ -10,15 +10,20 @@ whoever needs it next. Do both before the person leaves; it takes minutes.
 
 ## 1. Run records
 
-Every `pyclm run` writes `run_record.json` in its directory when it ends.
-For each run of this session:
+Every `pyclm run` writes `run_record.json` in its directory when it ends
+(PyCLM versions with the run record; older ones do not). For each run of
+this session:
 
 - Read the record and tell the person, in one line per run: outcome,
   timepoints acquired of planned, errors and watch flags, data size.
+- With no `run_record.json`, build the same summary from `status.json`
+  (timepoints, errors, done or not), the end of `log.log`, and
+  `watch/flags_log.jsonl` if a watcher ran, and say it came from those.
 - If the project has a pointer (`pyclm_project.md`) naming a place for run
   records (for example `runs/` in the project's repository), copy into
   `<that place>/<date>_<run directory name>/`:
-  the experiment and schedule TOMLs, `multipoints.xml`, `run_record.json`,
+  the experiment and schedule TOMLs, `multipoints.xml`, `run_record.json`
+  (or `status.json` without one),
   and the `pyclm_config.toml` used; add `log.log` and
   `watch/flags_log.jsonl` only if the run did not finish. Never copy data,
   movies, parquet tables or exports. Commit only if the person allows it.

@@ -27,7 +27,7 @@ from pathlib import Path
 
 try:
     import tomllib
-except ImportError:  # Python < 3.11
+except ImportError:  # Python < 3.11: _mini_toml reads the few forms we use
     tomllib = None
 
 USER_FILE = Path.home() / ".pyclm" / "lab_context.toml"
@@ -39,9 +39,41 @@ SETUP_LINE = (
 )
 
 
+def _mini_toml(text: str) -> dict:
+    """The TOML subset of lab.toml and lab_context.toml, for Python < 3.11:
+    ``[a.b]`` tables, ``key = "string"`` and ``key = ["a", "b"]`` on one line."""
+    data: dict = {}
+    table = data
+    for raw in text.splitlines():
+        line, quoted = "", False
+        for ch in raw:
+            if ch == '"':
+                quoted = not quoted
+            elif ch == "#" and not quoted:
+                break
+            line += ch
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            table = data
+            for part in line.strip("[]").split("."):
+                table = table.setdefault(part.strip().strip('"'), {})
+            continue
+        if "=" not in line:
+            continue
+        key, value = (x.strip() for x in line.split("=", 1))
+        if value.startswith("["):
+            items = value.strip("[]").split(",")
+            table[key] = [i.strip().strip('"') for i in items if i.strip()]
+        else:
+            table[key] = value.strip('"')
+    return data
+
+
 def _load_toml(path: Path) -> dict:
     if tomllib is None:
-        return {}
+        return _mini_toml(path.read_text(encoding="utf-8"))
     with open(path, "rb") as f:
         return tomllib.load(f)
 

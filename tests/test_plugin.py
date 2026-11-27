@@ -130,3 +130,20 @@ def test_the_hook_never_fails(tmp_path):
     )
     assert result.returncode == 0
     assert "no lab.md" in result.stdout
+
+
+def test_marketplace_lists_the_plugin():
+    market = json.loads((REPO / ".claude-plugin" / "marketplace.json").read_text())
+    manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
+    (entry,) = market["plugins"]
+    assert entry["name"] == manifest["name"]
+    assert (REPO / entry["source"] / ".claude-plugin" / "plugin.json").exists()
+
+
+def test_mini_toml_reads_the_lab_files(hook, lab):
+    data = hook._mini_toml((lab / "lab.toml").read_text())
+    assert data == tomllib.loads((lab / "lab.toml").read_text())
+    template = (TEMPLATE / "lab.toml").read_text()
+    assert hook._mini_toml(template) == tomllib.loads(template)
+    user = 'path = "C:/Lab Context"\nname = "Ada"  # comment\n'
+    assert hook._mini_toml(user) == {"path": "C:/Lab Context", "name": "Ada"}
