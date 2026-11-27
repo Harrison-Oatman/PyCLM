@@ -24,6 +24,21 @@ evidence.
 - Data root for runs on this microscope, beyond the lab rule: <path>.
   (<date>)
 
+## Finding focus
+
+How a person (or the agent) gets a sample in focus here. An agent cannot
+see the eyepiece; positions with z come from the person.
+
+- Focus lock: <none / Perfect Focus / Definite Focus / ...>, device name in
+  Micro-Manager <...>, `position_mover` <basic / pfs>. (<date>)
+- Typical z and lock offset per vessel: <for example "96-well glass
+  bottom: z 4640-4750, PFS offset ~10000">. (<date>)
+- How positions are made: <for example "the person focuses each well in
+  Micro-Manager, adds it to the Stage Position List and saves it as
+  multipoints.xml; the agent never opens the Micro-Manager GUI">. (<date>)
+- Micro-Manager and PyCLM cannot both hold the hardware: close the
+  Micro-Manager GUI before a run starts. (<date>)
+
 ## Defaults for users
 
 Settings a user is not asked about; the agent uses these and says so.
