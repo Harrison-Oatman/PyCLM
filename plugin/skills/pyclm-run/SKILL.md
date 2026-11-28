@@ -189,7 +189,13 @@ How the person hears about a flag while they are away is the lab's
 choice (`lab.md`, "Notifications"); it is usually a command for
 `--on-flag`, which gets the path of `flags.json` as its last argument.
 PyCLM sends no messages itself. Do not invent a notification channel; ask
-if `lab.md` says nothing.
+if `lab.md` says nothing. When the session is under Remote Control and
+the person asks to be notified ("tell my phone if a field loses focus"),
+Claude Code's own push notification to the Claude app is a channel: keep
+the watcher's flags in view (a background monitor on
+`watch/flags_log.jsonl`) and send one push per new flag of the kind
+asked for, with the flag and timepoint. It reaches the phone only while
+this session stays open.
 
 What each flag means and what to look at:
 

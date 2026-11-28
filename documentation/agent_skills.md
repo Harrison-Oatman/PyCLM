@@ -176,14 +176,18 @@ live analysis figure.
 
 ```{admonition} You
 :class: chat-you
-How is it going?
+Send a notification to my phone if any field goes out of focus.
 ```
 
 ```{admonition} Claude
 :class: chat-claude
-t 15 of 30, at most 5 s late, no flags. KTR activity in the lit fields has
-been falling since t 6; the unlit field is flat.
+Will do; I check the watcher's flags every minute. t 15 of 30, at most 5 s
+late, no flags so far. KTR activity in the lit fields has been falling since
+t 6; the unlit field is flat.
 ```
+
+Notifications to a phone need Remote Control on (Connecting to Claude Code
+projects, below), and the Claude session to stay open.
 
 ### 6. Export
 
@@ -205,18 +209,23 @@ on the lab drive (`pyclm pack`), and wrote the run record.
 
 ## Connecting to Claude Code projects
 
-A session on the microscope PC can be driven from elsewhere with
-Remote Control, for
-example from a laptop, a phone, or a project on claude.ai where the
-experiment was planned:
+A session on the microscope PC can be followed and driven from elsewhere
+with Remote Control, for example from a laptop, a phone, or a project on
+claude.ai where the experiment was planned:
 
-- **From a terminal on the microscope PC:** start `claude remote-control
-  --name <scope>` in the project folder, then open the session at
-  claude.ai/code or in the Claude app.
+- **From a session already running:** type `/remote-control` (or `/rc`). The
+  conversation so far carries over; open it at claude.ai/code or in the
+  Claude app.
+- **From a terminal on the microscope PC:** `claude remote-control --name
+  <scope>` in the project folder waits for a connection from claude.ai/code
+  or the Claude app.
 - **From a Claude project:** in the Claude desktop app on the microscope PC,
   turn on Remote Control (Settings, Claude Code, Remote Control) and add the
   projects folder. A conversation in the project can then start a session on
   that PC, with the plugin and the lab context as they are there.
+
+While Remote Control is on, Claude can send push notifications to the Claude
+app on your phone (turn them on in `/config`).
 
 The session runs on the microscope PC under the account that started it,
 and the PC must stay on. Approvals are still typed in the conversation, and
