@@ -157,13 +157,14 @@ One run holds the microscope at a time.
 
 ```{admonition} You
 :class: chat-you
-Can I close this window?
+Plot KTR activity over time, live, grouped by condition.
 ```
 
 ```{admonition} Claude
 :class: chat-claude
-Yes. The run is detached (pid 47572). It is at t 1 of 30, with light at the
-two bar fields only and no errors.
+Started detached (pid 47572), so it keeps going if this window closes. t 1
+of 30, light at the two bar fields only, no errors. The KTR plot, lit vs
+unlit, is at the top of the Running page and updates with each timepoint.
 ```
 
 ### 5. Follow
@@ -175,13 +176,13 @@ live analysis figure.
 
 ```{admonition} You
 :class: chat-you
-How is it going? Can you plot 545 against distance from the bar?
+How is it going?
 ```
 
 ```{admonition} Claude
 :class: chat-claude
-t 15 of 30, at most 5 s late, no flags. The profile is now at the top of the
-Running page and updates with it.
+t 15 of 30, at most 5 s late, no flags. KTR activity in the lit fields has
+been falling since t 6; the unlit field is flat.
 ```
 
 ### 6. Export
