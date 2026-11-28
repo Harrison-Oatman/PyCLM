@@ -86,8 +86,9 @@ Example at the end is a real run.
 ### 1. Describe
 
 Say what you want in plain words. Claude reads the lab and microscope notes,
-then asks only what it cannot know, usually in one message: the pattern, the
-dose, the timing and the controls. It proposes values; you decide.
+and fills in the rest from them and from earlier runs. If something it
+cannot know is missing (the pattern, the dose, the timing or the controls),
+it asks, usually in one message. It proposes values; you decide.
 
 ```{admonition} You
 :class: chat-you
@@ -162,8 +163,8 @@ Plot KTR activity over time, live, grouped by condition.
 ```{admonition} Claude
 :class: chat-claude
 Started detached (pid 47572), so it keeps going if this window closes. t 1
-of 30, light at the 12 bar fields only, no errors. The KTR plot, lit vs
-unlit, is at the top of the Running page and updates with each timepoint.
+of 30, light at the 12 bar fields only, no errors. The KTR plot, one line
+per bar speed and one for the dark fields, is at the top of the Running page and updates with each timepoint.
 ```
 
 ### 5. Follow
@@ -181,8 +182,8 @@ Send a notification to my phone if any field goes out of focus.
 ```{admonition} Claude
 :class: chat-claude
 Will do; I check the watcher's flags every minute. t 15 of 30, at most 5 s
-late, no flags so far. KTR activity in the lit fields has been falling since
-t 6; the unlit field is flat.
+late, no flags so far. KTR activity under the bars has been falling since
+t 6; the dark fields are flat.
 ```
 
 Notifications to a phone need Remote Control on (Connecting to Claude Code
