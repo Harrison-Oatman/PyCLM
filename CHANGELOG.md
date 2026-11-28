@@ -4,6 +4,11 @@
 
 ## 1.2.0 — 2026-12-01 (detached runs, watch, run record)
 
+- **Claude Code plugin.** `claude plugin marketplace add Harrison-Oatman/PyCLM`,
+  then `claude plugin install pyclm@pyclm-plugins`: skills for a first day on
+  a new microscope, lab setup, design, running and session records, a lab
+  context template with start files for shared microscope PCs, and session
+  pages. See "Using PyCLM with Claude Code" in the documentation.
 - **`pyclm --version`** prints the installed version.
 - TOML files saved with a UTF-8 byte-order mark (Windows PowerShell 5.1's
   `Set-Content -Encoding utf8`) are read instead of rejected as invalid.
