@@ -11,7 +11,13 @@ sys.path.insert(0, os.path.abspath("ext"))
 project = "PyCLM"
 copyright = "2026, Harrison-Oatman"
 author = "Harrison-Oatman"
-release = "0.1.0"
+try:
+    from importlib.metadata import version as _version
+
+    release = _version("closed-loop-microscopy")
+except Exception:  # not installed: building from a bare checkout
+    release = "unknown"
+version = ".".join(release.split(".")[:2])
 
 extensions = [
     "myst_parser",
