@@ -26,16 +26,18 @@ evidence.
 
 ## Finding focus
 
-How a person (or the agent) gets a sample in focus here. An agent cannot
-see the eyepiece; positions with z come from the person.
+How a sample gets in focus here. The agent starts from the focus lock
+setting and a recent z; when that does not find focus, it opens
+Micro-Manager and asks a person to focus.
 
 - Focus lock: <none / Perfect Focus / Definite Focus / ...>, device name in
   Micro-Manager <...>, `position_mover` <basic / pfs>. (<date>)
 - Typical z and lock offset per vessel: <for example "96-well glass
   bottom: z 4640-4750, PFS offset ~10000">. (<date>)
-- How positions are made: <for example "the person focuses each well in
-  Micro-Manager, adds it to the Stage Position List and saves it as
-  PositionList.pos; the agent never opens the Micro-Manager GUI">. (<date>)
+- Who focuses: <for example "the agent, from the plate map's z and the
+  PFS offset; Sam prefers to focus by hand for new samples">. (<date>)
+- Plate maps: `plates/` in this folder, one file per vessel format; see
+  `plates/example-96well.toml`. (<date>)
 - Starting Micro-Manager: `launcher\Start-MicroManager.bat` (its steps
   are in `launcher\local.json`, "micromanager"); which `.cfg` to pick in
   its start-up dialog: <...>. (<date>)

@@ -42,15 +42,58 @@ session on the microscope PC starts in such a folder, or the person says
 1. Read the plan note and the pointer, and say in two lines what the plan
    is and which directories it runs, in what order.
 2. Replace what only the scope can know: `pyclm_config.toml` from this
-   microscope (its note says where), and today's position list
-   (`PositionList.pos` from Micro-Manager, or `multipoints.xml` from
-   Nikon Elements). A plan's own copies of these are
+   microscope (its note says where), and today's positions (below,
+   "Positions, focus and plate maps"). A plan's own copies of these are
    placeholders; never run with them.
 3. `pyclm check` each directory against this scope (`--mm-config` if the
    `.cfg` is not the config's). Presets and pixel size are the usual
    mismatches between a plan and a scope.
 4. Then step 1 below. Anything the check changed from the plan goes into
    the summary, so the go-ahead covers it.
+
+## Positions, focus and plate maps
+
+Positions come from the plate map when there is one, and from a person
+when there is not.
+
+**Plate maps.** `microscopes/<name>/plates/<format>.toml` in the lab
+context holds where one vessel format's wells sit on this stage (two
+corner well centers, the pitch) and its focus (z, lock offset), plus a
+`[[confirmed]]` entry for each session that found a well where the map
+put it (the template's `plates/example-96well.toml` has the fields).
+
+- Ask which vessel is on the stage. If a map exists for it, go to the
+  center of the well the experiment needs, set z and the focus lock from
+  the map, and snap with no DMD light. If the cells are in focus and the
+  well is where expected, add a `[[confirmed]]` entry (date, well, offset
+  found minus predicted, z) and use the map for every position.
+- Trust the map once it has two or more confirmations from different
+  days with offsets under a tenth of the pitch. Until then, check one
+  well against it before placing fields, and say so.
+- No map yet: once a person has put one well in focus (or two, far apart,
+  for the rotation), write the map from those centers, the format's
+  pitch and the focus, and say where it is. Maps and confirmations are
+  measurements, so a session writes them directly; they are not rule
+  changes and need no proposal. A vessel format the lab will not use
+  again needs no map.
+- If the map is off (a well not where predicted by more than a quarter
+  of the pitch), do not correct it silently: say so, find the well with
+  the person, and write a new map dated today.
+
+**Focus.** Start from the focus lock setting and a recent z (the plate
+map, then the microscope note), engage the lock, snap, and look at the
+frame. Some people prefer to focus by hand; the microscope note says who.
+If focus cannot be found that way, open Micro-Manager yourself
+(`launcher\Start-MicroManager.bat` in the lab context, or the program
+the note names) and ask the person to focus. When they are done, they
+close Micro-Manager and you read x, y, z and the lock offset from the
+stage. The GUI and PyCLM cannot hold the hardware together, so never open
+it while a run is going, and close nothing the person has open.
+
+**Fields.** Scouting around a focused position with no light, then
+picking fields on the Positions page (`pyclm-session-pages`), is the
+default. Write the picked positions as the experiment's `PositionList.pos`
+(`pyclm.directories.write_position_list` writes one).
 
 ## 1. Before light goes on cells
 

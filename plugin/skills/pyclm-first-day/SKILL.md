@@ -62,13 +62,11 @@ is on the stage.
 - **Short before long.** A 10-minute run with three timepoints per
   position on the real sample, then the real run. It catches focus, light
   and timing problems that the dry run cannot.
-- **Positions come from the person.** The agent cannot focus by eye. The
-  person focuses each position in Micro-Manager (engaging the focus lock
-  if there is one), saves the Stage Position List as `PositionList.pos`
-  (it carries x, y, z and the lock offset; `multipoints.xml` is the Nikon
-  Elements equivalent), and closes the Micro-Manager
-  GUI before the run. Write the typical z and lock offset into the
-  microscope note's "Finding focus" section.
+- **Make a plate map on day one.** Once one well is found and in focus,
+  map the vessel (`pyclm-run`, "Positions, focus and plate maps"): every
+  later session on this microscope starts from it instead of searching.
+  Write the z and lock offset that worked into the microscope note's
+  "Finding focus" section.
 - **Focus.** With no hardware focus lock, use `position_mover = "basic"`
   and few positions; check focus on the frames at the first timepoints.
   Thick samples (organoids, embryos, tissue) drift in z; say so before the

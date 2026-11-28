@@ -104,10 +104,17 @@ at fixed offsets?
 
 ### 2. Position
 
-Claude cannot focus. Focus one field in Micro-Manager (with the focus lock
-on), save the Stage Position List as `PositionList.pos` in the project
-folder, and close Micro-Manager. Claude can scout around it without light and
-propose fields on the **Positions page**.
+Claude finds the well from the **plate map** for your vessel, sets z and the
+focus lock from it, and checks the focus on a frame. If it cannot find focus,
+or you prefer to focus by hand, it opens Micro-Manager and asks you to focus.
+It then scouts around the well without light and proposes fields on the
+**Positions page**.
+
+A plate map records where one vessel format's wells sit on the stage and where
+focus is. Claude makes one the first time a format is used, adds a
+confirmation each time a well turns up where the map says, and relies on it
+once positions have proven consistent between sessions. Maps are kept with
+the microscope in the lab context folder.
 
 ```{admonition} Claude
 :class: chat-claude
@@ -216,8 +223,8 @@ before asking to run it (*"Run the plan in this folder."*).
 ## Example
 
 A 30-minute moving-bar run on an MDCK monolayer, on a Nikon Ti2 with a DMD
-that had run PyCLM before. The researcher focused one field in well B7,
-saved it as `PositionList.pos`, closed Micro-Manager, and asked for the run
+that had run PyCLM before. The researcher had focused one field in well B7
+and asked for the run
 with an unlit control, the design and positions shown on pages, and no
 scouting outside B7. Claude asked about the bar, cadence and scouting in one
 message, scouted a 3 × 3 grid with no light, and opened two pages:

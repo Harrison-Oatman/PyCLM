@@ -11,6 +11,7 @@ Nothing else here is loaded at the start of a session.
 | `lab.toml` | the same facts a script needs: admins, which computer is which microscope | the lab admin |
 | `microscopes/<name>/note.md` | how to start PyCLM there, data paths, quirks, measured timings, dated temporary issues | the microscope owner, from proposals |
 | `microscopes/<name>/pyclm_config.toml` | the calibrated configuration in use | the microscope owner |
+| `microscopes/<name>/plates/<format>.toml` | plate maps: where each vessel format's wells sit on the stage, and its focus | sessions add maps and confirmations; the owner may correct |
 | `proposals/` | proposed changes from sessions, one file each | sessions add; the admin or owner reviews |
 | `launcher/` | `Start-PyCLM.bat`: the start file for a microscope PC that several people share; `Start-MicroManager.bat`: the Micro-Manager GUI with this scope's start-up steps (below) | the lab admin |
 

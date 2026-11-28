@@ -1,0 +1,31 @@
+# A plate map: where the wells of one vessel format sit on this microscope's
+# stage, and where focus is. Sessions start from it instead of searching for
+# wells, and add a [[confirmed]] entry each time a well is found where the
+# map says. One file per format, named after it (96-well-glassbottom.toml).
+# Sessions may add a map and confirmations directly; it is a measurement, not
+# a lab rule. Delete this example when the first real map is made.
+
+format = "96-well, glass bottom"   # as the lab names it; the maker and part number if known
+rows = 8                           # A..H
+columns = 12                       # 1..12
+pitch_um = 9000                    # center to center
+imaging_diameter_um = 6000         # the part of a well where fields can go
+
+# Stage coordinates (um) of two well centers far apart; the rest follow.
+a1_center_um = [0.0, 0.0]
+h12_center_um = [99000.0, 63000.0]
+
+# Focus at the well centers, with the focus lock engaged.
+z_um = 4700.0
+focus_lock_offset = 10000          # leave out without a focus lock
+
+made = "2026-01-01"                # date and person or session
+made_by = "<name>"
+
+# One entry per session that found a well where the map put it:
+# offset_um = found center minus predicted center.
+[[confirmed]]
+date = "2026-01-01"
+well = "B7"
+offset_um = [0.0, 0.0]
+z_um = 4700.0
