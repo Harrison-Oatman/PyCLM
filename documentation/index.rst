@@ -13,10 +13,9 @@ one needs no programming; a new kind of light rule is a small Python class.
 Start here
 ----------
 
-- **Ask for it:** with the Claude Code plugin, an agent on the microscope PC
-  sets PyCLM up, designs the experiment with you, shows it on a page for your
-  go-ahead, and runs it. :doc:`agent_skills` installs it in two commands and
-  walks through a run.
+- **With Claude Code:** the PyCLM plugin sets PyCLM up on a microscope and
+  designs, checks, runs, follows and exports experiments with you
+  (:doc:`agent_skills`).
 
   .. code-block:: bash
 
@@ -46,9 +45,14 @@ Start here
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting started
+   :caption: Claude Code plugin
 
    agent_skills
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Getting started
+
    installation
    first_time_setup
    usage

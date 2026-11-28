@@ -10,13 +10,12 @@ imaging position gets its own light pattern, projected through a DMD, that
 can be fixed, change over time, follow individual cells, or respond to what
 the cells are doing.
 
-## Get started with Claude Code
+## Using PyCLM with Claude Code
 
-The easiest way in is to ask. The PyCLM plugin for
-[Claude Code](https://claude.com/claude-code) sets PyCLM up on your
-microscope, turns an experiment idea into a checked experiment, shows you
-the design on a page for your go-ahead, runs it, and follows it. On the
-microscope PC, with Claude Code installed:
+PyCLM ships a plugin for [Claude Code](https://claude.com/claude-code) that
+sets PyCLM up on a microscope and designs, checks, runs, follows and exports
+experiments with you, using the `pyclm` commands below. On the microscope PC,
+with Claude Code installed:
 
 ```bash
 claude plugin marketplace add Harrison-Oatman/PyCLM
@@ -24,18 +23,11 @@ claude plugin install pyclm@pyclm-plugins
 claude
 ```
 
-Then say what you want, for example:
-
-> Set up PyCLM on this microscope and run an experiment today.
-
-> I want a 30-minute moving-bar run in well B7: a few fields near the saved
-> position, at least one of them unlit. Ask me what you need to know.
-
-![](https://raw.githubusercontent.com/Harrison-Oatman/PyCLM/main/documentation/imgs/plugin/page_design.jpg "The Design page the agent shows before asking for approval")
+![](https://raw.githubusercontent.com/Harrison-Oatman/PyCLM/main/documentation/imgs/plugin/six_steps.svg "The six steps of a run")
 
 [Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
-walks through a full run, prompt by prompt, with the pages you see along
-the way. It also covers labs where several people share one microscope PC.
+covers setup, launching on a shared microscope PC, each step of a run,
+Remote Control from a Claude project, and a worked example.
 
 ## How PyCLM works
 
@@ -53,7 +45,7 @@ exported at the end.
 
 | I want to... | Go to |
 |---|---|
-| Have an agent set it up and run it with me | **[Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)** |
+| Set up and run experiments with Claude Code | **[Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)** |
 | See what light patterns PyCLM can make | **[Method zoo](https://pyclm.readthedocs.io/en/latest/method_zoo.html)**: every built-in pattern method on a sample image, with a `[pattern]` table to copy |
 | Try it without a microscope | The demo below |
 | Set PyCLM up on my microscope | [First-time setup](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) |
