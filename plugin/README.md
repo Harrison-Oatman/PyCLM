@@ -1,24 +1,26 @@
-# PyCLM plugin for Claude Code (in progress)
+# PyCLM plugin for Claude Code
 
-This branch (`plugin`) holds the Claude Code plugin for PyCLM. It stays off
-`main` until the release, which comes with full documentation. Nothing here
-changes PyCLM itself; the engine features the plugin uses (`pyclm run
---detached`, `pyclm watch`, `run_record.json`, the microscope lock) are on
-`main` with their own documentation, and in PyPI releases from 1.2.0.
+The Claude Code plugin for PyCLM: skills, a start-of-session note, the lab
+context template and session pages. The user documentation is
+[Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html);
+this file is for people working on the plugin. Nothing here changes PyCLM
+itself; the engine features the plugin uses (`pyclm run --detached`,
+`pyclm watch`, `run_record.json`, the microscope lock) are in PyCLM 1.2 and
+later.
 
 ## Install
 
 On the computer that runs the microscope, with Claude Code installed:
 
 ```bash
-claude plugin marketplace add Harrison-Oatman/PyCLM@plugin
+claude plugin marketplace add Harrison-Oatman/PyCLM
 claude plugin install pyclm@pyclm-plugins
 ```
 
-or, inside a Claude Code session, `/plugin install pyclm --marketplace
-Harrison-Oatman/PyCLM@plugin`. Start a new session afterwards; the start
-note and the `pyclm-*` skills come with it. `claude plugin marketplace
-update pyclm-plugins` picks up later changes to the branch.
+Start a new session afterwards; the start note and the `pyclm-*` skills
+come with it. `claude plugin marketplace update pyclm-plugins`, then
+`claude plugin update pyclm@pyclm-plugins`, picks up later changes. To try
+an unreleased branch, add the marketplace as `Harrison-Oatman/PyCLM@<branch>`.
 
 The start-of-session note needs `python` (3.11 or later; 3.8 to 3.10 also
 work) on the `PATH` of the shell Claude Code uses: check `python
@@ -71,10 +73,10 @@ plugin follows `lab.md` and sets no rule of its own.
 ## Still to come
 
 1. Run chain beyond `--then`: a session log of planned and finished runs.
-2. Design builder (with the design skill) and the live-analysis skill.
+2. Design builder (with the design skill).
 3. Scouting and picking: plate map, scout scoring, a pick page.
 4. Dashboard and analysis cards.
-5. Documentation pages: each skill, lab and facility setup, roles, the proposals inbox.
+5. Documentation pages per skill, for facilities, roles and the proposals inbox.
 
 ## Trying it from a checkout
 

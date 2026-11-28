@@ -6,7 +6,7 @@
   "extra_dirs": [
     "D:\\data"
   ],
-  "plugin_marketplace": "Harrison-Oatman/PyCLM@plugin",
+  "plugin_marketplace": "Harrison-Oatman/PyCLM",
   "plugin": "pyclm@pyclm-plugins",
   "allow_guest": false,
   "micromanager": [

@@ -1,7 +1,7 @@
 # Writing Custom Pattern Methods
 
 *A coding agent can walk you through this page with the pyclm-write-pattern-method skill; see
-[Using PyCLM skills with Claude Code](agent_skills.md).*
+[Using PyCLM with Claude Code](agent_skills.md).*
 
 ## Overview
 Custom patterns provide a way to extend PyCLM and enable a wide range of new experiments using python.

@@ -33,8 +33,9 @@ Start here
 - **Write your own light rule:** :doc:`custom_pattern_methods` and
   :doc:`tracking`.
 - **Open the data:** :doc:`data_format`.
-- **Get walked through it:** :doc:`agent_skills` lets a coding agent such as
-  Claude Code guide you through setup, an experiment, or a new method.
+- **Get walked through it:** the Claude Code plugin (:doc:`agent_skills`)
+  lets a coding agent guide your lab through setup, an experiment, the run
+  and its record, on a microscope PC one person or several use.
 
 .. toctree::
    :maxdepth: 2

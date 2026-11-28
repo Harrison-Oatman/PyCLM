@@ -56,7 +56,7 @@ $profilesDir = Setting $local 'profiles_dir' (Join-Path $env:USERPROFILE '.pyclm
 # project folders: shared by everyone on this PC unless local.json says otherwise
 $projectsDir = Setting $local 'projects_dir' (Join-Path $env:PUBLIC 'pyclm-projects')
 $extraDirs = @(Setting $local 'extra_dirs' @())
-$marketplace = Setting $local 'plugin_marketplace' 'Harrison-Oatman/PyCLM@plugin'
+$marketplace = Setting $local 'plugin_marketplace' 'Harrison-Oatman/PyCLM'
 $plugin = Setting $local 'plugin' 'pyclm@pyclm-plugins'
 # guests: one-off visitors; their profile is deleted when Claude closes
 $allowGuest = [bool](Setting $local 'allow_guest' $false)

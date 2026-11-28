@@ -61,19 +61,23 @@ number of simultaneous experiments is limited mainly by the hardware. Data is
 written as the run goes (OME-Zarr by default), and ImageJ hyperstacks are
 exported at the end.
 
-## Using PyCLM skills with Claude Code
+## Using PyCLM with Claude Code
 
-The repository includes three [agent skills](https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills)
-that let a coding agent such as [Claude Code](https://claude.com/claude-code)
-walk you through microscope setup
-([`pyclm-microscope-bringup`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-microscope-bringup/SKILL.md)),
-designing an experiment
-([`pyclm-design-experiment`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-design-experiment/SKILL.md)),
-and writing a pattern method
-([`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md)).
-Start Claude Code in a clone of this repository and describe what you want;
-[Using PyCLM skills with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
-has the details.
+PyCLM comes with a plugin for [Claude Code](https://claude.com/claude-code)
+that lets a coding agent walk a lab through setting PyCLM up on a
+microscope, designing an experiment, running and following it, and
+recording the session, while asking people only what it cannot know:
+
+```bash
+claude plugin marketplace add Harrison-Oatman/PyCLM
+claude plugin install pyclm@pyclm-plugins
+```
+
+[Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
+covers the skills, the lab context folder, the start files for a microscope
+PC several people share, and the session pages. Three of the skills are
+also in [`.claude/skills/`](https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills)
+for use without the plugin.
 
 ## Citation
 

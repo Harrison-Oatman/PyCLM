@@ -1,7 +1,7 @@
 # First-Time Setup Guide
 
 *A coding agent can walk you through this page with the pyclm-microscope-bringup skill; see
-[Using PyCLM skills with Claude Code](agent_skills.md).*
+[Using PyCLM with Claude Code](agent_skills.md).*
 
 This guide walks through everything required to run a PyCLM experiment on a new microscope system. By the end you will have:
 
