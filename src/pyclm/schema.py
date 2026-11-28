@@ -806,8 +806,8 @@ def _props(table: dict[str, Scalar]) -> list[DeviceProperty]:
 def read_toml(path: str | Path) -> dict:
     path = Path(path)
     try:
-        with open(path, "rb") as f:
-            return tomllib.load(f)
+        # utf-8-sig: Windows PowerShell 5.1 writes UTF-8 with a byte-order mark
+        return tomllib.loads(path.read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
         raise ConfigError(path, ["file not found"]) from None
     except Exception as e:  # tomllib.TOMLDecodeError, a file that is not UTF-8

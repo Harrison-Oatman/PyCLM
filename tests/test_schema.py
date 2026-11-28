@@ -329,3 +329,11 @@ def test_stimulation_only_experiment():
     assert (
         ExperimentConfig.model_validate(tomllib.loads(with_empty)).channel_names == []
     )
+
+
+def test_a_toml_with_a_byte_order_mark_reads(tmp_path):
+    from pyclm.schema import read_toml
+
+    path = tmp_path / "schedule.toml"
+    path.write_bytes(b"\xef\xbb\xbf[timing]\nsteps = 3\n")
+    assert read_toml(path) == {"timing": {"steps": 3}}

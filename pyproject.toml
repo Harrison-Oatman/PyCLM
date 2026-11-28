@@ -1,6 +1,6 @@
 [project]
 name = "closed-loop-microscopy"
-version = "1.1.0"
+version = "1.2.0"
 description = "Closed-loop feedback control for optogenetic microscopy in Python"
 readme = "README.md"
 license = "MIT"

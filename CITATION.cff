@@ -15,7 +15,7 @@ authors:
   - family-names: Toettcher
     given-names: Jared E.
     orcid: "https://orcid.org/0000-0002-1546-4030"
-version: 1.1.0
+version: 1.2.0
 # the concept DOI: resolves to the latest release; each release also gets its own
 doi: 10.5281/zenodo.20385964
 identifiers:
