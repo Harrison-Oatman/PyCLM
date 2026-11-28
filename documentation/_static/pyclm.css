@@ -139,3 +139,34 @@
 #method-zoo table.docutils td:nth-child(2) {
     white-space: nowrap;
 }
+
+/* Claude Code plugin page: a request from the person and a reply from Claude */
+.rst-content .admonition.chat-you,
+.rst-content .admonition.chat-claude {
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin: 6px 0 10px;
+    box-shadow: none;
+}
+.rst-content .admonition.chat-you {
+    background: #f6e7de;
+    border-left: 4px solid #a14a28;
+    margin-left: 0;
+    margin-right: 12%;
+}
+.rst-content .admonition.chat-claude {
+    background: #f3f4f6;
+    border-left: 4px solid #26292e;
+    margin-left: 12%;
+}
+.rst-content .admonition.chat-you .admonition-title,
+.rst-content .admonition.chat-claude .admonition-title {
+    background: none;
+    margin: 0 0 2px;
+    padding: 0;
+    font-size: 0.85em;
+}
+.rst-content .admonition.chat-you .admonition-title { color: #a14a28; }
+.rst-content .admonition.chat-claude .admonition-title { color: #26292e; }
+.rst-content .admonition.chat-you .admonition-title::before,
+.rst-content .admonition.chat-claude .admonition-title::before { content: none; }

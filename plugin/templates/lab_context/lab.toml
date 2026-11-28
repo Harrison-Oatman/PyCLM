@@ -1,0 +1,12 @@
+# Facts about the lab that scripts read (the plugin's start-of-session note).
+# Keep in step with lab.md.
+
+[roles]
+# People who may make the admin-only decisions in lab.md. Use the names
+# people give in ~/.pyclm/lab_context.toml (name = "...").
+admins = ["<name>"]
+
+# One table per microscope; the folder microscopes/<name>/ holds its note.
+# hosts: the computer names of the PCs that run it (Python's platform.node()).
+[microscopes.my-scope]
+hosts = ["<COMPUTER-NAME>"]

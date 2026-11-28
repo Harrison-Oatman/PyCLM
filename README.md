@@ -8,9 +8,36 @@ A modular closed-loop microscopy software in Python.
 PyCLM runs many optogenetic experiments at once on one microscope. Each
 imaging position gets its own light pattern, projected through a DMD, that
 can be fixed, change over time, follow individual cells, or respond to what
-the cells are doing. Experiments are written as short TOML files, so running
-a new one needs no programming; a new kind of light rule is a small Python
-class.
+the cells are doing.
+
+## Using PyCLM with Claude Code
+
+PyCLM ships a plugin for [Claude Code](https://claude.com/claude-code) that
+sets PyCLM up on a microscope and designs, checks, runs, follows and exports
+experiments with you, using the `pyclm` commands below. On the microscope PC,
+with Claude Code installed:
+
+```bash
+claude plugin marketplace add Harrison-Oatman/PyCLM
+claude plugin install pyclm@pyclm-plugins
+claude
+```
+
+![](https://raw.githubusercontent.com/Harrison-Oatman/PyCLM/main/documentation/imgs/plugin/six_steps.svg "The six steps of a run")
+
+[Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
+covers setup, launching on a shared microscope PC, each step of a run,
+Remote Control from a Claude project, and a worked example.
+
+## How PyCLM works
+
+Experiments are written as short TOML files, so running a new one needs no
+programming; a new kind of light rule is a small Python class. Microscope
+control, segmentation, tracking, pattern generation and saving run as
+separate processes in parallel, so the microscope rarely waits and the
+number of simultaneous experiments is limited mainly by the hardware. Data
+is written as the run goes (OME-Zarr by default), and ImageJ hyperstacks are
+exported at the end.
 
 ![](https://raw.githubusercontent.com/Harrison-Oatman/PyCLM/main/documentation/imgs/pyclm-overview.png "PyCLM Overview")
 
@@ -18,6 +45,7 @@ class.
 
 | I want to... | Go to |
 |---|---|
+| Set up and run experiments with Claude Code | **[Using PyCLM with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)** |
 | See what light patterns PyCLM can make | **[Method zoo](https://pyclm.readthedocs.io/en/latest/method_zoo.html)**: every built-in pattern method on a sample image, with a `[pattern]` table to copy |
 | Try it without a microscope | The demo below |
 | Set PyCLM up on my microscope | [First-time setup](https://pyclm.readthedocs.io/en/latest/first_time_setup.html) |
@@ -27,7 +55,7 @@ class.
 
 The full documentation is at [pyclm.readthedocs.io](https://pyclm.readthedocs.io/en/latest/).
 
-## Install and try it
+## Install and try it yourself
 
 ```bash
 pip install "closed-loop-microscopy[gui]"
@@ -52,28 +80,6 @@ which PyCLM drives through
 `config_path` in `pyclm_config.toml` at your Micro-Manager `.cfg` file. The
 [installation page](https://pyclm.readthedocs.io/en/latest/installation.html)
 covers the extras and matching the Micro-Manager device interface.
-
-## How it works
-
-Microscope control, segmentation, tracking, pattern generation and saving run
-as separate processes in parallel, so the microscope rarely waits and the
-number of simultaneous experiments is limited mainly by the hardware. Data is
-written as the run goes (OME-Zarr by default), and ImageJ hyperstacks are
-exported at the end.
-
-## Using PyCLM skills with Claude Code
-
-The repository includes three [agent skills](https://github.com/Harrison-Oatman/PyCLM/tree/main/.claude/skills)
-that let a coding agent such as [Claude Code](https://claude.com/claude-code)
-walk you through microscope setup
-([`pyclm-microscope-bringup`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-microscope-bringup/SKILL.md)),
-designing an experiment
-([`pyclm-design-experiment`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-design-experiment/SKILL.md)),
-and writing a pattern method
-([`pyclm-write-pattern-method`](https://github.com/Harrison-Oatman/PyCLM/blob/main/.claude/skills/pyclm-write-pattern-method/SKILL.md)).
-Start Claude Code in a clone of this repository and describe what you want;
-[Using PyCLM skills with Claude Code](https://pyclm.readthedocs.io/en/latest/agent_skills.html)
-has the details.
 
 ## Citation
 

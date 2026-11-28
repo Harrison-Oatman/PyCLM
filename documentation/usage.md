@@ -1,7 +1,7 @@
 # Usage
 
 *A coding agent can walk you through this page with the pyclm-design-experiment skill; see
-[Using PyCLM skills with Claude Code](agent_skills.md).*
+[Using PyCLM with Claude Code](agent_skills.md).*
 
 A PyCLM run is one directory: the files that describe the experiments, and the
 data the run writes next to them. For the first time on a new microscope, see

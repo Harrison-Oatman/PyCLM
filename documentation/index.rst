@@ -13,6 +13,15 @@ one needs no programming; a new kind of light rule is a small Python class.
 Start here
 ----------
 
+- **With Claude Code:** the PyCLM plugin sets PyCLM up on a microscope and
+  designs, checks, runs, follows and exports experiments with you
+  (:doc:`agent_skills`).
+
+  .. code-block:: bash
+
+     claude plugin marketplace add Harrison-Oatman/PyCLM
+     claude plugin install pyclm@pyclm-plugins
+
 - **See what it can do:** the :doc:`method_zoo` shows every built-in pattern
   method on a sample image, with a ``[pattern]`` table to copy into an
   experiment.
@@ -33,8 +42,12 @@ Start here
 - **Write your own light rule:** :doc:`custom_pattern_methods` and
   :doc:`tracking`.
 - **Open the data:** :doc:`data_format`.
-- **Get walked through it:** :doc:`agent_skills` lets a coding agent such as
-  Claude Code guide you through setup, an experiment, or a new method.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Claude Code plugin
+
+   agent_skills
 
 .. toctree::
    :maxdepth: 2
@@ -43,7 +56,6 @@ Start here
    installation
    first_time_setup
    usage
-   agent_skills
 
 .. toctree::
    :maxdepth: 2

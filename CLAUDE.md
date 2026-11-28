@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Agent skills
 
-`.claude/skills/` holds the skills for people setting PyCLM up in their own lab: `pyclm-microscope-bringup`, `pyclm-design-experiment`, `pyclm-write-pattern-method`. They are linked from the README and `documentation/agent_skills.md` (an italic line at the top of five docs pages points there); keep them in step with the commands, config keys and documentation pages they name when those change.
+`.claude/skills/` holds the skills for people setting PyCLM up in their own lab: `pyclm-microscope-bringup`, `pyclm-design-experiment`, `pyclm-write-pattern-method`. They are linked from the README and `documentation/agent_skills.md` (an italic line at the top of five docs pages points there); keep them in step with the commands, config keys and documentation pages they name when those change. `plugin/` is the Claude Code plugin (marketplace `.claude-plugin/marketplace.json` at the root; user docs in `documentation/agent_skills.md`, developer notes in `plugin/README.md`): it ships copies of those three skills (`plugin/sync_skills.py`; `tests/test_plugin.py` fails while they differ) plus its own skills, hook and lab context template.
 
 ## Commands
 

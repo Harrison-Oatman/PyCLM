@@ -1,7 +1,7 @@
 # Experiment TOMLs
 
 *A coding agent can walk you through this page with the pyclm-design-experiment skill; see
-[Using PyCLM skills with Claude Code](agent_skills.md).*
+[Using PyCLM with Claude Code](agent_skills.md).*
 
 Each experiment (one per imaging position) is described by one TOML file in
 the experiment directory. The file's stem is the experiment name that
