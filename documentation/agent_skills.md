@@ -80,8 +80,8 @@ PC go in `launcher\local.json` (copy `local.example.json`).
 The six steps of a run, and where you come in.
 ```
 
-The exchanges below are shortened from a test run of a moving bar on an
-MDCK monolayer (Example, below).
+The exchanges below follow an illustrative bar-speed experiment. The
+Example at the end is a real run.
 
 ### 1. Describe
 
@@ -91,15 +91,14 @@ dose, the timing and the controls. It proposes values; you decide.
 
 ```{admonition} You
 :class: chat-you
-A 30-minute moving-bar run in well B7: a few fields near the saved
-position, at least one of them unlit.
+I have optoEGFR cells in wells B2-C4, and I want to compare moving bars of
+light ranging from 15 to 120 µm/h. Do 3 replicates per bar speed and image
+one dark position per well.
 ```
 
 ```{admonition} Claude
 :class: chat-claude
-Same bar as the last run (20 µm wide, 100 µm apart, 1 µm/min)? 15 timepoints
-every 2 minutes, or 30 every minute? Scout the well first, or place fields
-at fixed offsets?
+I'm setting up a directory for today's bar experiments now.
 ```
 
 ### 2. Position
@@ -120,9 +119,9 @@ context folder.
 
 ```{admonition} Claude
 :class: chat-claude
-Scouted 9 fields around your position, no light. I picked the middle row:
-your position stays unlit, its two neighbors get the bar. The Positions page
-is open.
+Scouted the six wells with no light and picked 18 fields: 3 per bar speed
+(15, 30, 60 and 120 µm/h), spread over the wells, and one dark field in each
+well. The Positions page is open.
 ```
 
 ```{admonition} You
@@ -163,7 +162,7 @@ Plot KTR activity over time, live, grouped by condition.
 ```{admonition} Claude
 :class: chat-claude
 Started detached (pid 47572), so it keeps going if this window closes. t 1
-of 30, light at the two bar fields only, no errors. The KTR plot, lit vs
+of 30, light at the 12 bar fields only, no errors. The KTR plot, lit vs
 unlit, is at the top of the Running page and updates with each timepoint.
 ```
 
