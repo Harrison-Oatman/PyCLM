@@ -48,7 +48,7 @@ PyCLM does not use MicroManager's graphical interface at runtime — the `.cfg` 
 
 ## 3. Create `pyclm_config.toml`
 
-Place a `pyclm_config.toml` in the experiment directory or at the repository root. PyCLM searches the experiment directory first, then the working directory.
+Place a `pyclm_config.toml` in the experiment directory, or pass it with `--config`. PyCLM searches the experiment directory first, then the working directory.
 
 ```toml
 # Absolute path to your MicroManager .cfg file
@@ -468,7 +468,7 @@ experiment_dir/
 ├── schedule.toml
 ├── feedback_ctrl.toml     # one .toml per experiment type
 ├── open_loop.toml
-└── pyclm_config.toml      # optional; falls back to repository root
+└── pyclm_config.toml      # optional; falls back to the working directory
 ```
 
 PyCLM writes output files alongside the configuration files:
@@ -512,7 +512,7 @@ refuses to start on errors. See [The pyclm command](command_line.md).
 uv run pyclm run path/to/experiment_dir
 ```
 
-Pass `--config` if `pyclm_config.toml` is not in the experiment directory or repository root:
+Pass `--config` if `pyclm_config.toml` is not in the experiment directory or the working directory:
 
 ```bash
 uv run pyclm run path/to/experiment_dir --config path/to/pyclm_config.toml

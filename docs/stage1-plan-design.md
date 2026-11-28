@@ -8,7 +8,7 @@ compatibility obligation either way; 2–5: confirmed as written). The code is
 [`tests/test_plan.py`](../tests/test_plan.py), which turned the spike's
 Manager comparison into a permanent check against the scheduling rules. The
 conversion spike script is therefore deleted; the feature probes remain in
-[spikes/stage1_useq_probe.py](spikes/stage1_useq_probe.py). All results below
+`spikes/stage1_useq_probe.py` (removed before 1.2.0; in git history). All results below
 are from useq-schema 0.8.1, now a direct dependency in `pyproject.toml`.
 
 ---

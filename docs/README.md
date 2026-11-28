@@ -30,7 +30,6 @@ built or published.
 | [acquisition-speedups-design.md](acquisition-speedups-design.md) | The `[acquisition]` options of `pyclm_config.toml` (2026-10-28): settle after a move only, sequence capture, shutter-timed stimulation, camera values set only on change; decisions and what to test at the microscope. | The microscope's per-frame path changes, or an option is made the default. |
 | [tracking-gap-closing-design.md](tracking-gap-closing-design.md) | Gap closing for live tracking (2026-10-28): laptrack, btrack and trackpy measured against an own frame-by-frame linker (latency, accuracy, failure in dense fields), and decisions to confirm (`max_gap_frames` on `centroid`). | Tracking methods or their keywords change. |
 | [multi-slm-design.md](multi-slm-design.md) | More than one SLM (DMD) per run (2026-11-21, PR #53): `[slm.<label>]` tables, `slm` in `[stimulation]`, the default-SLM refusal, `parallel_device_initialization`, how it sits with #54's pattern-at-use-time, what to test. | SLM routing, calibration storage or the SLM buffer change. |
-| [spikes/](spikes/) | Runnable spike scripts and their artifacts. Not part of the package, not tested. | A spike is superseded (delete it) or a new one is run. |
 
 Conventions for this folder:
 

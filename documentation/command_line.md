@@ -19,8 +19,8 @@ pyclm gui <dir>                 open the live viewer
 ```
 
 `pyclm <dir> [--dry] [--gui]`, the form from before these subcommands
-existed, still means `pyclm run`. `convert_hdf5s` and `gui` remain as
-aliases of `export` and `gui`. Custom methods need the Python entry points
+existed, still means `pyclm run`. `convert_hdf5s` remains as an
+alias of `pyclm export`; the separate `gui` command was removed in 1.2.0 (use `pyclm gui`). Custom methods need the Python entry points
 (`run_pyclm`, `check_directory`, `preview`), which take the same
 dictionaries; see [custom pattern methods](custom_pattern_methods.md).
 

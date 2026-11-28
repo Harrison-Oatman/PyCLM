@@ -4,6 +4,10 @@
 
 ## 1.2.0 — 2026-12-01 (detached runs, watch, run record)
 
+- **Removed:** the `gui` console command (use `pyclm gui`); the lab's own
+  `pyclm_config.toml` at the repository root, which a run started from a
+  clone's root picked up as its hardware config; the paper figure notebooks
+  in `figures/`; `docs/spikes/`.
 - **Claude Code plugin.** `claude plugin marketplace add Harrison-Oatman/PyCLM`,
   then `claude plugin install pyclm@pyclm-plugins`: skills for a first day on
   a new microscope, lab setup, design, running and session records, a lab

@@ -50,8 +50,8 @@ the tracker must decide at each frame from what it has seen so far.
 
 ## 3. What was measured
 
-Spike: [spikes/tracking_gap_closing_bench.py](spikes/tracking_gap_closing_bench.py)
-and [spikes/tracking_btrack_probe.py](spikes/tracking_btrack_probe.py), run
+Spike: `spikes/tracking_gap_closing_bench.py`
+and `spikes/tracking_btrack_probe.py` (both removed before 1.2.0; in git history), run
 2026-10-28 in the cloud container (4-core Xeon), Python 3.12, numpy 2.5,
 scipy 1.18, trackpy 0.7, laptrack 0.17.1, btrack 0.7.0.
 
