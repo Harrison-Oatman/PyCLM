@@ -5,6 +5,8 @@
 ## 1.2.0 — 2026-12-01 (detached runs, watch, run record)
 
 - **`pyclm --version`** prints the installed version.
+- TOML files saved with a UTF-8 byte-order mark (Windows PowerShell 5.1's
+  `Set-Content -Encoding utf8`) are read instead of rejected as invalid.
 - **`pyclm run --detached`** checks the directory, then starts the run in a
   process of its own and returns. Closing the terminal, ending its process
   tree, or restarting the coding agent that started it no longer stops the
