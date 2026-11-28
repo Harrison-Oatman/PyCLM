@@ -104,17 +104,19 @@ at fixed offsets?
 
 ### 2. Position
 
-Claude finds the well from the **plate map** for your vessel, sets z and the
-focus lock from it, and checks the focus on a frame. If it cannot find focus,
-or you prefer to focus by hand, it opens Micro-Manager and asks you to focus.
-It then scouts around the well without light and proposes fields on the
-**Positions page**.
+If a **plate map** for your vessel and a focus from a previous session are
+stored, Claude asks whether to reuse the z and focus-lock settings, use the
+sample as it is in focus now, or open Micro-Manager so you can focus. It then
+scouts around the well without light and proposes fields on the **Positions
+page**.
 
 A plate map records where one vessel format's wells sit on the stage and where
-focus is. Claude makes one the first time a format is used, adds a
-confirmation each time a well turns up where the map says, and relies on it
-once positions have proven consistent between sessions. Maps are kept with
-the microscope in the lab context folder.
+focus is. When there is none, Claude asks whether you want to help set one up:
+you focus one or two wells and say which they are. You can also skip it and
+use the well in focus. Claude adds a confirmation each time a well turns up
+where the map says, and relies on the map once positions have proven
+consistent between sessions. Maps are kept with the microscope in the lab
+context folder.
 
 ```{admonition} Claude
 :class: chat-claude

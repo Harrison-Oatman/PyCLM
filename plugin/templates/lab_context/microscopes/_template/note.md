@@ -26,9 +26,9 @@ evidence.
 
 ## Finding focus
 
-How a sample gets in focus here. The agent starts from the focus lock
-setting and a recent z; when that does not find focus, it opens
-Micro-Manager and asks a person to focus.
+How a sample gets in focus here. When a z and lock setting are stored
+from a previous session, the agent asks whether to reuse them, use what
+is in focus now, or open Micro-Manager for a person to focus.
 
 - Focus lock: <none / Perfect Focus / Definite Focus / ...>, device name in
   Micro-Manager <...>, `position_mover` <basic / pfs>. (<date>)

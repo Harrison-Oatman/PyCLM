@@ -2,8 +2,8 @@
 # stage, and where focus is. Sessions start from it instead of searching for
 # wells, and add a [[confirmed]] entry each time a well is found where the
 # map says. One file per format, named after it (96-well-glassbottom.toml).
-# Sessions may add a map and confirmations directly; it is a measurement, not
-# a lab rule. Delete this example when the first real map is made.
+# Sessions may add a map and confirmations directly (it is a measurement, not
+# a lab rule) when they know the format and which well each reference is. Delete this example when the first real map is made.
 
 format = "96-well, glass bottom"   # as the lab names it; the maker and part number if known
 rows = 8                           # A..H

@@ -53,8 +53,9 @@ session on the microscope PC starts in such a folder, or the person says
 
 ## Positions, focus and plate maps
 
-Positions come from the plate map when there is one, and from a person
-when there is not.
+Ask before using a plate map or a stored focus. The person may want the
+well that is in focus right now, and finding wells for a new map needs
+their help.
 
 **Plate maps.** `microscopes/<name>/plates/<format>.toml` in the lab
 context holds where one vessel format's wells sit on this stage (two
@@ -62,33 +63,47 @@ corner well centers, the pitch) and its focus (z, lock offset), plus a
 `[[confirmed]]` entry for each session that found a well where the map
 put it (the template's `plates/example-96well.toml` has the fields).
 
-- Ask which vessel is on the stage. If a map exists for it, go to the
-  center of the well the experiment needs, set z and the focus lock from
-  the map, and snap with no DMD light. If the cells are in focus and the
-  well is where expected, add a `[[confirmed]]` entry (date, well, offset
-  found minus predicted, z) and use the map for every position.
-- Trust the map once it has two or more confirmations from different
+- Ask which vessel is on the stage, if nobody has said.
+- No map for it: ask "I can't find a <format> plate map for this scope.
+  Would you like to help set up a calibration?" Setting one up needs the
+  person to put one well in focus (or two, far apart, for the rotation)
+  and say which wells they are. If they would rather use the well in
+  focus now, use the stage's current position and make no map.
+- A session writes a map directly, without a proposal, when it knows
+  enough: the format (a 96-well and a 6-well plate both have a B3) and
+  which well each reference position is. If either is a guess, ask, or
+  make no map. A vessel format the lab will not use again needs no map.
+- A map exists: go to the well the experiment needs only once the person
+  has agreed (the focus question below), snap with no DMD light, and if
+  the well is where expected add a `[[confirmed]]` entry (date, well,
+  offset found minus predicted, z).
+- Rely on the map once it has two or more confirmations from different
   days with offsets under a tenth of the pitch. Until then, check one
   well against it before placing fields, and say so.
-- No map yet: once a person has put one well in focus (or two, far apart,
-  for the rotation), write the map from those centers, the format's
-  pitch and the focus, and say where it is. Maps and confirmations are
-  measurements, so a session writes them directly; they are not rule
-  changes and need no proposal. A vessel format the lab will not use
-  again needs no map.
 - If the map is off (a well not where predicted by more than a quarter
   of the pitch), do not correct it silently: say so, find the well with
   the person, and write a new map dated today.
 
-**Focus.** Start from the focus lock setting and a recent z (the plate
-map, then the microscope note), engage the lock, snap, and look at the
-frame. Some people prefer to focus by hand; the microscope note says who.
-If focus cannot be found that way, open Micro-Manager yourself
-(`launcher\Start-MicroManager.bat` in the lab context, or the program
-the note names) and ask the person to focus. When they are done, they
-close Micro-Manager and you read x, y, z and the lock offset from the
-stage. The GUI and PyCLM cannot hold the hardware together, so never open
-it while a run is going, and close nothing the person has open.
+**Focus.** When a plate map or the microscope note has a z and lock
+setting from a previous session, ask, as one question with choices:
+
+> I have a height map stored from a previous session. Would you like me
+> to reuse the z drive and PFS settings?
+> 1. Yes, use the previous settings.
+> 2. No, the sample is in focus right now.
+> 3. No, open Micro-Manager so I can get the cells in focus.
+> 4. Something else (say what).
+
+Name the lab's focus lock in place of "PFS". For 1, set z and the lock,
+engage it, snap and look at the frame; if it is not in focus, say so and
+offer 3. For 2, read x, y, z and the lock offset from the stage and use
+them. For 3, open Micro-Manager yourself (`launcher\Start-MicroManager.bat`
+in the lab context, or the program the note names) and ask the person to
+focus; when they close it, read x, y, z and the lock offset from the
+stage. With nothing stored, ask whether the sample is in focus now or
+Micro-Manager should be opened. The GUI and PyCLM cannot hold the
+hardware together, so never open it while a run is going, and close
+nothing the person has open.
 
 **Fields.** Scouting around a focused position with no light, then
 picking fields on the Positions page (`pyclm-session-pages`), is the
